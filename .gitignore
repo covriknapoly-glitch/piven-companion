@@ -1,0 +1,40 @@
+# Everything is ignored by default; only the program's own files are listed.
+# Not in git: neural-network models and their runtimes (voice engines),
+# the bundled Python / Qt / packages, the archive, logs and caches.
+/*
+!/.gitignore
+!/README.md
+!/README_Компаньон.md
+!/DEPENDENCIES.txt
+!/requirements.txt
+!/companion_core.py
+!/computer_skill.py
+!/presentation_skill.py
+!/twitch_chat.py
+!/desktop_companion.pyw
+!/web_companion.pyw
+!/Qwen-Image-2.1-Heretic-*.json
+!/Qwen-Image-2.1-Heretic-Prompt-Enhancer-README.md
+!/Запустить компаньон.cmd
+!/Запустить веб-интерфейс.cmd
+!/assets/
+!/skills/
+
+!/modern-ui/
+/modern-ui/node_modules/
+
+# Voice engines: only the launch scripts and notes; models, binaries and venvs stay local.
+!/kitten-tts-openwebui/
+/kitten-tts-openwebui/*
+!/kitten-tts-openwebui/README.md
+!/kitten-tts-openwebui/asr-bridge.py
+!/kitten-tts-openwebui/start-*.bat
+!/qwen3-tts-openwebui/
+/qwen3-tts-openwebui/*
+!/qwen3-tts-openwebui/README.md
+!/qwen3-tts-openwebui/server.py
+!/qwen3-tts-openwebui/start-qwen-tts.bat
+
+__pycache__/
+*.pyc
+*.log

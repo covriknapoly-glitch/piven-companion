@@ -1,0 +1,23 @@
+PIVEN COMPANION · ВЛОЖЕННЫЕ ЗАВИСИМОСТИ
+
+CPython 3.11.9 x64 — runtime\Python311
+PySide6 Essentials 6.12.0 и shiboken6 6.12.0 — .qt_runtime
+Pillow 12.2.0
+python-pptx 1.0.2
+lxml 6.1.1
+XlsxWriter 3.2.9
+typing_extensions 4.16.0
+NumPy 2.4.6
+soundcard 0.4.6
+cffi 2.1.1
+pycparser 3.11
+pip 24.0 — в локальном runtime
+
+Окружение Parakeet и модель распознавания находятся в kitten-tts-openwebui.
+Qwen3-TTS и его модель находятся в qwen3-tts-openwebui.
+
+Ollama и ComfyUI — отдельные приложения, они в эту папку не входят.
+Веб-интерфейс (web_companion.pyw):
+pywebview 5.4, pythonnet 3.2.1, clr_loader 0.3.1, proxy_tools 0.1.0, bottle 0.13.4 — .packages
+Окно рисует Microsoft Edge WebView2 (входит в Windows 11).
+React 19.3.1 и esbuild для сборки — modern-ui\node_modules (Node.js не нужен).
