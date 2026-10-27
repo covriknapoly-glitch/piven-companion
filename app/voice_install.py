@@ -27,7 +27,7 @@ from pathlib import Path
 
 import voice_engines
 
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent.parent  # the program folder; the code lives in app/
 VOICE_DIR = APP_DIR / "kitten-tts-openwebui"
 ASR_DIR = VOICE_DIR / "nemo-speech"
 ASR_EXE = ASR_DIR / "bin" / "nemo-speech.exe"

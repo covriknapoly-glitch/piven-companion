@@ -1,50 +1,65 @@
 # PIVEN Companion
 
-Локальный компаньон для Windows: разговаривает через Ollama, рисует через ComfyUI, собирает презентации, работает с кодом в выбранной папке, слушает микрофон и озвучивает ответы. Всё работает на этом компьютере.
+Локальный компаньон для Windows: разговаривает с локальными моделями через llama.cpp, рисует через ComfyUI, собирает презентации, работает с кодом в выбранной папке, слушает микрофон и озвучивает ответы. Всё работает на этом компьютере.
 
 Два интерфейса над одним движком:
 
-- `desktop_companion.pyw` — обычное окно на PySide6 (полный набор функций, включая микрофон и экран).
-- `web_companion.pyw` — новый интерфейс: React-страница `modern-ui/dist` в окне pywebview.
+- **Веб-интерфейс** — React-страница `modern-ui/dist` в окне pywebview (`app/web_companion.pyw`).
+- **Обычное окно** на PySide6 (`app/desktop_companion.pyw`).
 
 Одновременно открывается только одно окно, чтобы они не перезаписали чаты друг друга.
 
-## Что в репозитории
+## Структура
 
-| Путь | Что это |
-|---|---|
-| `companion_core.py` | Движок без Qt: настройки, чаты, Ollama, ComfyUI, голос, навыки |
-| `desktop_companion.pyw`, `web_companion.pyw` | Два интерфейса |
-| `computer_skill.py`, `presentation_skill.py`, `twitch_chat.py` | Навыки |
-| `modern-ui/` | Исходники веб-интерфейса (`src/`) и готовая сборка (`dist/`) |
-| `skills/computer-control/` | Инструкция для модели и справка по устройству программы |
-| `assets/` | Логотип, иконки, шрифты |
-| `Qwen-Image-*.json` | Workflow ComfyUI для картинок |
-| `kitten-tts-openwebui/`, `qwen3-tts-openwebui/` | Только скрипты запуска голосовых серверов |
+```
+Запустить веб-интерфейс.cmd   запуск веб-интерфейса
+Запустить компаньон.cmd       запуск обычного окна
+requirements.txt              библиотеки Python
+app/                          код программы
+  companion_core.py           движок без интерфейса: настройки, чаты, модели, голос, навыки
+  web_companion.pyw           веб-интерфейс (pywebview)
+  desktop_companion.pyw       обычное окно (PySide6)
+  llama_backend.py            запуск llama-server и разговор с моделью
+  hf_models.py                поиск и скачивание моделей с Hugging Face
+  voice_install.py            голосовые модели: поиск, скачивание, удаление
+  voice_engines.py            установка голосовых движков
+  audiocpp_catalog.py         каталог моделей audio.cpp
+  memory_estimate.py          оценка видеопамяти
+  computer_skill.py           управление компьютером
+  presentation_skill.py       презентации PowerPoint
+  twitch_chat.py, twitch_core.py   Twitch
+  native_browser.py, model_logos.py, process_job.py   вспомогательное
+modern-ui/                    веб-интерфейс: исходники (src/) и готовая сборка (dist/)
+qwen3-tts-openwebui/          голосовые серверы (hf_voice_server.py, server.py)
+kitten-tts-openwebui/         скрипты распознавания речи
+skills/computer-control/      инструкция для модели и справка по устройству программы
+assets/                       иконки и шрифты
+docs/                         подробное описание и список вложенных зависимостей
+```
 
-Нейросети в репозиторий не входят: модели и окружения Qwen3-TTS и Parakeet, ComfyUI, Ollama. Также не входят вложенный Python и библиотеки — их ставит инструкция ниже.
+Нейросети в репозиторий не входят: модели, голосовые движки и их окружения, llama.cpp, ComfyUI. Не входят и вложенный Python с библиотеками — их ставит инструкция ниже.
 
 ## Установка
 
-1. **Python 3.11 x64.** Можно положить его в `runtime\Python311` (тогда ярлыки возьмут его) или использовать установленный.
+1. **Python 3.11 x64** в `runtime\Python311` (его возьмут ярлыки) или установленный.
 2. **Библиотеки** рядом с программой:
    ```
    runtime\Python311\python.exe -m pip install --target .packages -r requirements.txt
    ```
    Программа читает пакеты из `.packages` и `.qt_runtime` и не смотрит в пользовательские site-packages.
-3. **Ollama** с хотя бы одной моделью — для разговора, кода и презентаций.
-4. **ComfyUI** (Comfy Desktop) — для картинок. Адрес и workflow настраиваются в программе.
-5. **Голос (по желанию).** Распознавание речи: NeMo-Speech с моделью Parakeet в `kitten-tts-openwebui/nemo-speech` и `kitten-tts-openwebui/models`. Озвучка: Qwen3-TTS, сервер `qwen3-tts-openwebui/server.py` в окружении `kitten-tts-openwebui/.venv`. Подробности — в README этих папок.
+3. **llama.cpp**: `llama.cpp\bin\llama-server.exe`. Модели GGUF скачиваются в программе («Скачать модель с Hugging Face»).
+4. **Голос (по желанию)**: движки и модели озвучки и распознавания ставятся в настройках программы.
+5. **ComfyUI** (по желанию) — для картинок. Адрес и workflow указываются в настройках.
 
 ## Запуск
 
-- `Запустить компаньон.cmd` — обычное окно.
 - `Запустить веб-интерфейс.cmd` — веб-интерфейс.
+- `Запустить компаньон.cmd` — обычное окно.
 
 Настройки, чаты, журналы и картинки хранятся в `%LOCALAPPDATA%\OllamaCompanion`, а не в папке программы.
 
 ## Сборка веб-интерфейса
 
-После правок в `modern-ui/src` пересобери `dist`: `modern-ui\scripts\build.cmd`. Скрипт использует `esbuild` из `modern-ui/node_modules` (в git не входит). Поставить зависимости можно через Node.js: `npm install` в папке `modern-ui`.
+После правок в `modern-ui/src` пересобери `dist`: `modern-ui\scripts\build.cmd`. Скрипт берёт `esbuild` из `modern-ui/node_modules` (в git не входит; `npm install` в папке `modern-ui`). Если есть портативный Node.js в `runtime\node`, перед сборкой идёт проверка типов TypeScript.
 
-Подробнее о возможностях — в `README_Компаньон.md`.
+Подробнее о возможностях — в [docs/README_Компаньон.md](docs/README_Компаньон.md).

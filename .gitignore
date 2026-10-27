@@ -4,25 +4,9 @@
 /*
 !/.gitignore
 !/README.md
-!/README_Компаньон.md
-!/DEPENDENCIES.txt
 !/requirements.txt
-!/companion_core.py
-!/computer_skill.py
-!/presentation_skill.py
-!/twitch_chat.py
-!/twitch_core.py
-!/hf_models.py
-!/llama_backend.py
-!/native_browser.py
-!/voice_install.py
-!/model_logos.py
-!/memory_estimate.py
-!/audiocpp_catalog.py
-!/voice_engines.py
-!/process_job.py
-!/desktop_companion.pyw
-!/web_companion.pyw
+!/app/
+!/docs/
 !/Запустить компаньон.cmd
 !/Запустить веб-интерфейс.cmd
 !/assets/

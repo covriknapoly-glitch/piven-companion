@@ -18,7 +18,7 @@ from pathlib import Path
 
 import process_job
 
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent.parent  # the program folder; the code lives in app/
 DATA_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "OllamaCompanion"
 SERVER_EXE = APP_DIR / "llama.cpp" / "bin" / "llama-server.exe"
 MODELS_DIR = DATA_DIR / "models"

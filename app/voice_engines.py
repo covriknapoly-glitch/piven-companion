@@ -18,7 +18,7 @@ from pathlib import Path
 
 import process_job
 
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent.parent  # the program folder; the code lives in app/
 VOICE_DIR = APP_DIR / "kitten-tts-openwebui"
 SHARED_VENV = VOICE_DIR / ".venv"
 SHARED_PYTHON = SHARED_VENV / "Scripts" / "python.exe"

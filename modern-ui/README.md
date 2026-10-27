@@ -1,6 +1,6 @@
 # PIVEN Companion · веб-интерфейс
 
-React + TypeScript интерфейс, который открывается в окне `web_companion.pyw` (pywebview + WebView2) и работает поверх движка `companion_core.py`. Перенесён из `Архив/PIVEN Companion Modern/modern-ui`; вместо отдельного Ollama-моста и `localStorage` он теперь читает и пишет настоящие чаты и настройки Компаньона.
+React + TypeScript интерфейс, который открывается в окне `app/web_companion.pyw` (pywebview + WebView2) и работает поверх движка `app/companion_core.py`. Перенесён из `Архив/PIVEN Companion Modern/modern-ui`; вместо отдельного Ollama-моста и `localStorage` он теперь читает и пишет настоящие чаты и настройки Компаньона.
 
 ## Устройство
 
@@ -19,7 +19,7 @@ scripts\build.cmd
 
 ## Как страница говорит с Python
 
-`src/bridge.ts` описывает `window.pywebview.api` — методы класса `WebApi` в `web_companion.pyw`. Страница раз в секунду (во время ответа — чаще) вызывает `poll(version)` и получает снимок состояния только при изменениях. Команды: `send`, `select_chat`, `new_chat`, `set_model`, `set_speech`, `interrupt`, `refresh_models`, `image_data`, `open_file`, `copy_text`.
+`src/bridge.ts` описывает `window.pywebview.api` — методы класса `WebApi` в `app/web_companion.pyw`. Страница раз в секунду (во время ответа — чаще) вызывает `poll(version)` и получает снимок состояния только при изменениях. Команды: `send`, `select_chat`, `new_chat`, `set_model`, `set_speech`, `interrupt`, `refresh_models`, `image_data`, `open_file`, `copy_text`.
 
 ## Что ещё не перенесено
 

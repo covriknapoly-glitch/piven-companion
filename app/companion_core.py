@@ -28,7 +28,7 @@ COMPANION_SYSTEM_GUARDRAILS = (
     "Обязательные правила: отвечай уважительно и без насмешек. Никогда не оскорбляй пользователя. "
     "Не печатай служебный JSON, имена инструментов и внутренние заметки в ответе."
 )
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent.parent  # the program folder; the code lives in app/
 QT_DIR = APP_DIR / ".qt_runtime"
 if QT_DIR.exists():
     sys.path.insert(0, str(QT_DIR))
