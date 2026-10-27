@@ -14,5 +14,5 @@ if not errorlevel 1 (
     exit /b 0
 )
 
-"%~dp0..\kitten-tts-openwebui\.venv\Scripts\python.exe" -X utf8 -u "%~dp0server.py"
+"%~dp0..\voice\.venv\Scripts\python.exe" -X utf8 -u "%~dp0server.py"
 pause

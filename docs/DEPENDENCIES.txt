@@ -13,8 +13,8 @@ cffi 2.1.1
 pycparser 3.11
 pip 24.0 — в локальном runtime
 
-Окружение Parakeet и модель распознавания находятся в kitten-tts-openwebui.
-Qwen3-TTS и его модель находятся в qwen3-tts-openwebui.
+Окружение Parakeet и модель распознавания находятся в voice.
+Qwen3-TTS и его модель находятся в voice-servers.
 
 Ollama и ComfyUI — отдельные приложения, они в эту папку не входят.
 Веб-интерфейс (web_companion.pyw):

@@ -28,11 +28,11 @@ from pathlib import Path
 import voice_engines
 
 APP_DIR = Path(__file__).resolve().parent.parent  # the program folder; the code lives in app/
-VOICE_DIR = APP_DIR / "kitten-tts-openwebui"
+VOICE_DIR = APP_DIR / "voice"
 ASR_DIR = VOICE_DIR / "nemo-speech"
 ASR_EXE = ASR_DIR / "bin" / "nemo-speech.exe"
 ASR_MODELS_DIR = VOICE_DIR / "models"
-TTS_DIR = APP_DIR / "qwen3-tts-openwebui"
+TTS_DIR = APP_DIR / "voice-servers"
 TTS_PYTHON = VOICE_DIR / ".venv" / "Scripts" / "python.exe"
 TTS_HF_HOME = TTS_DIR / "models" / "hf"
 BUNDLED_PYTHON = APP_DIR / "runtime" / "Python311" / "python.exe"
@@ -157,7 +157,7 @@ def custom_tts_models():
 
 # Engines that run voice models. NeMo-Speech and Qwen3-TTS have their own servers; "transformers"
 # (any Hugging Face transformers ASR/TTS pipeline model) and "piper" (Piper ONNX voices) run in
-# qwen3-tts-openwebui/hf_voice_server.py inside the same Python venv.
+# voice-servers/hf_voice_server.py inside the same Python venv.
 ENGINE_LABELS = {key: info["label"] for key, info in voice_engines.ENGINES.items()}
 # Engines that can speak in the voice of a recording (Settings → Voice → voice sample).
 CLONING_ENGINES = {"chatterbox", "f5-tts", "coqui", "voxcpm", "omnivoice"}

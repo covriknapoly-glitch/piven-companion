@@ -19,17 +19,17 @@
 /modern-ui/node_modules/
 
 # Voice engines: only the launch scripts and notes; models, binaries and venvs stay local.
-!/kitten-tts-openwebui/
-/kitten-tts-openwebui/*
-!/kitten-tts-openwebui/README.md
-!/kitten-tts-openwebui/asr-bridge.py
-!/kitten-tts-openwebui/start-*.bat
-!/qwen3-tts-openwebui/
-/qwen3-tts-openwebui/*
-!/qwen3-tts-openwebui/README.md
-!/qwen3-tts-openwebui/server.py
-!/qwen3-tts-openwebui/hf_voice_server.py
-!/qwen3-tts-openwebui/start-qwen-tts.bat
+!/voice/
+/voice/*
+!/voice/README.md
+!/voice/asr-bridge.py
+!/voice/start-*.bat
+!/voice-servers/
+/voice-servers/*
+!/voice-servers/README.md
+!/voice-servers/server.py
+!/voice-servers/hf_voice_server.py
+!/voice-servers/start-qwen-tts.bat
 
 __pycache__/
 *.pyc

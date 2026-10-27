@@ -1,6 +1,6 @@
 """Voice engines: which program runs a speech model, and the Python environment each one lives in. No UI code.
 
-Every engine gets its own venv under kitten-tts-openwebui/engines/<engine>/.venv so their pinned
+Every engine gets its own venv under voice/engines/<engine>/.venv so their pinned
 dependencies (one wants transformers 4.46, another 5.x) never collide. The shared venv with PyTorch
 for CUDA is linked in through a .pth file, so PyTorch is downloaded once; an engine that needs other
 versions of a package gets its own copy, which comes first on its path.
@@ -9,6 +9,7 @@ hf_voice_server.py, started with the engine's python, holds the code that loads 
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -19,7 +20,7 @@ from pathlib import Path
 import process_job
 
 APP_DIR = Path(__file__).resolve().parent.parent  # the program folder; the code lives in app/
-VOICE_DIR = APP_DIR / "kitten-tts-openwebui"
+VOICE_DIR = APP_DIR / "voice"
 SHARED_VENV = VOICE_DIR / ".venv"
 SHARED_PYTHON = SHARED_VENV / "Scripts" / "python.exe"
 SHARED_SITE = SHARED_VENV / "Lib" / "site-packages"
@@ -241,6 +242,13 @@ def _short(line):
     return line if len(line) < 140 else line[:137] + "…"
 
 
+def link_shared(engine):
+    """Point the engine's venv at the shared packages. The path is relative to its site-packages,
+    so the program folder can be moved or renamed."""
+    site_dir = venv_dir(engine) / "Lib" / "site-packages"
+    (site_dir / "piven_shared.pth").write_text(os.path.relpath(SHARED_SITE, site_dir) + "\n", encoding="utf-8")
+
+
 def _pip(python):
     return [str(python), "-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off"]
 
@@ -275,7 +283,7 @@ def ensure_engine(engine, progress, cancel_event):
         base = BUNDLED_PYTHON if BUNDLED_PYTHON.is_file() else Path(sys.executable)
         run([str(base), "-m", "venv", str(folder)], cancel_event, lambda line: None)
     # Link the shared packages in after the engine's own ones, so PyTorch is reused unless the engine pins another.
-    (folder / "Lib" / "site-packages" / "piven_shared.pth").write_text(str(SHARED_SITE) + "\n", encoding="utf-8")
+    link_shared(engine)
     progress(start + 3, f"Ставлю {info['label']}")
     if info.get("no_deps"):
         run(_pip(python) + ["--no-deps"] + info["no_deps"], cancel_event, lambda line: progress(start + 3, f"{info['label']} · " + _short(line)))

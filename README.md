@@ -30,8 +30,8 @@ app/                          код программы
   twitch_chat.py, twitch_core.py   Twitch
   native_browser.py, model_logos.py, process_job.py   вспомогательное
 modern-ui/                    веб-интерфейс: исходники (src/) и готовая сборка (dist/)
-qwen3-tts-openwebui/          голосовые серверы (hf_voice_server.py, server.py)
-kitten-tts-openwebui/         скрипты распознавания речи
+voice-servers/                голосовые серверы (hf_voice_server.py, server.py)
+voice/                        скрипты распознавания речи; здесь же ставятся движки и модели
 skills/computer-control/      инструкция для модели и справка по устройству программы
 assets/                       иконки и шрифты
 docs/                         подробное описание и список вложенных зависимостей

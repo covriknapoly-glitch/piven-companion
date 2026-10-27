@@ -62,7 +62,7 @@ TTS_URL = f"http://127.0.0.1:{TTS_PORT}"
 TTS_LOG = DATA_DIR / "qwen-tts.log"
 ASR_PORT = 47832
 ASR_URL = f"http://127.0.0.1:{ASR_PORT}"
-# Voice models run by qwen3-tts-openwebui/hf_voice_server.py (Transformers and Piper engines).
+# Voice models run by voice-servers/hf_voice_server.py (Transformers and Piper engines).
 HF_ASR_URL = "http://127.0.0.1:47834"
 HF_TTS_URL = "http://127.0.0.1:47835"
 VOICE_SERVER_LOG = DATA_DIR / "voice-models.log"
