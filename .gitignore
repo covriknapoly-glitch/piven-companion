@@ -11,6 +11,16 @@
 !/computer_skill.py
 !/presentation_skill.py
 !/twitch_chat.py
+!/twitch_core.py
+!/hf_models.py
+!/llama_backend.py
+!/native_browser.py
+!/voice_install.py
+!/model_logos.py
+!/memory_estimate.py
+!/audiocpp_catalog.py
+!/voice_engines.py
+!/process_job.py
 !/desktop_companion.pyw
 !/web_companion.pyw
 !/Qwen-Image-2.1-Heretic-*.json
@@ -33,6 +43,7 @@
 /qwen3-tts-openwebui/*
 !/qwen3-tts-openwebui/README.md
 !/qwen3-tts-openwebui/server.py
+!/qwen3-tts-openwebui/hf_voice_server.py
 !/qwen3-tts-openwebui/start-qwen-tts.bat
 
 __pycache__/

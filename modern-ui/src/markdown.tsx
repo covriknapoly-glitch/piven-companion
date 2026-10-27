@@ -1,11 +1,20 @@
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 
 /**
  * Small Markdown renderer for model answers. It builds React elements only
  * (never raw HTML), so text from the model cannot inject markup or scripts.
- * Links are shown, not followed: clicking would navigate the app window away.
+ * Links never navigate the app window: http(s) links go to the handler in
+ * LinkContext (the built-in browser pane), anything else is only shown.
  */
+
+export const LinkContext = createContext<((url: string) => void) | null>(null);
+
+function MdLink({ label, url }: { label: string; url: string }) {
+  const open = useContext(LinkContext);
+  if (!open || !/^https?:\/\//i.test(url)) return <span className="md-link" title={url}>{label}</span>;
+  return <button type="button" className="md-link" title={url} onClick={() => open(url)}>{label}</button>;
+}
 
 type Block =
   | { kind: "code"; lang: string; text: string }
@@ -94,7 +103,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     else if (token.startsWith("*")) nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
     else {
       const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      nodes.push(<span key={key} className="md-link" title={link?.[2]}>{link?.[1]}</span>);
+      nodes.push(<MdLink key={key} label={link?.[1] ?? token} url={link?.[2] ?? ""} />);
     }
     last = match.index + token.length;
   }

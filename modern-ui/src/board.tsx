@@ -31,7 +31,8 @@ function writeOffsets(chatId: string, offsets: Offsets) {
   try { localStorage.setItem(`piven-board:${chatId}`, JSON.stringify(offsets)); } catch { /* storage may be unavailable */ }
 }
 
-export function Board({ chatId, cards, empty }: { chatId: string; cards: BoardCard[]; empty?: ReactNode }) {
+export function Board({ chatId, cards, empty, focus }:
+  { chatId: string; cards: BoardCard[]; empty?: ReactNode; focus?: { key: string; nonce: number } | null }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [pan, setPan] = useState<Point>({ x: 0, y: 40 });
   const [zoom, setZoom] = useState(1);
@@ -150,6 +151,22 @@ export function Board({ chatId, cards, empty }: { chatId: string; cards: BoardCa
     firstFrame.current = false;
   }, [follow, lastKey, lastHeight, chatId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Bring a specific card (e.g. a search result) to the centre of the view and highlight it.
+  const [flashKey, setFlashKey] = useState("");
+  useEffect(() => {
+    if (!focus) return;
+    const viewport = viewportRef.current;
+    const card = layout.find((item) => item.key === focus.key);
+    if (!viewport || !card) return;
+    const rect = viewport.getBoundingClientRect();
+    setFollow(false);
+    const tall = card.height > rect.height - 120;
+    animateTo({ x: rect.width / 2 - (card.x + card.width / 2), y: tall ? 60 - card.y : rect.height / 2 - (card.y + card.height / 2) }, 1);
+    setFlashKey(focus.key);
+    const timer = window.setTimeout(() => setFlashKey(""), 1600);
+    return () => window.clearTimeout(timer);
+  }, [focus?.nonce, layout.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---- input ----
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -229,32 +246,23 @@ export function Board({ chatId, cards, empty }: { chatId: string; cards: BoardCa
     const start = { x: from.x + from.width / 2, y: from.y + from.height };
     const end = { x: card.x + card.width / 2, y: card.y };
     const bend = Math.max(28, Math.abs(end.y - start.y) / 2);
-    return { key: card.key, d: `M ${start.x} ${start.y + 4} C ${start.x} ${start.y + bend}, ${end.x} ${end.y - bend}, ${end.x} ${end.y - 6}`, start, end };
+    return { key: card.key, d: `M ${start.x} ${start.y} C ${start.x} ${start.y + bend}, ${end.x} ${end.y - bend}, ${end.x} ${end.y - 2}`, end };
   });
 
   const moved = Object.keys(offsets).length > 0;
-  const step = [25, 50, 100, 200, 250, 500, 1000, 2000].find((value) => value * zoom >= 84) ?? 4000;
-  const ticks = (offset: number, span: number) => {
-    const first = Math.floor((-offset / zoom) / step) * step;
-    const values: number[] = [];
-    for (let value = first; value * zoom + offset < span; value += step) values.push(value);
-    return values;
-  };
-  const isoMinor = `translate(${pan.x} ${pan.y}) scale(${zoom})`;
+  const gridTransform = `translate(${pan.x} ${pan.y}) scale(${zoom})`;
   return (
     <div className={`board ${draggingKey ? "is-dragging" : ""}`} ref={viewportRef}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
       <svg className="board-grid" aria-hidden="true">
         <defs>
-          <pattern id="iso-minor" width="60" height="34.641" patternUnits="userSpaceOnUse" patternTransform={isoMinor}>
-            <path className="iso-minor" d="M0 0L60 34.641M60 0L0 34.641M0 0V34.641M30 0V34.641" />
-          </pattern>
-          <pattern id="iso-major" width="240" height="138.564" patternUnits="userSpaceOnUse" patternTransform={isoMinor}>
-            <path className="iso-major" d="M0 0L240 138.564M240 0L0 138.564M0 0V138.564M120 0V138.564" />
+          {/* Cutting-mat grid: fine lines every 24 units, a heavier line every fifth. */}
+          <pattern id="board-mat" width="120" height="120" patternUnits="userSpaceOnUse" patternTransform={gridTransform}>
+            <path className="mat-minor" d="M24 0V120M48 0V120M72 0V120M96 0V120M0 24H120M0 48H120M0 72H120M0 96H120" />
+            <path className="mat-major" d="M0.5 0V120M0 0.5H120" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#iso-minor)" />
-        <rect width="100%" height="100%" fill="url(#iso-major)" />
+        <rect width="100%" height="100%" fill="url(#board-mat)" />
       </svg>
       {/* Pan is a whole-pixel translate; zoom uses CSS `zoom`, which re-lays out and
           re-rasterises text at every scale (transform: scale() stretched a bitmap → blur). */}
@@ -264,33 +272,29 @@ export function Board({ chatId, cards, empty }: { chatId: string; cards: BoardCa
           {links.map((link) => (
             <g key={link.key}>
               <path d={link.d} className="board-link" />
-              <circle cx={link.start.x} cy={link.start.y + 4} r={3.5} className="board-node" />
-              <path d={`M ${link.end.x} ${link.end.y - 9} L ${link.end.x + 4} ${link.end.y - 4.5} L ${link.end.x} ${link.end.y} L ${link.end.x - 4} ${link.end.y - 4.5} Z`} className="board-node end" />
+              <path d={`M ${link.end.x - 4.5} ${link.end.y - 7} L ${link.end.x} ${link.end.y - 1.5} L ${link.end.x + 4.5} ${link.end.y - 7}`} className="board-arrow" />
             </g>
           ))}
         </svg>
         {layout.map((card) => (
           <div key={card.key} ref={measure} data-key={card.key}
-            className={`board-card role-${card.role} ${draggingKey === card.key ? "dragging" : ""}`}
+            className={`board-card role-${card.role} ${draggingKey === card.key ? "dragging" : ""} ${flashKey === card.key ? "flash" : ""}`}
             style={{ left: Math.round(card.x), top: Math.round(card.y), width: card.width }}>
             {card.node}
           </div>
         ))}
       </div>
       </div>
-      <div className="ruler ruler-x" aria-hidden="true">{ticks(pan.x - 22, 4000).map((value) => <span key={value} className="tick" style={{ left: pan.x - 22 + value * zoom }}>{value}</span>)}</div>
-      <div className="ruler ruler-y" aria-hidden="true">{ticks(pan.y - 22, 3000).map((value) => <span key={value} className="tick" style={{ top: pan.y - 22 + value * zoom }}><span>{value}</span></span>)}</div>
-      <div className="ruler-corner" aria-hidden="true" />
       {!cards.length && empty}
       {cards.length > 0 && (
         <div className="board-hud">
+          {!follow && <button type="button" className="hud-latest" title="К последнему сообщению" onClick={() => setFollow(true)}><Icon name="arrowDown" size={15} /> К последнему</button>}
           <button type="button" title="Отдалить (Ctrl + колёсико)" onClick={() => zoomBy(1 / 1.2)}><Icon name="zoomOut" size={16} /></button>
           <button type="button" className="hud-zoom" title="Масштаб 100%" onClick={() => { setZoom(1); setFollow(true); }}>{Math.round(zoom * 100)}%</button>
           <button type="button" title="Приблизить (Ctrl + колёсико)" onClick={() => zoomBy(1.2)}><Icon name="zoomIn" size={16} /></button>
           <span className="hud-sep" />
           <button type="button" title="Показать все карточки" onClick={fitAll}><Icon name="fit" size={16} /></button>
           {moved && <button type="button" title="Вернуть карточки на места" onClick={resetLayout}><Icon name="refresh" size={15} /></button>}
-          {!follow && <button type="button" className="hud-latest" title="К последнему сообщению" onClick={() => setFollow(true)}><Icon name="arrowDown" size={15} /> К последнему</button>}
         </div>
       )}
     </div>

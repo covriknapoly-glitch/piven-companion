@@ -14,7 +14,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-MODEL_ID = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+# The companion picks the model through these variables; VoiceDesign speaks with VOICE_INSTRUCTION,
+# CustomVoice models with one of their built-in speakers (the request's `voice`).
+MODEL_ID = os.getenv("QWEN_MODEL_ID", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign")
+MODE = os.getenv("QWEN_MODE") or ("custom" if "CustomVoice" in MODEL_ID else "design")
 MODEL_NAME = "qwen3-tts-12hz-1.7b"
 VOICE_INSTRUCTION = (
     "A natural adult male voice, native Russian speaker, neutral standard Russian accent, "
@@ -52,6 +55,7 @@ def health():
     return {
         "status": "ok",
         "model": MODEL_NAME,
+        "repo": MODEL_ID,
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
     }
 
@@ -68,6 +72,8 @@ def audio_models():
 
 @app.get("/v1/audio/voices")
 def voices():
+    if MODE == "custom":
+        return {"voices": sorted(get_model().model.get_supported_speakers())}
     return {"voices": ["Russian"]}
 
 
@@ -80,11 +86,16 @@ def speech(request: SpeechRequest):
     try:
         model = get_model()
         with torch.inference_mode():
-            wavs, sample_rate = model.generate_voice_design(
-                text=request.input,
-                language="Russian",
-                instruct=VOICE_INSTRUCTION,
-            )
+            if MODE == "custom":
+                speakers = sorted(model.model.get_supported_speakers())
+                speaker = request.voice.lower() if request.voice.lower() in speakers else ("ryan" if "ryan" in speakers else speakers[0])
+                wavs, sample_rate = model.generate_custom_voice(text=request.input, language="Russian", speaker=speaker)
+            else:
+                wavs, sample_rate = model.generate_voice_design(
+                    text=request.input,
+                    language="Russian",
+                    instruct=VOICE_INSTRUCTION,
+                )
         output = io.BytesIO()
         sf.write(output, wavs[0], sample_rate, format="WAV", subtype="PCM_16")
         wav = output.getvalue()

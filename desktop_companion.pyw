@@ -15,6 +15,7 @@ from companion_core import CompanionCore
 import companion_core
 from PySide6.QtCore import Qt, QTimer, QSize, QRect, QRectF, QPointF, QPropertyAnimation, QEasingCurve, QVariantAnimation, QUrl, QParallelAnimationGroup, QObject, QEvent, QAbstractAnimation, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtGui import QFont, QTextCursor, QPainter, QLinearGradient, QRadialGradient, QColor, QBrush, QPen, QPainterPath, QPixmap, QIcon, QCursor, QImageReader, QDesktopServices
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabel, QPushButton,
     QComboBox, QCheckBox, QLineEdit, QVBoxLayout, QHBoxLayout,
@@ -22,9 +23,16 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabe
     QGraphicsScene, QGraphicsView, QGraphicsPathItem, QDialog, QDialogButtonBox, QFormLayout, QSpinBox, QSlider, QStyle, QStyleOptionComboBox, QStylePainter,
     QToolButton, QStyleOptionToolButton, QButtonGroup, QStackedWidget, QPlainTextEdit, QInputDialog, QListWidget, QListWidgetItem, QMenu, QProgressDialog)
 
-ICON_DIR = APP_DIR / "assets" / "icons"
-# UI icons are drawn from paths below so their strokes stay crisp at every DPI.
-ICON_ASSETS = {}
+ICON_DIR = APP_DIR / "assets" / "icons" / "material"
+# Google Material Symbols (Apache 2.0) by our icon name; the rest are drawn from paths in draw_vector_icon.
+MATERIAL_ICONS = {
+    "mic": "mic", "headphones": "headphones", "screen": "desktop_windows", "monitor": "desktop_windows",
+    "image": "imagesmode", "chat": "chat_bubble", "settings": "settings", "refresh": "refresh", "loop": "refresh",
+    "copy": "content_copy", "clone": "content_copy", "speak": "volume_up", "volume": "volume_up", "speaker": "volume_up",
+    "plus": "add", "more": "more_horiz", "panel": "left_panel_close", "panel-expand": "left_panel_open",
+    "file": "draft", "send": "arrow_upward",
+}
+_material_renderers = {}
 
 from twitch_chat import TwitchChatDialog
 
@@ -1045,7 +1053,30 @@ class ToggleSwitch(QCheckBox):
         painter.end()
 
 
+def draw_material_icon(painter, name, color, size):
+    """Draw a Material Symbol recoloured to `color`; False if the icon has none or its file is missing."""
+    filename = MATERIAL_ICONS.get(name)
+    if not filename:
+        return False
+    key = (filename, QColor(color).name(QColor.NameFormat.HexArgb))
+    renderer = _material_renderers.get(key)
+    if renderer is None:
+        try:
+            svg = (ICON_DIR / f"{filename}.svg").read_text(encoding="utf-8")
+        except OSError:
+            return False
+        svg = re.sub(r'fill="#[0-9a-fA-F]{3,8}"', f'fill="{QColor(color).name()}" fill-opacity="{QColor(color).alphaF():.3f}"', svg)
+        renderer = _material_renderers[key] = QSvgRenderer(svg.encode("utf-8"))
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    renderer.render(painter, QRectF(0, 0, size, size))
+    painter.restore()
+    return True
+
+
 def draw_vector_icon(painter, name, color, size=24):
+    if draw_material_icon(painter, name, color, size):
+        return
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.scale(size / 24.0, size / 24.0)
@@ -1173,36 +1204,12 @@ def draw_vector_icon(painter, name, color, size=24):
 
 
 def vector_icon(name, color, size=20):
-    if name in ICON_ASSETS:
-        return QIcon(tinted_asset_pixmap(name, color, size))
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     draw_vector_icon(painter, name, color, size)
     painter.end()
     return QIcon(pixmap)
-
-
-def tinted_asset_pixmap(name, color, size):
-    """Render one of the user's transparent PNG icons in the active UI color."""
-    filename = ICON_ASSETS.get(name)
-    if not filename:
-        return QPixmap()
-    source = QPixmap(str(ICON_DIR / filename))
-    if source.isNull():
-        return QPixmap()
-    source = source.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
-                           Qt.TransformationMode.SmoothTransformation)
-    result = QPixmap(size, size)
-    result.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(result)
-    x = (size - source.width()) // 2
-    y = (size - source.height()) // 2
-    painter.drawPixmap(x, y, source)
-    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-    painter.fillRect(result.rect(), QColor(color))
-    painter.end()
-    return result
 
 
 class VectorIconWidget(QWidget):
@@ -1668,12 +1675,6 @@ class CompanionApp(QMainWindow, CompanionCore):
         title = QLabel("PIVEN"); title.setObjectName("brandTitle"); brand.addWidget(title)
         subtitle = QLabel("COMPANION"); subtitle.setObjectName("brandSubtitle"); brand.addWidget(subtitle)
         header.addStretch(1)
-        self.twitch_btn = self._button("Twitch", "quiet")
-        self.twitch_btn.setMinimumHeight(40)
-        self.twitch_btn.setToolTip("Подготовить и вручную подтвердить одно сообщение в Twitch")
-        self.twitch_btn.setEnabled(self.settings.get("integrations_enabled", {}).get("twitch", True))
-        self.twitch_btn.clicked.connect(self.open_twitch_chat)
-        header.addWidget(self.twitch_btn)
         self.sidebar_toggle_btn = self._button("", "quiet")
         self.sidebar_toggle_btn.setIcon(vector_icon("panel", MONO["text"]))
         self.sidebar_toggle_btn.setIconSize(QSize(19, 19))
@@ -2481,8 +2482,6 @@ class CompanionApp(QMainWindow, CompanionCore):
             integration_enabled[name] = bool(enabled)
             self.settings["integrations_enabled"] = dict(integration_enabled)
             state_label.setText("Включена" if enabled else "Выключена")
-            if name == "twitch":
-                self.twitch_btn.setEnabled(enabled)
 
         def make_integration_row(key, name, detail, icon_name, open_settings_callback):
             row = QFrame(); row.setObjectName("settingsCard")
@@ -2513,7 +2512,7 @@ class CompanionApp(QMainWindow, CompanionCore):
         def open_ollama_settings():
             def contents(layout, window):
                 note = QLabel("Ollama — локальный движок Компаньона."); note.setObjectName("mutedSmall"); note.setWordWrap(True); layout.addWidget(note)
-                form = QFormLayout(); form.addRow("Адрес", QLabel(OLLAMA_URL)); form.addRow("Выбранная модель", QLabel(self.model_box.currentText().strip() or "Не выбрана")); layout.addLayout(form)
+                form = QFormLayout(); form.addRow("Движок", QLabel(f"llama.cpp, {llama_backend.BASE_URL}")); form.addRow("Выбранная модель", QLabel(self.model_box.currentText().strip() or "Не выбрана")); layout.addLayout(form)
                 refresh = self._button("Обновить список моделей", "quiet"); refresh.clicked.connect(self.refresh_models); layout.addWidget(refresh)
                 info = QLabel("Переключатель на странице интеграций приостанавливает обращения Компаньона к Ollama."); info.setObjectName("mutedSmall"); info.setWordWrap(True); layout.addWidget(info)
             make_integration_settings_window("Ollama", contents).exec()
@@ -2621,7 +2620,6 @@ class CompanionApp(QMainWindow, CompanionCore):
                 self.settings["decoration_shape"] = previous_decoration_shape
                 self._apply_theme()
             self.settings["integrations_enabled"] = previous_integrations_enabled
-            self.twitch_btn.setEnabled(previous_integrations_enabled.get("twitch", True))
             self._settings_nav_buttons = []
             return
 
@@ -3440,18 +3438,8 @@ class CompanionApp(QMainWindow, CompanionCore):
         destination_path = Path(path)
         if destination_path.suffix.lower() != expected_suffix:
             destination_path = destination_path.with_suffix(expected_suffix)
-        role_names = {"user": "Вы", "assistant": "Компаньон", "system": "Система", "computer": "Звук компьютера"}
-        title = str(chat.get("title") or "Чат")
-        lines = [f"# {title}", ""] if markdown else [title, "=" * len(title), ""]
-        for entry in chat.get("items", []):
-            role = role_names.get(entry.get("role"), entry.get("role", "Сообщение"))
-            heading = f"## {role}" if markdown else f"{role}:"
-            lines.extend((heading, "", str(entry.get("text", "")), ""))
-            for image_path in entry.get("images", []):
-                lines.append(f"Изображение: {image_path}")
-                lines.append("")
         try:
-            destination_path.write_text("\n".join(lines), encoding="utf-8")
+            destination_path.write_text(self.export_chat_text(chat.get("id"), markdown), encoding="utf-8")
             self.chat.show_chat_hint("Чат экспортирован")
         except Exception as error:
             QMessageBox.warning(self, "Экспорт чата", f"Не удалось сохранить файл:\n{error}")
@@ -3530,22 +3518,8 @@ class CompanionApp(QMainWindow, CompanionCore):
             self._retry_last_answer()
 
     def _retry_last_answer(self):
-        if self.busy:
-            return
-        user_index = next((i for i in range(len(self.messages) - 1, 0, -1)
-                           if self.messages[i].get("role") == "user"), None)
-        if user_index is None:
-            return
-        previous = self.messages[user_index]
-        prompt = previous.get("content", "")
-        images = previous.get("images") or []
-        self.messages = self.messages[:user_index]
-        self.selected_model = self.model_box.currentText().strip() or self.selected_model
-        self.action_cancel.clear()
-        self._active_ollama_response = None
-        self.busy = True
-        self._set_activity("Думает")
-        threading.Thread(target=self.ask_model, args=(prompt, images or None, self.speech_enabled), daemon=True).start()
+        if self.retry_last_answer(self.model_box.currentText().strip()):
+            self._set_activity("Думает")
 
     def _set_status(self, text):
         status_changed = self.status_pill.text() != text
@@ -4274,30 +4248,9 @@ class CompanionApp(QMainWindow, CompanionCore):
                         if isinstance(expected, (int, float)) and expected > 0 and received != expected:
                             raise RuntimeError(f"Размер скачанного файла не совпадает с Hugging Face: {received} из {int(expected)} байт.")
                         os.replace(partial, destination)
-                    else:
-                        signals.progress.emit(68, "Файл уже скачан · добавляю в Ollama…")
-
-                    signals.progress.emit(70, "Импортирую GGUF в Ollama…")
-                    modelfile = f'FROM "{destination.as_posix()}"'
-                    payload = json.dumps({"name": model_tag, "model": model_tag,
-                                          "modelfile": modelfile, "stream": True}).encode("utf-8")
-                    request = urllib.request.Request(OLLAMA_URL + "/api/create", data=payload,
-                        headers={"Content-Type": "application/json"}, method="POST")
-                    with urllib.request.urlopen(request, timeout=3600) as response:
-                        for line in response:
-                            if cancel_event.is_set():
-                                raise InterruptedError("Импорт прерван. Ollama могла продолжить сборку модели.")
-                            if not line.strip():
-                                continue
-                            item = json.loads(line.decode("utf-8", errors="replace"))
-                            if item.get("error"):
-                                raise RuntimeError(item["error"])
-                            total = item.get("total") or 0
-                            done = item.get("completed") or 0
-                            percent = 70 + int(done * 29 / total) if total else 75
-                            signals.progress.emit(percent, str(item.get("status") or "Собираю модель в Ollama…"))
+                    # llama.cpp loads the GGUF straight from this folder; there is no import step.
                     signals.progress.emit(100, "Модель готова")
-                    signals.finished.emit(str(destination), model_tag)
+                    signals.finished.emit(str(destination), destination.stem)
                 except Exception as error:
                     try:
                         partial.unlink(missing_ok=True)
@@ -4317,12 +4270,15 @@ class CompanionApp(QMainWindow, CompanionCore):
 
     def refresh_models(self):
         if not self._integration_enabled("ollama"):
-            self.events.put(("status", "Интеграция Ollama выключена"))
+            self.events.put(("status", "Локальная модель выключена"))
             return
         self.events.put(("activity", "Обновляет список моделей"))
         def work():
-            try: self.events.put(("models",[m["name"] for m in ollama_get("/api/tags").get("models",[])]))
-            except Exception as e: self.events.put(("status", "Ollama недоступна — запустите приложение Ollama")); log(f"Ollama model list error: {e}")
+            try:
+                self.events.put(("models", list_models()))
+                problem = backend_problem()
+                if problem: self.events.put(("status", problem))
+            except Exception as e: self.events.put(("status", f"Не удалось прочитать папку моделей: {e}")); log(f"model list error: {e}")
         threading.Thread(target=work,daemon=True).start()
 
     def _update_model_label(self,*args):
@@ -4362,7 +4318,7 @@ class CompanionApp(QMainWindow, CompanionCore):
                 self._thinking_lookup_inflight.add(model)
                 def lookup():
                     try:
-                        values, default = ollama_model_thinking(model)
+                        values, default = model_thinking(model)
                         result = (model, values, default, "")
                     except Exception as error:
                         result = (model, None, None, str(error))
@@ -4514,7 +4470,7 @@ class CompanionApp(QMainWindow, CompanionCore):
                         self._append("user",text,image_paths)
                         self.events.put(("activity","Думает · отвечает на сообщение из очереди"))
                         threading.Thread(target=self.ask_model,args=(text,images or None,self.speech_enabled),daemon=True).start()
-                elif kind=="asr": self._handle_transcript(value)
+                elif kind=="asr": self.handle_transcript(value, self.model_box.currentText().strip())
                 elif kind=="stopped": self.running=False; self._set_start("Старт")
                 elif kind=="capture_failed": self._reset_running()
         except queue.Empty: pass
@@ -4535,8 +4491,8 @@ class CompanionApp(QMainWindow, CompanionCore):
             except Exception:
                 if QMessageBox.question(self,APP_NAME,"Для захвата микрофона и звука компьютера не хватает soundcard. Установить его сейчас в фоне?",QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No)==QMessageBox.StandardButton.Yes: threading.Thread(target=self.install_audio,daemon=True).start()
                 return
-        try: ollama_get("/api/tags")
-        except Exception: QMessageBox.critical(self,APP_NAME,"Ollama не запущена или недоступна. Откройте приложение Ollama и попробуйте снова."); return
+        problem = backend_problem()
+        if problem: QMessageBox.critical(self,APP_NAME,problem); return
         self.stop_event.clear(); self.running=True; self.selected_model=model
         self.capture_options=(enabled("mic"),enabled("loopback"),enabled("screen"),enabled("proactive"))
         self._set_start("Пауза",danger=True); self._set_status("Активен · речь и звук ПК, экран в паузах")
@@ -4708,54 +4664,6 @@ class CompanionApp(QMainWindow, CompanionCore):
         self._active_ollama_response = None
         self.busy=True; self.selected_model=model; self.events.put(("activity","Думает"))
         threading.Thread(target=self.ask_model,args=(text,image_data or None,self.speech_enabled),daemon=True).start()
-
-    def _handle_transcript(self, transcript):
-        source,text=transcript; text=text.strip()
-        if len(text)<3:return
-        if self.busy:return
-        role="user" if source=="микрофон" else "computer"
-        self.events.put(("message",(role,text,False)))
-        if not self.running:return
-        if source == "микрофон" and self._detect_composer_route(text) == "image":
-            self._start_image_generation(text)
-            return
-        if source == "микрофон" and self._detect_composer_route(text) == "code":
-            model = self.model_box.currentText().strip()
-            project_root = Path(self.settings.get("project_root", str(APP_DIR))).expanduser()
-            if model and project_root.is_dir():
-                self.action_cancel.clear()
-                self._active_ollama_response = None
-                self.busy = True
-                self.selected_model = model
-                self.events.put(("activity", "Распознал задачу по проекту · запускает агента"))
-                threading.Thread(target=self._run_coding_agent,
-                                 args=(text, model, str(project_root)), daemon=True).start()
-                return
-            self.events.put(("activity", "Для задачи по проекту выберите модель и папку проекта"))
-            return
-        if source == "микрофон" and self._detect_composer_route(text) == "presentation":
-            model = self.model_box.currentText().strip()
-            if model:
-                self.action_cancel.clear()
-                self._active_ollama_response = None
-                self.busy = True
-                self.selected_model = model
-                self.events.put(("activity", "Распознал просьбу создать презентацию"))
-                threading.Thread(target=self._run_presentation_agent, args=(text, model), daemon=True).start()
-            else:
-                self.events.put(("activity", "Для создания презентации выберите модель Ollama"))
-            return
-        self._start_voice_turn(text,source)
-
-    def _start_voice_turn(self,text,source="микрофон"):
-        self.busy=True; screenshot=self.take_screenshot() if self.vars["screen"].isChecked() else None
-        self.action_cancel.clear()
-        self._active_ollama_response = None
-        self.events.put(("activity","Думает"))
-        source_hint="пользователь сказал в микрофон" if source=="микрофон" else "в звуке компьютера распознана речь"
-        media_rule=" Если это фрагмент видео или игры, а не обращение к тебе, ответь строго [МОЛЧУ]." if source=="звук ПК" else ""
-        prompt=f"{source_hint}: {text}\nОтветь естественно и коротко по-русски.{media_rule}"
-        threading.Thread(target=self.ask_model,args=(prompt,screenshot,self.speech_enabled),daemon=True).start()
 
     def _reset_running(self):
         self.running=False; self._set_start("Старт"); self._set_status("Захват остановлен")
