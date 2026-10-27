@@ -23,8 +23,6 @@
 !/process_job.py
 !/desktop_companion.pyw
 !/web_companion.pyw
-!/Qwen-Image-2.1-Heretic-*.json
-!/Qwen-Image-2.1-Heretic-Prompt-Enhancer-README.md
 !/Запустить компаньон.cmd
 !/Запустить веб-интерфейс.cmd
 !/assets/
