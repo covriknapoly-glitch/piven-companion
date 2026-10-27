@@ -910,7 +910,8 @@ class CompanionCore:
 
     def _start_voice_turn(self, text, source="микрофон"):
         self.busy = True
-        screenshot = self.take_screenshot() if self.capture_options[2] else None
+        sees_screen = llama_backend.has_vision(self.selected_model)
+        screenshot = self.take_screenshot() if self.capture_options[2] and sees_screen else None
         self.action_cancel.clear()
         self._active_ollama_response = None
         self.events.put(("activity", "Думает"))
@@ -1851,7 +1852,11 @@ class CompanionCore:
             message={"role":"user","content":content}
             if screenshot:
                 message["images"] = screenshot if isinstance(screenshot, list) else [screenshot]
-            context=[system_message]+self.messages[1:][-8:]+[message]
+            history=self.messages[1:][-8:]
+            if not sees_screen:  # images from earlier turns (another model, screen glances) would make the request fail
+                history=[{**item,"images":[],"content":item.get("content","")+"\n[Здесь было изображение, текущая модель его не видит.]"}
+                         if item.get("images") else item for item in history]
+            context=[system_message]+history+[message]
             self.events.put(("activity","Ждёт ответа модели"))
             reasoning_received=threading.Event()
             # A plain spoken reply is voiced sentence by sentence while the model still writes it. Answers that
@@ -2050,7 +2055,8 @@ class CompanionCore:
         while not self.stop_event.is_set():
             now=time.monotonic()
             quiet_since_voice=now-self.last_mic_activity
-            if proactive_enabled and screen_enabled and now>=next_visual and not self.busy and quiet_since_voice>=5:
+            if (proactive_enabled and screen_enabled and now>=next_visual and not self.busy and quiet_since_voice>=5
+                    and llama_backend.has_vision(self.selected_model)):
                 self.action_cancel.clear(); self._active_ollama_response=None
                 self.busy=True; screenshot=self.take_screenshot(); threading.Thread(target=self.ask_model,args=("Осмотри текущий экран и оцени, есть ли повод коротко обратиться к пользователю.",screenshot,self.speech_enabled,True),daemon=True).start(); next_visual=now+self.screen_interval_seconds
             else:time.sleep(0.2)
