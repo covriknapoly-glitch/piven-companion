@@ -28,6 +28,9 @@
 !/Запустить компаньон.cmd
 !/Запустить веб-интерфейс.cmd
 !/assets/
+# Logo drafts the program does not load
+/assets/piven_logo.png
+/assets/piven_logo_2026.png
 !/skills/
 
 !/modern-ui/
