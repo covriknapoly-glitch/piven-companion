@@ -128,7 +128,7 @@ function CodeBlock({ lang, text, onCopy }: { lang: string; text: string; onCopy:
 
 export function Markdown({ text, onCopy }: { text: string; onCopy: (text: string) => void }) {
   return (
-    <div className="md">
+    <div className="md" data-i18n-skip>
       {parseBlocks(text).map((block, index) => {
         const key = `b${index}`;
         switch (block.kind) {

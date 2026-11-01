@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { HfFile, VoiceDetails, VoiceKind, VoiceSearchHit, VoiceStatus, WebApi } from "./bridge";
 import { Icon } from "./icons";
-import { Button, Field, MemoryBar, Modal, ModelLogo, gigabytes } from "./ui";
+import { Button, Field, gigabytes, MemoryBar, Modal, ModelDescription, ModelLogo } from "./ui";
 
 const KINDS: { kind: VoiceKind; title: string; placeholder: string }[] = [
   { kind: "asr", title: "Распознавание речи", placeholder: "Например, whisper russian, gigaam или parakeet" },
@@ -20,7 +20,7 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
   const [query, setQuery] = useState("");
   const [token, setToken] = useState("");
   const [hits, setHits] = useState<VoiceSearchHit[] | null>(null);
-  const [note, setNote] = useState("Загружаю популярные модели…");
+  const [note, setNote] = useState("Загрузка популярных моделей…");
   const [hit, setHit] = useState<VoiceSearchHit | null>(null);
   const [file, setFile] = useState<HfFile | null>(null);
   const [details, setDetails] = useState<VoiceDetails | null>(null);
@@ -28,7 +28,7 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
 
   useEffect(() => {
     const text = query.trim();
-    setNote(text ? "Ищу на Hugging Face…" : "Загружаю популярные модели…");
+    setNote(text ? "Поиск на Hugging Face…" : "Загрузка популярных моделей…");
     let live = true;
     const timer = window.setTimeout(() => {
       void api.voice_search(kind, text, token).then((reply) => {
@@ -77,8 +77,9 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
 
   return (
     <Modal title="Модели озвучки и распознавания" subtitle="Ищет на Hugging Face и в каталоге audio.cpp. У каждой модели видно, каким движком она запустится; движок ставится сам при первой загрузке."
-      onClose={() => { if (!running) onClose(); }} width={720} className="hub-modal" footer={<>
-        <span className="foot-note">{note}</span>
+      onClose={onClose} width={720} className="hub-modal" footer={<>
+        <span className="foot-note">{running ? "Окно можно закрыть: загрузка продолжится, её видно в панели слева." : note}</span>
+        {running && <Button kind="ghost" onClick={onClose}>Скрыть</Button>}
         {running
           ? <Button kind="ghost" onClick={() => { void api.voice_cancel(); }}>Отменить</Button>
           : <Button kind="primary" icon="download" disabled={!canInstall} onClick={start}>Скачать</Button>}
@@ -103,7 +104,7 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
             <button key={item.id} type="button" className={`${item.id === repo ? "selected" : ""} ${item.engine ? "" : "unsupported"}`} disabled={running}
               title={item.engine ? `Запустится через ${item.engineLabel}` : `Не запустится: ${item.reason}`} onClick={() => setHit(item)}>
               <span className="hub-name"><ModelLogo api={api} name={item.title ?? item.id} author={item.engine === "audiocpp" ? "audio-cpp" : item.id.split("/")[0]} size={20} />
-                <span className="hub-title">{item.title ?? item.id}{item.note && <small>{item.note}</small>}</span>
+                <span className="hub-title">{item.title ?? item.id}</span>
                 {installed.has(item.id) && <small className="hub-tag">скачана</small>}
                 {item.nonCommercial && <small className="hub-tag off" title={item.license}>некоммерческая</small>}{item.gated && <Icon name="pin" size={13} />}</span>
               <span className="hub-stats">{item.engine ? <small className="hub-tag engine">{item.engineLabel}</small> : <small className="hub-tag off">не запустится</small>}
@@ -112,10 +113,12 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
           ))}
         </div>
       )}
+      {hit && <ModelDescription api={api} repo={hit.id} token={token} />}
+      {hit && hit.note && <p className="model-desc">{hit.note}</p>}
       {hit && (
         <div className="hub-form">
           {!hit.engine ? <p className="pane-note">Эту модель программа не запустит: {hit.reason}.</p>
-            : !details ? <p className="pane-note">{engine === "nemo" ? "Проверяю, подойдёт ли этот GGUF для NeMo-Speech…" : "Смотрю, что это за модель…"}</p>
+            : !details ? <p className="pane-note">{engine === "nemo" ? "Проверка, подойдёт ли этот GGUF для NeMo-Speech…" : "Определение модели…"}</p>
             : !details.ok ? <p className="pane-note">{details.error}</p>
             : !details.supported ? <p className="pane-note">{details.reason}</p>
             : <>

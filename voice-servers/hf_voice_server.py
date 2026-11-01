@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import os
+import threading
 import wave
 
 import numpy as np
@@ -306,6 +307,8 @@ def speech(request: SpeechRequest):
     except HTTPException:
         raise
     except Exception as error:
+        if "CUDA error" in str(error):  # the process cannot recover; quit so the companion starts a fresh one
+            threading.Timer(0.5, os._exit, (1,)).start()
         raise HTTPException(status_code=500, detail=f"Speech generation failed: {error}") from error
 
 

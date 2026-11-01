@@ -1,10 +1,37 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { MemoryEstimate, WebApi } from "./bridge";
+import type { MemoryEstimate, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
-import logoUrl from "./assets/piven_logo.png";
+import logoSvg from "./assets/piven_logo.svg";
+
+export const THINKING_NAMES: Record<string, string> = { low: "Низкий", medium: "Средний", high: "Высокий", true: "Включено", false: "Выключено" };
+export const thinkingName = (value: ThinkingValue | null) => (value === null ? "" : THINKING_NAMES[String(value)] ?? String(value));
+/** What the thinking switch can tell about a model that cannot be switched. */
+export const thinkingFixed = (options: ThinkingOptions) =>
+  options.values.length ? "" : options.default === true ? "Эта модель всегда размышляет." : "Эта модель не размышляет.";
+
+/** A short description of a Hugging Face model from its card (for a conversion, from the original model's card). */
+export function ModelDescription({ api, repo, token = "" }: { api: WebApi; repo: string; token?: string }) {
+  const [found, setFound] = useState<{ text: string; source: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    setFound(null);
+    if (repo && !repo.startsWith("audiocpp:")) void api.model_description(repo, token).then((reply) => { if (live) setFound(reply); });
+    return () => { live = false; };
+  }, [api, repo, token]);
+  if (!repo || repo.startsWith("audiocpp:")) return null;
+  if (!found) return <p className="model-desc muted">Загрузка описания…</p>;
+  if (!found.text) return <p className="model-desc muted">У этой модели нет описания на Hugging Face.</p>;
+  return (
+    <div className="model-desc">
+      <p>{found.text}</p>
+      {found.source !== repo && <small>Описание исходной модели {found.source}</small>}
+    </div>
+  );
+}
 
 export function Logo({ size = 22, pulse = false }: { size?: number; pulse?: boolean }) {
-  return <img className={`logo ${pulse ? "pulse" : ""}`} src={logoUrl} width={size} height={size} alt="" draggable={false} />;
+  // Inline SVG drawn in currentColor, so the logo follows the light and dark theme.
+  return <span className={`logo ${pulse ? "pulse" : ""}`} style={{ width: size, height: size }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: logoSvg }} />;
 }
 
 export function IconButton({ icon, label, onClick, className = "", disabled = false, size = 18, active = false }:
@@ -85,6 +112,16 @@ export function Switch({ checked, onChange, label, disabled = false }: { checked
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} className={`switch ${checked ? "on" : ""}`} onClick={() => onChange(!checked)}><span /></button>;
 }
 
+/** A switch with its text next to it (several options under one heading). */
+export function Toggle({ checked, onChange, label, disabled = false }: { checked: boolean; onChange: (value: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <label className={`toggle-row ${disabled ? "disabled" : ""}`}>
+      <Switch checked={checked} onChange={onChange} label={label} disabled={disabled} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 export function Field({ label, hint, error, children }: { label: string; hint?: ReactNode; error?: string; children: ReactNode }) {
   return (
     <div className={`field ${error ? "has-error" : ""}`}>
@@ -115,18 +152,18 @@ export const formatElapsed = (seconds: number) => {
 // Developer logos (Qwen, Meta, Google, NVIDIA...) by model name, fetched once per name for the whole page.
 const logoCache = new Map<string, string>();
 const logoWaiters = new Set<() => void>();
-let logoQueue: { names: Set<string>; authors: Record<string, string> } | null = null;
+let logoQueue: { names: Set<string>; authors: Record<string, string>; archs: Record<string, string> } | null = null;
 
-function requestLogos(api: WebApi, names: string[], authors: Record<string, string>) {
+function requestLogos(api: WebApi, names: string[], authors: Record<string, string>, archs: Record<string, string> = {}) {
   const missing = names.filter((name) => !logoCache.has(name));
   if (!missing.length) return;
   if (!logoQueue) {
-    logoQueue = { names: new Set(), authors: {} };
+    logoQueue = { names: new Set(), authors: {}, archs: {} };
     window.setTimeout(() => {
       const batch = logoQueue!; logoQueue = null;
       const list = [...batch.names];
       list.forEach((name) => logoCache.set(name, ""));
-      void api.model_logos(list, batch.authors).then((found) => {
+      void api.model_logos(list, batch.authors, batch.archs).then((found) => {
         Object.entries(found || {}).forEach(([name, url]) => logoCache.set(name, url));
         logoWaiters.forEach((wake) => wake());
       });
@@ -134,18 +171,19 @@ function requestLogos(api: WebApi, names: string[], authors: Record<string, stri
   }
   missing.forEach((name) => logoQueue!.names.add(name));
   Object.assign(logoQueue.authors, authors);
+  Object.assign(logoQueue.archs, archs);
 }
 
 /** Small square developer logo for a model; a neutral box when there is none or it fails to load. */
-export function ModelLogo({ api, name, author = "", size = 18 }: { api: WebApi | null; name: string; author?: string; size?: number }) {
+export function ModelLogo({ api, name, author = "", arch = "", size = 18 }: { api: WebApi | null; name: string; author?: string; arch?: string; size?: number }) {
   const [, redraw] = useState(0);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     const wake = () => redraw((value) => value + 1);
     logoWaiters.add(wake);
-    if (api && name) requestLogos(api, [name], author ? { [name]: author } : {});
+    if (api && name) requestLogos(api, [name], author ? { [name]: author } : {}, arch ? { [name]: arch } : {});
     return () => { logoWaiters.delete(wake); };
-  }, [api, name, author]);
+  }, [api, name, author, arch]);
   const url = logoCache.get(name);
   return url && !failed
     ? <img className="model-logo" src={url} width={size} height={size} alt="" draggable={false} onError={() => setFailed(true)} />

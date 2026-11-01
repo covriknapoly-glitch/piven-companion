@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isUnchanged, waitForEngine, type ChatSummary, type EngineState, type SearchHit, type WebApi } from "./bridge";
-import { Board, type BoardCard } from "./board";
-import { Lightbox, MessageCard, ROLE_WIDTH, ThinkingCard } from "./cards";
+import { Lightbox } from "./cards";
 import { Composer } from "./composer";
 import { ConfirmDialog, DownloadDialog, HubDialog, SearchDialog, TwitchDialog } from "./dialogs";
 import { VoiceHubDialog } from "./voicehub";
 import { Icon } from "./icons";
-import { BrowserPane } from "./browser";
 import { CallPanel } from "./call";
 import { LinkContext } from "./markdown";
-import { SettingsDialog, FONT_CHOICES, type ThemeChoice, type ViewMode, type FontChoice } from "./settings";
+import { SettingsDialog, FONT_CHOICES, type ThemeChoice, type FontChoice } from "./settings";
 import { Sidebar, type ChatActions } from "./sidebar";
-import { Transcript } from "./transcript";
+import { Transcript, TwitchPollContext } from "./transcript";
 import { IconButton, Logo, MenuButton } from "./ui";
+import { Workspace, type WorkspaceTab } from "./workspace";
+import { LANGUAGES, defaultLanguage, setLanguage, type Language } from "./i18n";
 
 const THEME_KEY = "piven-ui-theme";
 const BROWSER_KEY = "piven-browser-open";
-const VIEW_KEY = "piven-view-mode";
 const FONT_KEY = "piven-font";
+const LANGUAGE_KEY = "piven-language";
 
 function readStored(key: string, allowed: string[], fallback: string) {
   try {
@@ -65,16 +65,21 @@ export default function App() {
   const [dialog, setDialog] = useState<"" | "settings" | "search" | "twitch" | "hub" | "voice-asr" | "voice-tts">("");
   const [deleting, setDeleting] = useState<ChatSummary | null>(null);
   const [lightbox, setLightbox] = useState("");
-  const [focus, setFocus] = useState<{ key: string; nonce: number } | null>(null);
   const [focusIndex, setFocusIndex] = useState<{ index: number; nonce: number } | null>(null);
   const [browserOpen, setBrowserOpen] = useState(() => readStored(BROWSER_KEY, ["1", "0"], "0") === "1");
   const [browserRequest, setBrowserRequest] = useState<{ url: string; nonce: number } | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => readStored(VIEW_KEY, ["chat", "cards"], "chat") as ViewMode);
   useEffect(() => { writeStored(BROWSER_KEY, browserOpen ? "1" : "0"); }, [browserOpen]);
-  useEffect(() => { writeStored(VIEW_KEY, viewMode); }, [viewMode]);
+  const [language, setLanguageChoice] = useState<Language>(() => readStored(LANGUAGE_KEY, LANGUAGES.map(([value]) => value), defaultLanguage()) as Language);
+  useEffect(() => { writeStored(LANGUAGE_KEY, language); setLanguage(language); if (api) void api.set_language(language); }, [language, api]);
   const [fontChoice, setFontChoice] = useState<FontChoice>(() => readStored(FONT_KEY, FONT_CHOICES.map(([value]) => value), "mono") as FontChoice);
   useEffect(() => { writeStored(FONT_KEY, fontChoice); document.documentElement.dataset.font = fontChoice; }, [fontChoice]);
-  const openLink = useCallback((url: string) => { setBrowserOpen(true); setBrowserRequest({ url, nonce: Date.now() }); }, []);
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("browser");
+  const [twitchPoll, setTwitchPoll] = useState<{ question: string; options: string[] } | null>(null);
+  const openTwitchPoll = useCallback((poll: { question: string; options: string[] }) => { setTwitchPoll(poll); setDialog("twitch"); }, []);
+  const openLink = useCallback((url: string) => { setBrowserOpen(true); setWorkspaceTab("browser"); setBrowserRequest({ url, nonce: Date.now() }); }, []);
+  // The model opened a page with its browser tool: show the browser panel so the user sees it too.
+  const modelBrowse = state?.browserRequest?.nonce;
+  useEffect(() => { if (modelBrowse && state?.browserRequest) openLink(state.browserRequest.url); }, [modelBrowse]); // eslint-disable-line react-hooks/exhaustive-deps
   const [pendingFocus, setPendingFocus] = useState<SearchHit | null>(null);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -121,7 +126,6 @@ export default function App() {
   // A search hit in another chat: switch first, then focus the card once that chat is on screen.
   useEffect(() => {
     if (pendingFocus && state?.activeChatId === pendingFocus.chatId) {
-      setFocus({ key: String(pendingFocus.index), nonce: Date.now() });
       setFocusIndex({ index: pendingFocus.index, nonce: Date.now() });
       setPendingFocus(null);
     }
@@ -155,17 +159,9 @@ export default function App() {
     return <div className="splash"><Logo size={96} /><h2>Нет связи с движком</h2><p>Этот интерфейс открывается файлом «Запустить веб-интерфейс» в папке Компаньона.</p></div>;
   }
   if (!api || !state || !actions) {
-    return <div className="splash"><Logo size={96} pulse /><p>Загружаю чаты…</p></div>;
+    return <div className="splash"><Logo size={96} pulse /><p>Загрузка чатов…</p></div>;
   }
 
-  const model = state.settings.model;
-  const lastAssistant = state.items.map((item) => item.role).lastIndexOf("assistant");
-  const cards: BoardCard[] = state.items.map((item, index) => ({
-    key: String(index), role: item.role, width: ROLE_WIDTH[item.role] ?? 520,
-    node: <MessageCard api={api} item={item} model={model} canRetry={index === lastAssistant && !state.busy}
-      onCopy={copy} onView={setLightbox} onRetry={() => { void api.retry_last().then((result) => done(result.ok ? undefined : result.error)); }} />,
-  }));
-  if (state.busy) cards.push({ key: "thinking", role: "thinking", width: ROLE_WIDTH.thinking, node: <ThinkingCard state={state} onStop={stop} /> });
   const empty = !state.items.length && !state.busy;
   const activeChat = state.chats.find((chat) => chat.id === state.activeChatId);
   const recent = state.chats.filter((chat) => chat.id !== state.activeChatId && chat.count > 1).slice(0, 5);
@@ -173,15 +169,16 @@ export default function App() {
 
   return (
     <LinkContext.Provider value={openLink}>
+    <TwitchPollContext.Provider value={openTwitchPoll}>
     <div className={`app ${sidebarOpen ? "" : "sidebar-hidden"}`}>
-      <Sidebar state={state} actions={actions} searchRef={searchRef} onNewChat={newChat}
+      <Sidebar api={api} state={state} actions={actions} searchRef={searchRef} onNewChat={newChat}
         onSearchMessages={() => setDialog("search")} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
 
       <main className="main">
         <header className="topbar">
           {!sidebarOpen && <>
             <IconButton icon="sidebarOpen" label="Показать панель (Ctrl+B)" onClick={() => setSidebarOpen(true)} />
-            <IconButton icon="compose" label="Новый чат (Ctrl+N)" onClick={newChat} disabled={state.busy} />
+            <IconButton icon="compose" label="Новый чат (Ctrl+N)" onClick={newChat} />
           </>}
           <div className="topbar-title">
             {renaming && activeChat
@@ -193,7 +190,7 @@ export default function App() {
           </div>
           <span className="topbar-spacer" />
           <IconButton icon={resolvedTheme === "light" ? "moon" : "sun"} label={resolvedTheme === "light" ? "Тёмная тема" : "Светлая тема"} onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")} />
-          <IconButton icon={browserOpen ? "sidebar" : "sidebarOpen"} label={browserOpen ? "Скрыть браузер (Ctrl+D)" : "Показать браузер (Ctrl+D)"} active={browserOpen} className="flip" onClick={() => setBrowserOpen((open) => !open)} />
+          <IconButton icon={browserOpen ? "sidebar" : "sidebarOpen"} label={browserOpen ? "Скрыть рабочую панель (Ctrl+D)" : "Рабочая панель: браузер и файлы (Ctrl+D)"} active={browserOpen} className="flip" onClick={() => setBrowserOpen((open) => !open)} />
           {activeChat && <MenuButton label="Действия с чатом" items={[
             { icon: "search", label: "Искать в сообщениях", hint: "Ctrl+Shift+F", onClick: () => setDialog("search") },
             { icon: "edit", label: "Переименовать", onClick: () => setRenaming(true) },
@@ -208,38 +205,35 @@ export default function App() {
 
         {state.busy && <div className="activity-strip"><i /></div>}
 
-        {viewMode === "cards" && !empty
-          ? <Board chatId={state.activeChatId} cards={cards} focus={focus} />
-          : <Transcript api={api} state={state} focusIndex={focusIndex} boardOpen={false} recent={recent}
+        <Transcript api={api} state={state} focusIndex={focusIndex} recent={recent}
               onCopy={copy} onView={setLightbox} onStop={stop}
               onRetry={() => { void api.retry_last().then((result) => done(result.ok ? undefined : result.error)); }}
-              onShowOnBoard={() => undefined}
-              onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} onSelectChat={actions.select} />}
+              onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} onSelectChat={actions.select} />
 
         <div className="composer-dock">
           <Composer api={api} state={state} inputRef={inputRef} prefill={prefill} onStop={stop} onError={done} onOpenHub={() => setDialog("hub")} onOpenVoiceHub={() => setDialog("voice-tts")}
-            onSent={(queued) => { if (queued) notify("Отправлю после текущего ответа", "info"); void poll(); }} />
+            onSent={(queued) => { if (queued) notify("Отправится после текущего ответа", "info"); void poll(); }} />
         </div>
       </main>
 
       {(browserOpen || state.listening.running) && (
-        <aside className={`workspace ${state.listening.running ? "in-call" : ""}`} aria-label={state.listening.running ? "Звонок" : "Браузер"}>
+        <aside className={`workspace ${state.listening.running ? "in-call" : ""}`} aria-label={state.listening.running ? "Звонок" : "Рабочая панель"}>
           {state.listening.running && <CallPanel api={api} state={state} onError={done} />}
-          {/* The browser stays mounted under a call so its page survives; its native view is hidden meanwhile. */}
+          {/* The panel stays mounted under a call so the browser's page survives; its native view is hidden meanwhile. */}
           {browserOpen && <div className={state.listening.running ? "workspace-hidden" : "workspace-slot"}>
-            <BrowserPane api={api} openRequest={browserRequest} onClose={() => setBrowserOpen(false)}
-              covered={Boolean(dialog || deleting || lightbox || state.confirm || state.listening.running)} />
+            <Workspace api={api} state={state} tab={workspaceTab} setTab={setWorkspaceTab} browserRequest={browserRequest}
+              onClose={() => setBrowserOpen(false)} covered={Boolean(dialog || deleting || lightbox || state.confirm || state.listening.running)} />
           </div>}
         </aside>
       )}
 
-      {dialog === "settings" && <SettingsDialog state={state} api={api} theme={theme} setTheme={setTheme} viewMode={viewMode} setViewMode={setViewMode} fontChoice={fontChoice} setFontChoice={setFontChoice} onClose={() => setDialog("")}
+      {dialog === "settings" && <SettingsDialog state={state} api={api} theme={theme} setTheme={setTheme} fontChoice={fontChoice} setFontChoice={setFontChoice} language={language} setLanguage={setLanguageChoice} onClose={() => setDialog("")}
         onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind) => setDialog(`voice-${kind}`)} onOpenTwitch={() => setDialog("twitch")} />}
       {dialog === "search" && <SearchDialog api={api} onClose={() => setDialog("")} onOpen={(hit) => {
-        if (hit.chatId === state.activeChatId) { setFocus({ key: String(hit.index), nonce: Date.now() }); setFocusIndex({ index: hit.index, nonce: Date.now() }); }
+        if (hit.chatId === state.activeChatId) { setFocusIndex({ index: hit.index, nonce: Date.now() }); }
         else { setPendingFocus(hit); void api.select_chat(hit.chatId).then((result) => done(result.ok ? undefined : result.error)); }
       }} />}
-      {dialog === "twitch" && <TwitchDialog api={api} onClose={() => setDialog("")} />}
+      {dialog === "twitch" && <TwitchDialog api={api} poll={twitchPoll} onClose={() => { setDialog(""); setTwitchPoll(null); }} />}
       {(dialog === "voice-asr" || dialog === "voice-tts") && <VoiceHubDialog api={api} initialKind={dialog === "voice-asr" ? "asr" : "tts"}
         onClose={() => setDialog("settings")} onDone={() => notify("Голосовая модель скачана", "info")} />}
       {dialog === "hub" && <HubDialog api={api} onClose={() => setDialog("")} onDone={() => { void poll(); notify("Модель скачана", "info"); }} />}
@@ -249,6 +243,7 @@ export default function App() {
       {lightbox && <Lightbox api={api} path={lightbox} onClose={() => setLightbox("")} />}
       {toast && <div className={`toast ${toast.kind}`} role="status"><Icon name={toast.kind === "error" ? "alert" : "check"} size={16} />{toast.text}</div>}
     </div>
+    </TwitchPollContext.Provider>
     </LinkContext.Provider>
   );
 }

@@ -202,7 +202,7 @@ def install(kind, family, package_id, progress, cancel_event, token=""):
             url = f"https://huggingface.co/{urllib.parse.quote(repo, safe='/')}/resolve/main/{quoted}"
             _download(url, target, size, "", cancel_event,
                       lambda received: progress(start + (99 - start) * (done + received) / total,
-                                                f"Скачиваю {spec.get('display_name', family)}: {(done + received) / 2**20:.0f} из {total / 2**20:.0f} МБ"), token)
+                                                f"Скачивание {spec.get('display_name', family)}: {(done + received) / 2**20:.0f} из {total / 2**20:.0f} МБ"), token)
         done += size
     ggufs = [path for path in folder.rglob("*.gguf")]
     path = ggufs[0] if len(files) == 1 and len(ggufs) == 1 else folder

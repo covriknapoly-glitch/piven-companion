@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
-import type { EngineState, ModelMemory, WebApi } from "./bridge";
+import type { EngineState, ModelMemory, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
 import { useImage } from "./cards";
 import { CallControl } from "./dialogs";
 import { Icon } from "./icons";
-import { IconButton, MemoryBadge, ModelLogo, fileName, useOutsideClose } from "./ui";
+import { IconButton, MemoryBadge, ModelLogo, fileName, thinkingFixed, thinkingName, useOutsideClose } from "./ui";
 
 const readAsBase64 = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
@@ -45,7 +45,7 @@ function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: E
             {models.map((name) => (
               <button key={name} type="button" className={name === model ? "selected" : ""}
                 onClick={() => { close(); if (name !== model) void api.set_model(name).then((result) => onDone(result.ok ? undefined : result.error)); }}>
-                <ModelLogo api={api} name={name} size={18} /><span className="mono-ish grow">{name}</span><MemoryBadge estimate={memory?.models[name]} gpu={memory?.gpu ?? 0} context={memory?.context} />{name === model && <Icon name="check" size={15} />}
+                <ModelLogo api={api} name={name} size={18} /><span className="mono-ish grow">{name}</span><MemoryBadge estimate={memory?.models[name]} gpu={Math.max(0, (memory?.gpu ?? 0) - (memory?.voiceReserved ?? 0))} context={memory?.context} />{name === model && <Icon name="check" size={15} />}
               </button>
             ))}
             {!models.length && <div className="menu-empty">{state.models.length ? "Ничего не найдено" : state.modelsError || "Нет моделей"}</div>}
@@ -54,6 +54,53 @@ function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: E
           <button type="button" onClick={() => { close(); void api.refresh_models().then(() => onDone()); }}><Icon name="refresh" size={15} /> Обновить список</button>
           <button type="button" onClick={() => { close(); onOpenHub(); }}><Icon name="download" size={15} /> Скачать модель с Hugging Face…</button>
           <button type="button" onClick={() => { close(); onOpenVoiceHub(); }}><Icon name="mic" size={15} /> Озвучка и распознавание…</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The model's thinking mode next to the model chip; a fixed note for models that cannot switch it. */
+function ThinkingChip({ state, api, onDone }: { state: EngineState; api: WebApi; onDone: (error?: string) => void }) {
+  const model = state.settings.model;
+  const [options, setOptions] = useState<ThinkingOptions | null>(null);
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  const ref = useOutsideClose(open, close);
+  useEffect(() => {
+    setOptions(null);
+    if (model && state.models.includes(model)) void api.thinking_options(model).then(setOptions);
+  }, [api, model, state.models]);
+  if (!options || options.error) return null;
+  if (!options.values.length) return options.default === true
+    ? <span className="chip-btn static" title={thinkingFixed(options)}><Icon name="spark" size={14} /><span className="chip-text">Размышляет</span></span>
+    : null;
+  const choose = (value: ThinkingValue | "__auto__") => {
+    close();
+    void api.set_thinking(model, value).then((result) => {
+      onDone(result.ok ? undefined : result.error);
+      void api.thinking_options(model).then(setOptions);
+    });
+  };
+  // "auto" means the model's default: the menu shows that default as the chosen mode instead of a separate item
+  const effective = options.current === "__auto__" ? options.default ?? options.values[0] : options.current;
+  // the chip says what the model will do: think or not, or how deeply
+  const label = typeof effective === "boolean" ? (effective ? "С размышлением" : "Без размышления") : `Размышление: ${thinkingName(effective ?? null).toLowerCase()}`;
+  return (
+    <div className="menu-anchor" ref={ref}>
+      <button type="button" className="chip-btn" disabled={state.busy} onClick={() => setOpen((value) => !value)} title="Размышление">
+        <Icon name="spark" size={14} /><span className="chip-text">{label}</span><Icon name="chevronDown" size={14} />
+      </button>
+      {open && (
+        <div className="menu menu-up" role="menu">
+          <div className="menu-label">Размышление</div>
+          {options.values.map((value) => (
+            <button key={String(value)} type="button" className={String(value) === String(effective) ? "selected" : ""}
+              onClick={() => choose(String(value) === String(options.default) ? "__auto__" : value)}>
+              <span className="grow">{thinkingName(value)}{String(value) === String(options.default) && <small className="menu-hint"> · по умолчанию</small>}</span>
+              {String(value) === String(effective) && <Icon name="check" size={15} />}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -74,7 +121,7 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
 
   useEffect(() => {
     const text = draft.trim();
-    if (!text || images.length) { setHint(images.length ? "спрошу про картинку" : ""); return; }
+    if (!text || images.length) { setHint(images.length ? "спросит про картинку" : ""); return; }
     const timer = window.setTimeout(() => { void api.route_hint(text).then((result) => setHint(result.label)); }, 160);
     return () => window.clearTimeout(timer);
   }, [api, draft, images.length]);
@@ -141,12 +188,13 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
         </div>
       )}
       <textarea ref={inputRef} rows={1} aria-label="Сообщение" value={draft} spellCheck
-        placeholder={state.busy ? "Можно писать дальше, отправлю после текущего ответа" : "Напиши сообщение, попроси нарисовать картинку или сделать презентацию"}
+        placeholder={state.busy ? "Можно писать дальше: сообщение отправится после текущего ответа" : "Напиши сообщение, попроси нарисовать картинку или сделать презентацию"}
         onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
       <div className="composer-bar">
         <IconButton icon="paperclip" label="Прикрепить картинку (можно вставить Ctrl+V или перетащить)"
           onClick={() => { void api.pick_images().then((paths) => setImages((current) => [...current, ...paths.filter((path) => !current.includes(path))])); }} />
         <ModelChip state={state} api={api} onDone={onError} onOpenHub={onOpenHub} onOpenVoiceHub={onOpenVoiceHub} />
+        <ThinkingChip state={state} api={api} onDone={onError} />
         {hint && <span className="route-hint"><Icon name="spark" size={13} />{hint}</span>}
         <span className="composer-spacer" />
         <CallControl api={api} state={state} onError={onError} />

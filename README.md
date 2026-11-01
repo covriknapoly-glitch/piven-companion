@@ -62,4 +62,14 @@ docs/                         подробное описание и списо�
 
 После правок в `modern-ui/src` пересобери `dist`: `modern-ui\scripts\build.cmd`. Скрипт берёт `esbuild` из `modern-ui/node_modules` (в git не входит; `npm install` в папке `modern-ui`). Если есть портативный Node.js в `runtime\node`, перед сборкой идёт проверка типов TypeScript.
 
+## Установщик
+
+`installer/piven.iss` собирает `PIVEN-Companion-<версия>-Setup.exe` (Inno Setup 6.3+):
+
+```
+"%LOCALAPPDATA%\Programs\Inno Setup 7\ISCC.exe" installer\piven.iss
+```
+
+В установщик входят программа, вложенный Python с библиотеками, Qt и llama.cpp из этой папки; модели и голосовые движки — нет. Программа ставится для текущего пользователя в `%LOCALAPPDATA%\Programs\PIVEN Companion`, потому что пишет голосовые движки рядом с собой. Готовый файл появляется в `installer/Output` (в git не входит).
+
 Подробнее о возможностях — в [docs/README_Компаньон.md](docs/README_Компаньон.md).

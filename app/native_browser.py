@@ -7,8 +7,10 @@ downloads, and only http(s) navigation. Links that want a new window open in the
 """
 from __future__ import annotations
 
+import json
 import os
 import threading
+import time
 
 import clr  # noqa: F401 - pythonnet, already loaded by pywebview
 from System import Func, Type, Uri
@@ -156,6 +158,32 @@ class NativeBrowser:
     def state(self):
         with self._lock:
             return dict(self._state)
+
+    @property
+    def ready(self):
+        return self._ready
+
+    def read_text(self, timeout=20):
+        """The visible text of the open page (for the model's read_web_page); None when nothing is open.
+        The script runs in the page but the page gets no access to the companion."""
+        box = {}
+
+        def action():
+            core = self._control.CoreWebView2 if self._control and self._ready else None
+            if core is not None:
+                box["task"] = core.ExecuteScriptAsync("document.body ? document.body.innerText : ''")
+        self._on_ui(action)
+        task = box.get("task")
+        if task is None:
+            return None
+        deadline = time.monotonic() + timeout
+        while not task.IsCompleted:
+            if time.monotonic() > deadline:
+                raise TimeoutError("страница не ответила")
+            time.sleep(0.1)
+        if task.IsFaulted:
+            raise RuntimeError(str(task.Exception))
+        return json.loads(str(task.Result) or '""')
 
     def clear_notice(self):
         self._update(notice="")

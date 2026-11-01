@@ -3,7 +3,7 @@
  * `window.pywebview.api` (web_companion.pyw → WebApi), which works on the same
  * chats and settings as the Qt window through companion_core.
  */
-export type ChatRole = "user" | "assistant" | "system" | "computer";
+export type ChatRole = "user" | "assistant" | "system" | "computer" | "poll";
 
 export interface DialogueItem {
   role: ChatRole;
@@ -17,6 +17,9 @@ export interface ChatSummary {
   pinned: boolean;
   count: number;
   preview: string;
+  busy?: boolean;      // an answer is being written in this chat (it may be in the background)
+  unread?: boolean;    // an answer arrived while another chat was open
+  model?: string;
 }
 
 export interface EngineSettings {
@@ -46,6 +49,8 @@ export interface EngineState {
   listening: { running: boolean; options: ListenOptions };
   call: { speaking: boolean; hearing: boolean; muted: boolean };
   confirm: DownloadConfirm | null;
+  downloads: DownloadRow[];
+  browserRequest: { url: string; nonce: number } | null;
   activity: string;
   status: string;
   reasoning: string;
@@ -54,6 +59,24 @@ export interface EngineState {
   modelsError: string;
   settings: EngineSettings;
 }
+
+export type ParamValue = number | string | boolean;
+export interface ModelParams {
+  model: string; defaults: Record<string, ParamValue>; limits: Record<string, [number, number]>; choices: Record<string, string[]>;
+  presets: Record<string, Record<string, ParamValue>>; serverKeys: string[]; all: Record<string, ParamValue>; own: Record<string, ParamValue>;
+  effective: Record<string, ParamValue>; autoTitles: boolean;
+}
+export interface ProviderRow { id: string; title: string; local: boolean; needsKey: boolean; enabled: boolean; url: string; defaultUrl: string; hasKey: boolean; models: number; error: string; installed: boolean; site: string }
+export interface McpServer { name: string; command: string; url: string; env: Record<string, string>; enabled: boolean; error?: string; tools?: number | null }
+export interface SkillRow { name: string; folder: string; description: string; builtin: boolean; body: string }
+export interface ToolsStatus { enabled: boolean; servers: McpServer[]; skills: SkillRow[] }
+export interface CodeRun { ok: boolean; stdout?: string; stderr?: string; exitCode?: number | null; seconds?: number; error?: string }
+export interface Slide { title: string; texts: string[]; images: string[]; background: string }
+export interface MemoryStatus {
+  enabled: boolean; facts: { id: number; text: string; created: number }[]; counts: { facts: number; exchanges: number; withMeaning: number };
+  modelReady: boolean; modelSize: string; modelName: string; job: { state?: string; percent?: number; message?: string };
+}
+export interface DownloadRow { kind: "model" | "voice"; title: string; state: "running" | "done" | "error" | "cancelled"; percent: number; message: string }
 
 export type PollResult = EngineState | { version: number; unchanged: true };
 
@@ -78,10 +101,14 @@ export interface SettingsDetails {
   micDevice: string;
   micSensitivity: number;
   bargeIn: boolean;
+  closeToTray: boolean;
+  maxLoadedModels: number;
+  notifications: boolean;
   microphones: string[];
   micError: string;
   comfyUrl: string;
   comfyWorkflow: string;
+  comfyVideoWorkflow: string;
   projectRoot: string;
   twitchChannel: string;
   integrations: Record<string, boolean>;
@@ -93,7 +120,7 @@ export interface ThinkingOptions { values: ThinkingValue[]; default: ThinkingVal
 export interface SettingsResult { ok: boolean; errors: Record<string, string>; saved: string[] }
 export interface SearchHit { chatId: string; chatTitle: string; index: number; role: ChatRole; excerpt: string }
 export interface TwitchStatus { status: string; channel: string; enabled: boolean; maxChars: number }
-export interface HfModel { id: string; downloads?: number; likes?: number; gated: boolean }
+export interface HfModel { id: string; downloads?: number; likes?: number; gated: boolean; arch?: string }
 export interface HfFile { path: string; size?: number }
 export interface BrowserState { url: string; title: string; loading: boolean; canBack: boolean; canForward: boolean; notice: string }
 export type VoiceKind = "asr" | "tts";
@@ -102,7 +129,7 @@ export interface VoiceModel { id: string; title: string; note: string; license: 
 export interface VoiceSearchHit { id: string; title?: string; note?: string; downloads: number; gated: boolean; engine: string; engineLabel: string; reason: string; license?: string; nonCommercial?: boolean }
 export interface VoiceDetails { ok: boolean; error?: string; supported?: boolean; reason?: string; engine?: string; mode?: "custom" | "design"; voices?: string[]; files?: (HfFile & { label?: string })[]; bytes?: number; note?: string; license?: string }
 export interface MemoryEstimate { total: number; weights: number; kv: number; other: number; speed?: number; measured?: boolean }
-export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate> }
+export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number }
 export interface VoiceStatus {
   asr: { models: VoiceModel[]; engine: boolean; engineNote: string; selected: string };
   tts: { models: VoiceModel[]; engine: boolean; engineNote: string; selected: string };
@@ -164,8 +191,37 @@ interface WebApi {
   voice_install(kind: VoiceKind, modelId: string, extra?: { file?: HfFile; repo?: string; size?: number; engine?: string; voices?: string[] }, token?: string): Promise<CommandResult>;
   voice_search(kind: VoiceKind, query: string, token?: string): Promise<{ ok: boolean; error?: string; models: VoiceSearchHit[] }>;
   voice_details(kind: VoiceKind, repo: string, engine: string, token?: string): Promise<VoiceDetails>;
-  voice_select(kind: VoiceKind, modelId: string): Promise<CommandResult>;
-  model_logos(names: string[], authors?: Record<string, string>): Promise<Record<string, string>>;
+  voice_select(kind: VoiceKind, modelId: string): Promise<CommandResult & { restart?: boolean }>;
+  restart_app(): Promise<CommandResult>;
+  model_params(model: string): Promise<ModelParams>;
+  set_model_params(scope: string, values: Record<string, ParamValue>, replace: boolean): Promise<CommandResult>;
+  set_auto_titles(enabled: boolean): Promise<CommandResult>;
+  reset_settings(): Promise<CommandResult>;
+  set_language(language: string): Promise<CommandResult>;
+  recommended_model(): Promise<{ ok: boolean; repo?: string; record?: Record<string, unknown>; tag?: string; size?: number; why?: string; error?: string }>;
+  providers_status(): Promise<{ providers: ProviderRow[] }>;
+  tools_status(): Promise<ToolsStatus>;
+  run_code(language: string, code: string, stdin: string): Promise<CodeRun>;
+  memory_status(): Promise<MemoryStatus>;
+  memory_set_enabled(enabled: boolean): Promise<CommandResult>;
+  memory_add_fact(text: string): Promise<CommandResult>;
+  memory_delete(id: number): Promise<CommandResult>;
+  memory_clear(kind: string): Promise<CommandResult>;
+  memory_download_model(repo: string, file: string, size: number): Promise<CommandResult>;
+  memory_search_models(query: string): Promise<{ ok: boolean; error?: string; models: { id: string; downloads: number }[] }>;
+  memory_model_files(repo: string): Promise<{ ok: boolean; error?: string; files: HfFile[] }>;
+  memory_cancel(): Promise<CommandResult>;
+  twitch_poll(channel: string, question: string, choices: string[], seconds: number, token: string): Promise<{ ok: boolean; message?: string; error?: string }>;
+  answer_poll(question: string, choice: string): Promise<CommandResult>;
+  presentation_slides(path: string): Promise<{ ok: boolean; slides: Slide[]; error?: string }>;
+  set_tools_enabled(enabled: boolean): Promise<CommandResult>;
+  save_mcp_server(entry: McpServer, oldName: string): Promise<{ ok: boolean; error?: string; tools?: number }>;
+  delete_mcp_server(name: string): Promise<CommandResult>;
+  save_skill(name: string, description: string, instructions: string): Promise<{ ok: boolean; error?: string; folder?: string }>;
+  delete_skill(folder: string): Promise<CommandResult>;
+  set_provider(provider: string, enabled: boolean | null, url: string | null, key: string | null): Promise<{ ok: boolean; error: string; models: number }>;
+  model_description(repoId: string, token: string): Promise<{ text: string; source: string }>;
+  model_logos(names: string[], authors?: Record<string, string>, archs?: Record<string, string>): Promise<Record<string, string>>;
   model_memory(names?: string[]): Promise<ModelMemory>;
   hf_memory(repoId: string, filePath: string, size: number, token: string): Promise<{ gpu: number; context: number; estimate: MemoryEstimate | null; known: boolean }>;
   voice_cancel(): Promise<CommandResult>;

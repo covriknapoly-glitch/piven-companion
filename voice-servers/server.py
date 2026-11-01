@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import os
 import subprocess
+import threading
 from functools import lru_cache
 
 import imageio_ffmpeg
@@ -131,6 +132,10 @@ def speech(request: SpeechRequest):
             raise RuntimeError(f"MP3 encoding failed: {detail}")
         return Response(content=result.stdout, media_type="audio/mpeg")
     except Exception as exc:
+        if "CUDA error" in str(exc):
+            # A CUDA error (out of memory above all) leaves the process unusable; quit after this reply so the
+            # companion starts a fresh server for the next phrase.
+            threading.Timer(0.5, os._exit, (1,)).start()
         raise HTTPException(status_code=500, detail=f"Qwen TTS generation failed: {exc}") from exc
 
 

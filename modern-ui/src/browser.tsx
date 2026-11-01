@@ -26,12 +26,16 @@ const EMPTY: BrowserState = { url: "", title: "", loading: false, canBack: false
  * WebView2 (native_browser.py) is laid over that box. Native controls sit above the page, so the
  * box is hidden while a dialog or the image viewer is open (`covered`).
  */
-export function BrowserPane({ api, openRequest, covered, onClose }:
-  { api: WebApi; openRequest: { url: string; nonce: number } | null; covered: boolean; onClose: () => void }) {
+export function BrowserPane({ api, openRequest, covered }:
+  { api: WebApi; openRequest: { url: string; nonce: number } | null; covered: boolean }) {
   const [address, setAddress] = useState("");
   const [editing, setEditing] = useState(false);
   const [state, setState] = useState<BrowserState>(EMPTY);
-  const [started, setStarted] = useState(false);
+  // Page tabs share one native browser: switching a tab loads its page again.
+  const [tabs, setTabs] = useState<{ id: number; url: string; title: string }[]>([{ id: 1, url: "", title: "" }]);
+  const [activeId, setActiveId] = useState(1);
+  const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
+  const started = Boolean(activeTab.url);
   const viewRef = useRef<HTMLDivElement>(null);
 
   const place = useCallback(() => {
@@ -56,19 +60,48 @@ export function BrowserPane({ api, openRequest, covered, onClose }:
     const timer = window.setInterval(() => { void api.browser_state().then(setState); }, 400);
     return () => window.clearInterval(timer);
   }, [api]);
-  useEffect(() => { if (!editing && state.url) setAddress(state.url); }, [state.url, editing]);
+  useEffect(() => { if (!editing) setAddress(started ? state.url || activeTab.url : ""); }, [state.url, editing, started]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {  // the open page and its title belong to the active tab
+    if (started && state.url && state.url !== "about:blank")
+      setTabs((list) => list.map((tab) => (tab.id === activeId ? { ...tab, url: state.url, title: state.title } : tab)));
+  }, [state.url, state.title]); // eslint-disable-line react-hooks/exhaustive-deps
+  const switchTab = (id: number) => {
+    const tab = tabs.find((item) => item.id === id);
+    setActiveId(id);
+    if (tab?.url) void api.browser_go(tab.url);
+  };
+  const newTab = () => {
+    const id = Math.max(...tabs.map((tab) => tab.id)) + 1;
+    setTabs((list) => [...list, { id, url: "", title: "" }]);
+    setActiveId(id);
+  };
+  const closeTab = (id: number) => {
+    const rest = tabs.filter((tab) => tab.id !== id);
+    if (!rest.length) { setTabs([{ id: id + 1, url: "", title: "" }]); setActiveId(id + 1); return; }
+    setTabs(rest);
+    if (id === activeId) switchTab(rest[Math.max(0, tabs.findIndex((tab) => tab.id === id) - 1)].id);
+  };
 
   const go = useCallback((text: string) => {
     const target = toUrl(text);
     if (!target) return;
-    setStarted(true);
+    setTabs((list) => list.map((tab) => (tab.id === activeId ? { ...tab, url: target } : tab)));
     setAddress(target);
     void api.browser_go(target);
-  }, [api]);
+  }, [api, activeId]);
   useEffect(() => { if (openRequest) go(openRequest.url); }, [openRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="browser">
+      <div className="browser-tabs">
+        {tabs.map((tab) => (
+          <div key={tab.id} className={`browser-tab ${tab.id === activeId ? "on" : ""}`}>
+            <button type="button" onClick={() => switchTab(tab.id)} title={tab.url || "Новая вкладка"}>{tab.title || (tab.url ? tab.url.replace(/^https?:\/\/(www\.)?/, "") : "Новая вкладка")}</button>
+            <IconButton icon="close" label="Закрыть вкладку" size={12} onClick={() => closeTab(tab.id)} />
+          </div>
+        ))}
+        <IconButton icon="plus" label="Новая вкладка" size={14} onClick={newTab} />
+      </div>
       <form className="browser-bar" onSubmit={(event) => { event.preventDefault(); go(address); (document.activeElement as HTMLElement | null)?.blur(); }}>
         <IconButton icon="arrowRight" className="flip-x" label="Назад" size={15} disabled={!state.canBack} onClick={() => { void api.browser_command("back"); }} />
         <IconButton icon="arrowRight" label="Вперёд" size={15} disabled={!state.canForward} onClick={() => { void api.browser_command("forward"); }} />
@@ -78,7 +111,6 @@ export function BrowserPane({ api, openRequest, covered, onClose }:
           onChange={(event) => setAddress(event.target.value)}
           onFocus={(event) => { setEditing(true); event.currentTarget.select(); }} onBlur={() => setEditing(false)} />
         <IconButton icon="external" label="Открыть в обычном браузере" size={15} disabled={!state.url} onClick={() => { void api.open_url(state.url); }} />
-        <IconButton icon="close" label="Закрыть панель (Ctrl+D)" size={15} onClick={onClose} />
       </form>
       {state.loading && <div className="browser-progress"><i /></div>}
       {state.notice && <div className="browser-notice">{state.notice}</div>}

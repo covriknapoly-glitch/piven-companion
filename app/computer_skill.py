@@ -101,7 +101,7 @@ def _activate_window(title_hint: str) -> str:
 
     _user32.EnumWindows(callback_type(collect), 0)
     if not matches:
-        raise ValueError(f"Не нашёл открытое окно с названием «{title_hint}».")
+        raise ValueError(f"Открытое окно с названием «{title_hint}» не найдено.")
     hwnd, title = matches[0]
     _user32.ShowWindow(hwnd, 9)
     _user32.SetForegroundWindow(hwnd)
@@ -124,7 +124,7 @@ def _file_action(name: str, action: dict) -> str:
         if not path.exists():
             raise ValueError("Файл или папка не найдены.")
         os.startfile(str(path))
-        return f"Открыл «{path.name}»."
+        return f"Открыто: «{path.name}»."
     if name == "search_files":
         query = str(action.get("query", "")).strip().casefold()
         if not query or len(query) > 120:
@@ -143,7 +143,7 @@ def _file_action(name: str, action: dict) -> str:
                         break
             if len(results) >= 50:
                 break
-        return "Нашёл файлы:\n" + ("\n".join(results) if results else "Совпадений нет.")
+        return "Найдены файлы:\n" + ("\n".join(results) if results else "Совпадений нет.")
     if name == "copy_file":
         source = _safe_path(str(action.get("source", "")))
         destination = _safe_path(str(action.get("destination", "")))
@@ -154,7 +154,7 @@ def _file_action(name: str, action: dict) -> str:
         if destination.exists():
             raise ValueError("Файл назначения уже существует; ничего не перезаписал.")
         shutil.copy2(source, destination)
-        return f"Скопировал «{source.name}» в «{destination}»."
+        return f"«{source.name}» скопирован в «{destination}»."
     if name == "list_files":
         folder = _safe_path(str(action.get("path", "")))
         if not folder.is_dir():
@@ -176,7 +176,7 @@ def _file_action(name: str, action: dict) -> str:
             content = data.decode("utf-8-sig")
         except UnicodeDecodeError:
             content = data.decode("cp1251", errors="replace")
-        return f"Прочитал файл «{path.name}»:\n{content[:20000]}"
+        return f"Содержимое файла «{path.name}»:\n{content[:20000]}"
     if name == "create_file":
         path = _safe_path(str(action.get("path", "")))
         content = str(action.get("content", ""))
@@ -186,11 +186,11 @@ def _file_action(name: str, action: dict) -> str:
             raise ValueError("Папка для нового файла не найдена.")
         with path.open("x", encoding="utf-8", newline="") as file:
             file.write(content)
-        return f"Создал файл «{path.name}»."
+        return f"Файл «{path.name}» создан."
     if name == "create_folder":
         path = _safe_path(str(action.get("path", "")))
         path.mkdir(parents=False, exist_ok=False)
-        return f"Создал папку «{path.name}»."
+        return f"Папка «{path.name}» создана."
     if name in ("rename_file", "move_file"):
         source = _safe_path(str(action.get("source", "")))
         destination = _safe_path(str(action.get("destination", "")))
@@ -201,7 +201,7 @@ def _file_action(name: str, action: dict) -> str:
         if destination.exists():
             raise ValueError("В месте назначения уже есть файл или папка; ничего не перезаписал.")
         source.rename(destination)
-        return f"{('Переименовал' if name == 'rename_file' else 'Переместил')} «{source.name}» в «{destination.name}»."
+        return f"{('Переименовано' if name == 'rename_file' else 'Перемещено')}: «{source.name}» → «{destination.name}»."
     raise ValueError("Неизвестная файловая команда.")
 
 
@@ -240,7 +240,7 @@ def _download_file(action: dict) -> str:
         except OSError:
             pass
         raise
-    return f"Скачал файл «{destination.name}» ({destination.stat().st_size:,} байт) в «{destination.parent}»."
+    return f"Файл «{destination.name}» ({destination.stat().st_size:,} байт) скачан в «{destination.parent}»."
 
 
 def execute_project_action(project_root: str | os.PathLike, action: dict) -> str:
@@ -328,7 +328,7 @@ def execute_project_action(project_root: str | os.PathLike, action: dict) -> str
         finally:
             if temporary.exists():
                 temporary.unlink()
-        return f"Сохранил {display_path(path)} ({len(content)} символов)."
+        return f"Сохранено: {display_path(path)} ({len(content)} символов)."
 
     if name == "search":
         query = str(action.get("query", ""))
@@ -424,7 +424,7 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
             raise ValueError("Поисковый запрос должен содержать от 1 до 300 символов.")
         url = "https://www.google.com/search?" + urllib.parse.urlencode({"q": query})
         webbrowser.open(url)
-        return f"Открыл результаты Google по запросу «{query}»."
+        return f"Открыты результаты Google по запросу «{query}»."
     if name == "open_url":
         url = str(action.get("url", "")).strip()
         if "://" not in url:
@@ -433,7 +433,7 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         if parsed.scheme not in ("http", "https") or not parsed.netloc or any(char.isspace() for char in parsed.netloc):
             raise ValueError("Не удалось распознать адрес сайта.")
         webbrowser.open(url)
-        return f"Открыл сайт {parsed.netloc}."
+        return f"Открыт сайт {parsed.netloc}."
     if name == "open_app":
         app_name = str(action.get("app", "")).strip()
         if not app_name or len(app_name) > 100:
@@ -441,17 +441,17 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         normalized_app = " ".join(app_name.casefold().replace("ё", "е").split())
         if normalized_app in {"проводник", "файловый проводник", "file explorer", "explorer", "explorer.exe"}:
             os.startfile("explorer.exe")
-            return "Открыл Проводник."
+            return "Проводник открыт."
         if normalized_app in {"терминал", "windows terminal", "командная строка", "cmd", "cmd.exe"}:
             try:
                 subprocess.Popen(["wt.exe"], shell=False)
             except OSError:
                 subprocess.Popen([os.environ.get("COMSPEC", "cmd.exe")], shell=False)
-            return "Открыл терминал Windows."
+            return "Терминал Windows открыт."
         if normalized_app in {"powershell", "windows powershell", "powershell 7", "pwsh"}:
             executable = shutil.which("pwsh") or shutil.which("powershell") or "powershell.exe"
             subprocess.Popen([executable, "-NoLogo"], shell=False)
-            return "Открыл PowerShell."
+            return "PowerShell открыт."
         _send_key(_KEYS["WIN"])
         _send_key(_KEYS["WIN"], True)
         time.sleep(0.35)
@@ -460,7 +460,7 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         _send_key(_KEYS["ENTER"])
         _send_key(_KEYS["ENTER"], True)
         time.sleep(1.0)
-        return f"Ищу приложение «{app_name}» через меню Пуск."
+        return f"Поиск приложения «{app_name}» через меню Пуск."
     if name == "activate_window":
         return _activate_window(str(action.get("title", "")))
     if name == "get_active_window":
@@ -473,8 +473,8 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         hwnd = _user32.GetForegroundWindow()
         command = {"minimize_window": 6, "maximize_window": 3, "restore_window": 9}[name]
         _user32.ShowWindow(hwnd, command)
-        return {"minimize_window": "Свернул активное окно.",
-                "maximize_window": "Развернул активное окно.",
+        return {"minimize_window": "Активное окно свёрнуто.",
+                "maximize_window": "Активное окно развёрнуто.",
                 "restore_window": "Восстановил размер активного окна."}[name]
     if name == "wait":
         seconds = max(0.0, min(5.0, float(action.get("seconds", 1))))
@@ -500,13 +500,13 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
             _user32.mouse_event(up, 0, 0, 0, 0)
             if count == 2:
                 time.sleep(0.08)
-        return f"Нажал на экране в точке {x}, {y}."
+        return f"Клик в точке {x}, {y}."
     if name == "type_text":
         _type_text(str(action.get("text", "")))
-        return "Ввёл текст в активное поле."
+        return "Текст введён в активное поле."
     if name == "press_key":
         _key_combo(str(action.get("keys", "")))
-        return f"Нажал {action.get('keys', '')}."
+        return f"Нажато: {action.get('keys', '')}."
     if name == "scroll":
         if action.get("x") is not None and action.get("y") is not None and screenshot_size and display_size:
             image_w, image_h = screenshot_size
@@ -517,5 +517,5 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
             _user32.SetCursorPos(round(image_x * screen_w / image_w), round(image_y * screen_h / image_h))
         amount = max(-1200, min(1200, int(action.get("amount", -480))))
         _user32.mouse_event(_MOUSEEVENTF_WHEEL, 0, 0, ctypes.c_ulong(amount).value, 0)
-        return "Прокрутил страницу."
+        return "Страница прокручена."
     raise ValueError("Эта команда компьютера не поддерживается.")

@@ -1,26 +1,30 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DiskUsage, EngineState, ModelMemory, SettingsDetails, ThinkingOptions, ThinkingValue, VoiceKind, VoiceModel, VoiceStatus, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
-import { Button, Field, IconButton, MemoryBar, ModelLogo, Switch, TextSetting, gigabytes, useOutsideClose } from "./ui";
+import { ConfirmDialog } from "./dialogs";
+import { LANGUAGES, type Language } from "./i18n";
+import { ModelParamsPane } from "./params";
+import { ProvidersPane } from "./providers";
+import { ToolsPane } from "./tools";
+import { MemoryPane } from "./memory";
+import { Button, Field, gigabytes, IconButton, MemoryBar, ModelLogo, Switch, TextSetting, thinkingFixed, thinkingName, Toggle, useOutsideClose } from "./ui";
 
 export type ThemeChoice = "system" | "light" | "dark";
-type SectionId = "look" | "model" | "voice" | "images" | "code" | "integrations" | "data";
+type SectionId = "look" | "model" | "tools" | "memory" | "voice" | "images" | "code" | "integrations" | "data";
 const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
   { id: "look", title: "Оформление", icon: "sun" },
   { id: "model", title: "Модель", icon: "box" },
+  { id: "tools", title: "Инструменты и навыки", icon: "code" },
+  { id: "memory", title: "Память", icon: "chat" },
   { id: "voice", title: "Голос и микрофон", icon: "mic" },
-  { id: "images", title: "Картинки", icon: "image" },
-  { id: "code", title: "Работа с кодом", icon: "code" },
+  { id: "images", title: "Картинки и видео", icon: "image" },
   { id: "integrations", title: "Интеграции", icon: "extension" },
   { id: "data", title: "Данные", icon: "folder" },
 ];
 
-const THINKING_NAMES: Record<string, string> = { low: "Низкий", medium: "Средний", high: "Высокий", true: "Включено", false: "Выключено" };
-const thinkingName = (value: ThinkingValue | null) => (value === null ? "" : THINKING_NAMES[String(value)] ?? String(value));
 
 let lastSection: SectionId = "look";  // reopening settings (after a hub dialog) returns to the same section
 
-export type ViewMode = "chat" | "cards";
 export type FontChoice = "mono" | "sans" | "huninn" | "martian" | "playfair" | "roboto";
 export const FONT_CHOICES: readonly (readonly [FontChoice, string, string])[] = [
   ["mono", "IBM Plex Mono", "var(--mono)"], ["sans", "LINE Seed JP", "\"LINE Seed JP\", sans-serif"],
@@ -28,8 +32,8 @@ export const FONT_CHOICES: readonly (readonly [FontChoice, string, string])[] = 
   ["playfair", "Playfair Display", "\"Playfair Display\", serif"], ["roboto", "Roboto Condensed", "\"Roboto Condensed\", sans-serif"],
 ];
 
-export function SettingsDialog({ state, api, theme, setTheme, viewMode, setViewMode, fontChoice, setFontChoice, onClose, onOpenHub, onOpenVoiceHub, onOpenTwitch }:
-  { state: EngineState; api: WebApi; theme: ThemeChoice; setTheme: (value: ThemeChoice) => void; viewMode: ViewMode; setViewMode: (value: ViewMode) => void;
+export function SettingsDialog({ state, api, theme, setTheme, language, setLanguage, fontChoice, setFontChoice, onClose, onOpenHub, onOpenVoiceHub, onOpenTwitch }:
+  { state: EngineState; api: WebApi; theme: ThemeChoice; setTheme: (value: ThemeChoice) => void; language: Language; setLanguage: (value: Language) => void;
     fontChoice: FontChoice; setFontChoice: (value: FontChoice) => void;
     onClose: () => void; onOpenHub: () => void; onOpenVoiceHub: (kind: VoiceKind) => void; onOpenTwitch: () => void }) {
   const ref = useOutsideClose(true, onClose);
@@ -84,12 +88,12 @@ export function SettingsDialog({ state, api, theme, setTheme, viewMode, setViewM
         </nav>
         <div className="settings-pane">
           <header className="settings-pane-head"><h4>{current.title}</h4><IconButton icon="close" label="Закрыть (Esc)" onClick={onClose} /></header>
-          {!d ? <p className="pane-note">Загружаю…</p> : <div className="settings-fields">
+          {!d ? <p className="pane-note">Загрузка…</p> : <div className="settings-fields">
             {section === "look" && <>
-              <Field label="Вид разговора" hint="Обычный чат — сообщения идут лентой. Карточки — каждое сообщение лежит на доске, карточки можно двигать.">
-                <div className="segmented">
-                  {([["chat", "Обычный чат"], ["cards", "Карточки"]] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={viewMode === value ? "on" : ""} onClick={() => setViewMode(value)}>{label}</button>
+              <Field label="Язык / Language" hint="Язык интерфейса. Модель тоже будет отвечать на нём.">
+                <div className="segmented wrap">
+                  {LANGUAGES.map(([value, label]) => (
+                    <button key={value} type="button" className={language === value ? "on" : ""} onClick={() => setLanguage(value)} data-i18n-skip>{label}</button>
                   ))}
                 </div>
               </Field>
@@ -109,6 +113,16 @@ export function SettingsDialog({ state, api, theme, setTheme, viewMode, setViewM
               </Field>
             </>}
 
+            {section === "tools" && <>
+              <ToolsPane api={api} />
+              <Field label="Папка проекта" error={errors.projectRoot} hint="Здесь компаньон читает и правит файлы, когда просишь что-то сделать с кодом.">
+                <div className="row grow">
+                  <TextSetting mono value={d.projectRoot} onCommit={(value) => { void save({ projectRoot: value }); }} />
+                  <Button onClick={() => { void api.pick_path("folder").then((path) => { if (path) void save({ projectRoot: path }); }); }}>Выбрать…</Button>
+                </div>
+              </Field>
+            </>}
+            {section === "memory" && <MemoryPane api={api} />}
             {section === "model" && <>
               <Field label="Модель" hint={state.status || "GGUF-файлы из папки моделей."}>
                 <div className="row">
@@ -120,19 +134,30 @@ export function SettingsDialog({ state, api, theme, setTheme, viewMode, setViewM
                   <Button icon="download" onClick={onOpenHub}>Скачать с Hugging Face…</Button>
                 </div>
                 {modelEstimate && memory && <MemoryBar gpu={memory.gpu} speed={modelEstimate} label={`При запуске (контекст ${Math.round(memory.context / 1024)}K)`}
-                  parts={[{ label: "Веса", bytes: modelEstimate.weights }, { label: "Контекст", bytes: modelEstimate.kv }, { label: "Прочее", bytes: modelEstimate.other }].filter((part) => part.bytes > 0)} />}
+                  parts={[{ label: "Веса", bytes: modelEstimate.weights }, { label: "Контекст", bytes: modelEstimate.kv }, { label: "Прочее", bytes: modelEstimate.other }, { label: "Голос", bytes: memory.voiceReserved ?? 0 }].filter((part) => part.bytes > 0)} />}
+              </Field>
+              <Field label="Моделей в памяти одновременно" hint="У каждого чата своя модель. Несколько моделей держатся загруженными и могут отвечать в разных чатах одновременно; модель без дела выгружается, если следующая не помещается рядом с ней в видеопамять.">
+                <div className="segmented">
+                  {[1, 2, 3, 4].map((count) => (
+                    <button key={count} type="button" className={d.maxLoadedModels === count ? "on" : ""} onClick={() => { void save({ maxLoadedModels: count }); }}>{count}</button>
+                  ))}
+                </div>
               </Field>
               <LocalModels api={api} current={model} count={state.models.length} />
-              <Field label="Размышление" hint={thinking?.error ? `Не удалось узнать у модели: ${thinking.error}` : thinking && !thinking.values.length ? "Эта модель не умеет переключать размышление." : `По умолчанию у модели: ${thinkingName(thinking?.default ?? null) || "не указано"}.`}>
-                <select className="select" value={String(thinking?.current ?? "__auto__")} disabled={!thinking || !thinking.values.length}
-                  onChange={(event) => {
-                    const raw = event.target.value;
-                    const value: ThinkingValue = raw === "true" ? true : raw === "false" ? false : raw;
-                    void api.set_thinking(model, value).then(() => { setSavedAt(Date.now()); void api.thinking_options(model).then(setThinking); });
-                  }}>
-                  <option value="__auto__">Как решит модель</option>
-                  {thinking?.values.map((value) => <option key={String(value)} value={String(value)}>{thinkingName(value)}</option>)}
-                </select>
+              <Field label="Размышление" hint={thinking?.error ? `Не удалось узнать у модели: ${thinking.error}` : thinking && !thinking.values.length ? thinkingFixed(thinking) : `По умолчанию у модели: ${thinkingName(thinking?.default ?? null) || "не указано"}.`}>
+                {thinking && thinking.values.length > 0 && (
+                  <div className="segmented wrap">
+                    {thinking.values.map((value) => {
+                      const effective = thinking.current === "__auto__" ? thinking.default ?? thinking.values[0] : thinking.current;
+                      return (
+                        <button key={String(value)} type="button" className={String(value) === String(effective) ? "on" : ""} onClick={() => {
+                          const next: ThinkingValue | "__auto__" = String(value) === String(thinking.default) ? "__auto__" : value;
+                          void api.set_thinking(model, next).then(() => { setSavedAt(Date.now()); void api.thinking_options(model).then(setThinking); });
+                        }}>{thinkingName(value)}</button>
+                      );
+                    })}
+                  </div>
+                )}
               </Field>
               <Field label="Системный промпт" hint="Как компаньон должен себя вести. Применяется к следующим сообщениям." error={errors.systemPrompt}>
                 <textarea className="textarea prompt-input" value={prompt} onChange={(event) => setPrompt(event.target.value)} spellCheck={false} />
@@ -143,6 +168,7 @@ export function SettingsDialog({ state, api, theme, setTheme, viewMode, setViewM
                   <Button kind="primary" disabled={!promptDirty} onClick={() => { void save({ systemPrompt: prompt }); }}>Сохранить</Button>
                 </div>
               </Field>
+              <ModelParamsPane api={api} model={model} onSaved={() => setSavedAt(Date.now())} />
             </>}
 
             {section === "voice" && <>
@@ -193,25 +219,22 @@ export function SettingsDialog({ state, api, theme, setTheme, viewMode, setViewM
               <Field label="Адрес ComfyUI" error={errors.comfyUrl} hint="Если ComfyUI запущен на этом компьютере, обычно это http://127.0.0.1:8188.">
                 <TextSetting mono value={d.comfyUrl} placeholder="http://127.0.0.1:8188" onCommit={(value) => { void save({ comfyUrl: value }); }} />
               </Field>
-              <Field label="Workflow" error={errors.comfyWorkflow} hint="JSON-файл ComfyUI, через который рисуются картинки. Пустое поле вернёт стандартный.">
+              <Field label="Workflow для картинок" error={errors.comfyWorkflow} hint="JSON-файл ComfyUI, через который рисуются картинки. Пустое поле вернёт стандартный.">
                 <div className="row grow">
                   <TextSetting mono value={d.comfyWorkflow} onCommit={(value) => { void save({ comfyWorkflow: value }); }} />
                   <Button onClick={() => { void api.pick_path("workflow").then((path) => { if (path) void save({ comfyWorkflow: path }); }); }}>Выбрать…</Button>
                 </div>
               </Field>
-            </>}
-
-            {section === "code" && (
-              <Field label="Папка проекта" error={errors.projectRoot} hint="Здесь компаньон читает и правит файлы, когда просишь что-то сделать с кодом.">
+              <Field label="Workflow для видео" error={errors.comfyVideoWorkflow} hint="JSON-файл ComfyUI для видео (экспорт API или обычный). Текст запроса подставится в него; приложенная картинка — в узел LoadImage.">
                 <div className="row grow">
-                  <TextSetting mono value={d.projectRoot} onCommit={(value) => { void save({ projectRoot: value }); }} />
-                  <Button onClick={() => { void api.pick_path("folder").then((path) => { if (path) void save({ projectRoot: path }); }); }}>Выбрать…</Button>
+                  <TextSetting mono value={d.comfyVideoWorkflow} placeholder="не выбран" onCommit={(value) => { void save({ comfyVideoWorkflow: value }); }} />
+                  <Button onClick={() => { void api.pick_path("workflow").then((path) => { if (path) void save({ comfyVideoWorkflow: path }); }); }}>Выбрать…</Button>
                 </div>
               </Field>
-            )}
+            </>}
 
             {section === "integrations" && <>
-              {([["ollama", "Локальная модель (llama.cpp)", "Ответы, код и презентации. Если выключить, текущий ответ остановится."],
+              {([["ollama", "Модели (llama.cpp и подключённые сервисы)", "Ответы, код и презентации. Если выключить, текущий ответ остановится."],
                  ["comfyui", "ComfyUI", "Рисование картинок."],
                  ["twitch", "Twitch", "Отправка сообщений в чат канала."]] as const).map(([key, label, hint]) => (
                 <Field key={key} label={label} hint={hint}>
@@ -224,9 +247,17 @@ export function SettingsDialog({ state, api, theme, setTheme, viewMode, setViewM
                   <Button icon="twitch" onClick={onOpenTwitch}>Написать в чат…</Button>
                 </div>
               </Field>
+              <ProvidersPane api={api} onChanged={() => setSavedAt(Date.now())} />
             </>}
 
             {section === "data" && <>
+              <Field label="Сброс настроек" hint="Вернёт рекомендуемые настройки: промпт, голос, микрофон, параметры модели, интеграции, оформление. Чаты, скачанные модели и выбранные модели останутся.">
+                <ResetButton api={api} onReset={() => { setTheme("system"); setFontChoice(FONT_CHOICES[0][0]); void reload(); setSavedAt(Date.now()); }} />
+              </Field>
+              <Field label="Работа в фоне" hint="Крестик прячет окно в трей (значок у часов), ответы и вопросы модели приходят уведомлениями. Выйти совсем — правой кнопкой по значку → «Выйти».">
+                <Toggle label="Сворачивать в трей при закрытии" checked={d.closeToTray} onChange={(value) => { void save({ closeToTray: value }); }} />
+                <Toggle label="Уведомления, когда окно скрыто или в другом окне" checked={d.notifications} onChange={(value) => { void save({ notifications: value }); }} />
+              </Field>
               <Field label="Папка с данными" hint={<span className="mono">{d.dataDir}</span>}>
                 <div className="row">
                   <Button icon="folder" onClick={() => { void api.open_data_folder("folder"); }}>Открыть папку</Button>
@@ -246,6 +277,17 @@ const VOICE_KINDS: { kind: VoiceKind; title: string; hint: string }[] = [
   { kind: "asr", title: "Распознавание речи", hint: "Переводит твой голос в текст во время звонка." },
   { kind: "tts", title: "Озвучка", hint: "Читает ответы вслух." },
 ];
+
+function ResetButton({ api, onReset }: { api: WebApi; onReset: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState("");
+  return <>
+    <Button kind="danger" icon="refresh" onClick={() => setAsking(true)}>Сбросить все настройки</Button>
+    {error && <p className="pane-note">{error}</p>}
+    {asking && <ConfirmDialog title="Сбросить настройки?" text="Все настройки вернутся к рекомендуемым. Чаты и скачанные модели не пострадают." confirmLabel="Сбросить" danger
+      onClose={() => setAsking(false)} onConfirm={() => { void api.reset_settings().then((result) => { setError(result.ok ? "" : result.error ?? ""); if (result.ok) onReset(); }); }} />}
+  </>;
+}
 
 /** A delete button that asks once more before acting. */
 function DeleteButton({ onDelete, disabled = false }: { onDelete: () => Promise<void>; disabled?: boolean }) {
@@ -298,6 +340,7 @@ function LocalModels({ api, current, count }: { api: WebApi; current: string; co
 function VoiceModels({ api, onOpenHub, chatModel, chatMemory, onChanged }: { api: WebApi; onOpenHub: (kind: VoiceKind) => void; chatModel: string; chatMemory: number; onChanged: () => void }) {
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [error, setError] = useState("");
+  const [restartFor, setRestartFor] = useState<VoiceKind | null>(null);
   const [revision, setRevision] = useState(0);
   const usage = useDiskUsage(api, `${revision}-${status?.job.state}`);
   const load = useCallback(() => api.voice_status().then(setStatus), [api]);
@@ -316,7 +359,11 @@ function VoiceModels({ api, onOpenHub, chatModel, chatMemory, onChanged }: { api
   };
   const select = (kind: VoiceKind, id: string) => {
     setError("");
-    void api.voice_select(kind, id).then((result) => { if (result.error) setError(result.error); void load(); onChanged(); });
+    void api.voice_select(kind, id).then((result) => {
+      if (result.error) setError(result.error);
+      if (result.ok && result.restart) setRestartFor(kind);
+      void load(); onChanged();
+    });
   };
   const job = status.job;
   const row = (kind: VoiceKind, model: VoiceModel) => {
@@ -363,6 +410,10 @@ function VoiceModels({ api, onOpenHub, chatModel, chatMemory, onChanged }: { api
       </Field>
     ))}
     {error && <p className="pane-note">{error}</p>}
+    {restartFor && <ConfirmDialog title="Нужен перезапуск"
+      text={`Модель ${restartFor === "tts" ? "озвучки" : "распознавания"} сменена. Чтобы она заработала, программу нужно перезапустить. Чаты и настройки сохранятся.`}
+      confirmLabel="Перезапустить сейчас" cancelLabel="Позже" onClose={() => setRestartFor(null)}
+      onConfirm={() => { void api.restart_app(); }} />}
     {usage && (usage.voiceModels > 0 || usage.engines.length > 0) && (
       <Field label="Место на диске" hint="Движки ставятся один раз и нужны всем своим моделям; модели удаляются кнопкой «Удалить» выше.">
         <div className="disk-list">

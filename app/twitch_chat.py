@@ -137,7 +137,7 @@ class TwitchChatDialog(QDialog):
         self.channel.setEnabled(False)
         self.token_box.setEnabled(False)
         self.message.setEnabled(False)
-        self.status.setText("Отправляю одно сообщение… Повторной попытки автоматически не будет.")
+        self.status.setText("Отправка одного сообщения… Повторной попытки автоматически не будет.")
         self.worker = _SendWorker(channel, message, self.token, self)
         self.worker.done.connect(self._send_finished)
         self.worker.start()

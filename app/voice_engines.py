@@ -90,7 +90,7 @@ def ensure_audiocpp(progress, cancel_event):
         archive = ENGINES_DIR / url.rsplit("/", 1)[1]
         if not (archive.is_file() and archive.stat().st_size == size):
             _download(url, archive, size, digest, cancel_event,
-                      lambda received: progress(40 * (done + received) / total, f"Скачиваю audio.cpp: {(done + received) / 2**20:.0f} из {total / 2**20:.0f} МБ"))
+                      lambda received: progress(40 * (done + received) / total, f"Скачивание audio.cpp: {(done + received) / 2**20:.0f} из {total / 2**20:.0f} МБ"))
         progress(40 * (done + size) / total, "Распаковываю audio.cpp")
         with zipfile.ZipFile(archive) as bundle:
             bundle.extractall(AUDIOCPP_DIR)
@@ -258,14 +258,14 @@ def ensure_shared(progress, cancel_event):
     if shared_ready():
         return 0
     if not SHARED_PYTHON.is_file():
-        progress(1, "Создаю Python-окружение")
+        progress(1, "Создание Python-окружения")
         python = BUNDLED_PYTHON if BUNDLED_PYTHON.is_file() else Path(sys.executable)
         run([str(python), "-m", "venv", str(SHARED_VENV)], cancel_event, lambda line: None)
     if not (SHARED_SITE / "torch").is_dir():
-        progress(3, "Скачиваю PyTorch с CUDA, это самая долгая часть")
+        progress(3, "Скачивание PyTorch с CUDA — это самая долгая часть")
         run(_pip(SHARED_PYTHON) + TORCH_PACKAGES + ["--index-url", TORCH_INDEX], cancel_event,
             lambda line: progress(3, "PyTorch · " + _short(line)))
-    progress(35, "Ставлю общие пакеты голоса")
+    progress(35, "Установка общих пакетов голоса")
     run(_pip(SHARED_PYTHON) + SHARED_PACKAGES, cancel_event, lambda line: progress(35, "Пакеты · " + _short(line)))
     return 40
 
@@ -279,12 +279,12 @@ def ensure_engine(engine, progress, cancel_event):
     folder = venv_dir(engine)
     python = python_for(engine)
     if not python.is_file():
-        progress(start + 1, f"Создаю окружение {info['label']}")
+        progress(start + 1, f"Создание окружения {info['label']}")
         base = BUNDLED_PYTHON if BUNDLED_PYTHON.is_file() else Path(sys.executable)
         run([str(base), "-m", "venv", str(folder)], cancel_event, lambda line: None)
     # Link the shared packages in after the engine's own ones, so PyTorch is reused unless the engine pins another.
     link_shared(engine)
-    progress(start + 3, f"Ставлю {info['label']}")
+    progress(start + 3, f"Установка {info['label']}")
     if info.get("no_deps"):
         run(_pip(python) + ["--no-deps"] + info["no_deps"], cancel_event, lambda line: progress(start + 3, f"{info['label']} · " + _short(line)))
     run(_pip(python) + info["pip"] + ["--extra-index-url", TORCH_INDEX], cancel_event,

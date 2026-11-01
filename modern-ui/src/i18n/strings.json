@@ -1,0 +1,3162 @@
+{
+"({0} МБ)": [
+"({0} MB)",
+"（{0} MB）",
+"({0} MB)"
+],
+"(не подключён)": [
+"(not connected)",
+"（未连接）",
+"(no conectado)"
+],
+") или доступен по адресу.": [
+") or reachable at an address.",
+"）启动，或通过地址访问。",
+") o está disponible en una dirección."
+],
+", в памяти ≈ {0}.": [
+", in memory ≈ {0}.",
+"，占用内存约 {0}。",
+", en memoria ≈ {0}."
+],
+", разговоров": [
+", conversations",
+"，对话",
+", conversaciones"
+],
+". Не влезет в видеокарту целиком, часть уйдёт в ОЗУ и будет медленнее.": [
+". It won't fit entirely on the GPU; part of it will go to RAM and run slower.",
+"。无法完全放入显卡，部分将放入内存，速度会变慢。",
+". No cabe entera en la tarjeta gráfica; una parte irá a la RAM y será más lenta."
+],
+". Скачается": [
+". Download size:",
+"。下载大小：",
+". Se descargará"
+],
+". Удалённый чат забывается вместе со своими разговорами.": [
+". A deleted chat is forgotten together with its conversations.",
+"。删除聊天时，其对话也会从记忆中删除。",
+". Un chat eliminado se olvida junto con sus conversaciones."
+],
+". Хранится только до закрытия окна.": [
+". Kept only until the window is closed.",
+"。仅保存到窗口关闭为止。",
+". Se guarda solo hasta cerrar la ventana."
+],
+"0 — без ограничения. Пригодится, чтобы оставить место для озвучки, распознавания или игры.": [
+"0 — no limit. Useful to leave room for speech, recognition or a game.",
+"0 — 不限制。可为语音合成、语音识别或游戏留出空间。",
+"0 — sin límite. Útil para dejar espacio a la voz, el reconocimiento o un juego."
+],
+"0 — выбрать автоматически.": [
+"0 — choose automatically.",
+"0 — 自动选择。",
+"0 — elegir automáticamente."
+],
+"1 минута": [
+"1 minute",
+"1 分钟",
+"1 minuto"
+],
+"1 — выключен. 1.05–1.15 помогает, если модель зацикливается.": [
+"1 — off. 1.05–1.15 helps if the model gets stuck in loops.",
+"1 — 关闭。若模型陷入重复，1.05–1.15 会有帮助。",
+"1 — desactivado. 1.05–1.15 ayuda si el modelo se repite en bucle."
+],
+"1 — выключено.": [
+"1 — off.",
+"1 — 关闭。",
+"1 — desactivado."
+],
+"10 минут": [
+"10 minutes",
+"10 分钟",
+"10 minutos"
+],
+"2 минуты": [
+"2 minutes",
+"2 分钟",
+"2 minutos"
+],
+"30 минут": [
+"30 minutes",
+"30 分钟",
+"30 minutos"
+],
+"5 минут": [
+"5 minutes",
+"5 分钟",
+"5 minutos"
+],
+"API-ключ": [
+"API key",
+"API 密钥",
+"Clave de API"
+],
+"Ctrl+Enter — запустить. Код выполняется во временной папке, не дольше 30 секунд.": [
+"Ctrl+Enter — run. Code runs in a temporary folder for at most 30 seconds.",
+"Ctrl+Enter — 运行。代码在临时文件夹中运行，最长 30 秒。",
+"Ctrl+Enter — ejecutar. El código se ejecuta en una carpeta temporal durante 30 segundos como máximo."
+],
+"DRY: допустимая длина": [
+"DRY: allowed length",
+"DRY：允许长度",
+"DRY: longitud permitida"
+],
+"DRY: основа": [
+"DRY: base",
+"DRY：基数",
+"DRY: base"
+],
+"GGUF-моделей не нашлось, попробуй другое название.": [
+"No GGUF models found, try another name.",
+"未找到 GGUF 模型，请换个名称试试。",
+"No se encontraron modelos GGUF, prueba con otro nombre."
+],
+"GGUF-файлы из папки моделей.": [
+"GGUF files from the models folder.",
+"模型文件夹中的 GGUF 文件。",
+"Archivos GGUF de la carpeta de modelos."
+],
+"JSON-файл ComfyUI для видео (экспорт API или обычный). Текст запроса подставится в него; приложенная картинка — в узел LoadImage.": [
+"A ComfyUI JSON workflow for video (API or regular export). The request text is put into it; an attached picture goes into the LoadImage node.",
+"用于视频的 ComfyUI JSON 工作流（API 导出或普通导出）。请求文本会填入其中；附加的图片会放入 LoadImage 节点。",
+"Un flujo JSON de ComfyUI para vídeo (exportación API o normal). El texto de la petición se inserta en él; la imagen adjunta va al nodo LoadImage."
+],
+"JSON-файл ComfyUI, через который рисуются картинки. Пустое поле вернёт стандартный.": [
+"The ComfyUI JSON workflow used to draw pictures. Leave empty for the default one.",
+"用于生成图片的 ComfyUI JSON 工作流。留空则恢复默认。",
+"El flujo JSON de ComfyUI que dibuja las imágenes. Déjalo vacío para usar el predeterminado."
+],
+"MCP-сервер {0}": [
+"MCP server {0}",
+"MCP 服务器 {0}",
+"Servidor MCP {0}"
+],
+"MCP-серверы": [
+"MCP servers",
+"MCP 服务器",
+"Servidores MCP"
+],
+"Mirostat: скорость": [
+"Mirostat: learning rate",
+"Mirostat：学习率",
+"Mirostat: velocidad"
+],
+"Mirostat: цель": [
+"Mirostat: target",
+"Mirostat：目标",
+"Mirostat: objetivo"
+],
+"Model Context Protocol подключает инструменты других программ: файлы, базы данных, GitHub, Notion и многое другое. Сервер запускается командой (например": [
+"Model Context Protocol connects tools of other programs: files, databases, GitHub, Notion and much more. A server is started by a command (for example",
+"Model Context Protocol 可接入其他程序的工具：文件、数据库、GitHub、Notion 等。服务器可通过命令启动（例如",
+"Model Context Protocol conecta herramientas de otros programas: archivos, bases de datos, GitHub, Notion y mucho más. El servidor se inicia con un comando (por ejemplo"
+],
+"OAuth-токен": [
+"OAuth token",
+"OAuth 令牌",
+"Token OAuth"
+],
+"PIVEN — помощник, который работает прямо на твоём компьютере: отвечает на вопросы, рисует, делает презентации, говорит голосом. Для начала нужна модель — «мозг» помощника.": [
+"PIVEN is an assistant that runs right on your computer: it answers questions, draws, makes presentations and talks. To begin, it needs a model — the assistant's “brain”.",
+"PIVEN 是直接在你电脑上运行的助手：它能回答问题、画图、制作演示文稿，还能用语音交流。开始前需要一个模型——助手的“大脑”。",
+"PIVEN es un asistente que funciona directamente en tu ordenador: responde preguntas, dibuja, crea presentaciones y habla. Para empezar necesita un modelo, el «cerebro» del asistente."
+],
+"Streamable HTTP, например http://127.0.0.1:8000/mcp": [
+"Streamable HTTP, e.g. http://127.0.0.1:8000/mcp",
+"Streamable HTTP，例如 http://127.0.0.1:8000/mcp",
+"Streamable HTTP, por ejemplo http://127.0.0.1:8000/mcp"
+],
+"Twitch-канал": [
+"Twitch channel",
+"Twitch 频道",
+"Canal de Twitch"
+],
+"Windows не будет выгружать модель на диск. Нужна свободная память.": [
+"Windows won't page the model out to disk. Requires free RAM.",
+"Windows 不会把模型换出到磁盘。需要足够的空闲内存。",
+"Windows no moverá el modelo al disco. Requiere memoria libre."
+],
+"Workflow для видео": [
+"Video workflow",
+"视频工作流",
+"Flujo de vídeo"
+],
+"Workflow для картинок": [
+"Image workflow",
+"图片工作流",
+"Flujo de imágenes"
+],
+"XTC: вероятность": [
+"XTC: probability",
+"XTC：概率",
+"XTC: probabilidad"
+],
+"XTC: порог": [
+"XTC: threshold",
+"XTC：阈值",
+"XTC: umbral"
+],
+"channel:manage:polls (токен твоего канала; опросы есть у партнёров и компаньонов Twitch)": [
+"channel:manage:polls (a token of your own channel; polls are available to Twitch Partners and Affiliates)",
+"channel:manage:polls（你自己频道的令牌；投票功能仅限 Twitch 合作伙伴和联盟主播）",
+"channel:manage:polls (un token de tu propio canal; las encuestas están disponibles para Partners y Afiliados de Twitch)"
+],
+"llama.cpp готов": [
+"llama.cpp ready",
+"llama.cpp 已就绪",
+"llama.cpp listo"
+],
+"npx -y @modelcontextprotocol/server-filesystem C:\\Users\\Я\\Documents": [
+"npx -y @modelcontextprotocol/server-filesystem C:\\Users\\Me\\Documents",
+"npx -y @modelcontextprotocol/server-filesystem C:\\Users\\我\\Documents",
+"npx -y @modelcontextprotocol/server-filesystem C:\\Users\\Yo\\Documents"
+],
+"print(\"Привет из PIVEN\")": [
+"print(\"Hello from PIVEN\")",
+"print(\"来自 PIVEN 的问候\")",
+"print(\"Hola desde PIVEN\")"
+],
+"q8_0 почти без потерь вдвое экономит память контекста, q4_0 — вчетверо, но может ухудшить ответы.": [
+"q8_0 halves context memory almost losslessly; q4_0 saves four times as much but may worsen answers.",
+"q8_0 几乎无损地将上下文内存减半；q4_0 可节省四倍，但可能降低回答质量。",
+"q8_0 reduce a la mitad la memoria del contexto casi sin pérdidas; q4_0 la reduce cuatro veces, pero puede empeorar las respuestas."
+],
+"{0} ГБ": [
+"{0} GB",
+"{0} GB",
+"{0} GB"
+],
+"{0} из 60 символов": [
+"{0} of 60 characters",
+"{0} / 60 个字符",
+"{0} de 60 caracteres"
+],
+"{0} из {1} символов": [
+"{0} of {1} characters",
+"{0} / {1} 个字符",
+"{0} de {1} caracteres"
+],
+"{0} мин {1} с": [
+"{0} min {1} s",
+"{0} 分 {1} 秒",
+"{0} min {1} s"
+],
+"{0} с": [
+"{0} s",
+"{0} 秒",
+"{0} s"
+],
+"{0}: {1}, из них запустятся {2}. Выбери модель.": [
+"{0}: {1}, of which {2} can run. Choose a model.",
+"{0}：{1} 个，其中可运行 {2} 个。请选择模型。",
+"{0}: {1}, de los cuales funcionarán {2}. Elige un modelo."
+],
+"{0}{1} ток/с": [
+"{0}{1} tok/s",
+"{0}{1} 词元/秒",
+"{0}{1} tok/s"
+],
+"{0}Пресет заменяет изменения {1}.": [
+"{0}A preset replaces the changes {1}.",
+"{0}预设会替换{1}的更改。",
+"{0}Un preajuste reemplaza los cambios {1}."
+],
+"«{0}» будет удалён.": [
+"“{0}” will be deleted.",
+"“{0}”将被删除。",
+"«{0}» se eliminará."
+],
+"«{0}» и вся его история будут удалены. Это нельзя отменить.": [
+"“{0}” and its whole history will be deleted. This can't be undone.",
+"“{0}”及其全部历史将被删除，且无法撤销。",
+"«{0}» y todo su historial se eliminarán. No se puede deshacer."
+],
+"· {0} с": [
+"· {0} s",
+"· {0} 秒",
+"· {0} s"
+],
+"· по умолчанию": [
+"· default",
+"· 默认",
+"· predeterminado"
+],
+"Авто": [
+"Auto",
+"自动",
+"Auto"
+],
+"Авто ({0})": [
+"Auto ({0})",
+"自动（{0}）",
+"Auto ({0})"
+],
+"Авто + n-граммы": [
+"Auto + n-grams",
+"自动 + n-gram",
+"Auto + n-gramas"
+],
+"Авто: у моделей со встроенными MTP-головами (Qwen3.5/3.6 MTP, GLM) ответы идут примерно в 1,4 раза быстрее, текст тот же. N-граммы дополнительно ускоряют повторяющийся текст, например правки кода.": [
+"Auto: models with built-in MTP heads (Qwen3.5/3.6 MTP, GLM) answer about 1.4× faster with the same text. N-grams also speed up repetitive text such as code edits.",
+"自动：内置 MTP 头的模型（Qwen3.5/3.6 MTP、GLM）回答速度约快 1.4 倍，内容不变。n-gram 还能加速重复性文本，例如代码修改。",
+"Auto: los modelos con cabezas MTP integradas (Qwen3.5/3.6 MTP, GLM) responden unas 1,4 veces más rápido con el mismo texto. Los n-gramas aceleran además el texto repetitivo, como las ediciones de código."
+],
+"Адрес": [
+"Address",
+"地址",
+"Dirección"
+],
+"Адрес ComfyUI": [
+"ComfyUI address",
+"ComfyUI 地址",
+"Dirección de ComfyUI"
+],
+"Адрес сервера": [
+"Server address",
+"服务器地址",
+"Dirección del servidor"
+],
+"Без голоса": [
+"No voice",
+"无语音",
+"Sin voz"
+],
+"Без размышления": [
+"No thinking",
+"不思考",
+"Sin razonamiento"
+],
+"Без решётки, например twitchdev.": [
+"Without the #, e.g. twitchdev.",
+"不带 #，例如 twitchdev。",
+"Sin #, por ejemplo twitchdev."
+],
+"Без сжатия (f16)": [
+"Uncompressed (f16)",
+"不压缩（f16）",
+"Sin compresión (f16)"
+],
+"Браузер": [
+"Browser",
+"浏览器",
+"Navegador"
+],
+"Браузер скрыт, пока открыто окно поверх.": [
+"The browser is hidden while a window is open on top.",
+"上层有窗口打开时，浏览器会隐藏。",
+"El navegador se oculta mientras hay una ventana abierta encima."
+],
+"Быстрая загрузка; выключи, если модель на медленном диске.": [
+"Fast loading; turn off if the model is on a slow disk.",
+"加载更快；若模型在慢速磁盘上请关闭。",
+"Carga rápida; desactívalo si el modelo está en un disco lento."
+],
+"Быстрее и экономнее по памяти на видеокартах NVIDIA.": [
+"Faster and uses less memory on NVIDIA GPUs.",
+"在 NVIDIA 显卡上更快、更省显存。",
+"Más rápido y con menos memoria en tarjetas NVIDIA."
+],
+"Быстро": [
+"Fast",
+"快速",
+"Rápido"
+],
+"Быстро · 640×352, 2 с": [
+"Fast · 640×352, 2 s",
+"快速 · 640×352，2 秒",
+"Rápido · 640×352, 2 s"
+],
+"Быстро — 640×352, 2 секунды. Обычно — 832×480, 3 секунды. Высокое — 1280×704, 5 секунд: дольше всего и больше видеопамяти.": [
+"Fast — 640×352, 2 seconds. Normal — 832×480, 3 seconds. High — 1280×704, 5 seconds: slowest and uses the most video memory.",
+"快速 — 640×352，2 秒。标准 — 832×480，3 秒。高 — 1280×704，5 秒：耗时最长，占用显存最多。",
+"Rápido: 640×352, 2 segundos. Normal: 832×480, 3 segundos. Alta: 1280×704, 5 segundos; la más lenta y la que más memoria de vídeo usa."
+],
+"В памяти: фактов": [
+"In memory: facts",
+"记忆中：事实",
+"En memoria: hechos"
+],
+"В редактор": [
+"To editor",
+"在编辑器中打开",
+"Al editor"
+],
+"В списке моделей она будет называться «": [
+"In the model list it will be called “",
+"在模型列表中它将显示为“",
+"En la lista de modelos se llamará «"
+],
+"В этом репозитории нет GGUF-файлов.": [
+"This repository has no GGUF files.",
+"该仓库中没有 GGUF 文件。",
+"Este repositorio no tiene archivos GGUF."
+],
+"В этом чате пока нет файлов. Здесь появятся картинки, презентации и другие файлы из ответов.": [
+"No files in this chat yet. Pictures, presentations and other files from answers will appear here.",
+"此聊天中还没有文件。回答中的图片、演示文稿和其他文件会显示在这里。",
+"Este chat aún no tiene archivos. Aquí aparecerán imágenes, presentaciones y otros archivos de las respuestas."
+],
+"Вариант {0}": [
+"Option {0}",
+"选项 {0}",
+"Opción {0}"
+],
+"Варианты": [
+"Options",
+"选项",
+"Opciones"
+],
+"Введи адрес или запрос сверху. Ссылки из ответов компаньона тоже открываются здесь.": [
+"Enter an address or a search above. Links from the companion's answers open here too.",
+"在上方输入地址或搜索内容。伙伴回答中的链接也会在这里打开。",
+"Escribe una dirección o una búsqueda arriba. Los enlaces de las respuestas del compañero también se abren aquí."
+],
+"Введи хотя бы два символа.": [
+"Enter at least two characters.",
+"请至少输入两个字符。",
+"Escribe al menos dos caracteres."
+],
+"Ввод для программы (stdin)": [
+"Program input (stdin)",
+"程序输入（stdin）",
+"Entrada del programa (stdin)"
+],
+"Вернуть стандартный": [
+"Restore default",
+"恢复默认",
+"Restaurar predeterminado"
+],
+"Вернёт рекомендуемые настройки: промпт, голос, микрофон, параметры модели, интеграции, оформление. Чаты, скачанные модели и выбранные модели останутся.": [
+"Restores the recommended settings: prompt, voice, microphone, model parameters, integrations, appearance. Chats, downloaded models and chosen models stay.",
+"恢复推荐设置：提示词、语音、麦克风、模型参数、集成和外观。聊天、已下载的模型和已选模型会保留。",
+"Restaura la configuración recomendada: prompt, voz, micrófono, parámetros del modelo, integraciones y apariencia. Los chats, los modelos descargados y los elegidos se conservan."
+],
+"Веса": [
+"Weights",
+"权重",
+"Pesos"
+],
+"Видео": [
+"Video",
+"视频",
+"Vídeo"
+],
+"Видит экран в паузах": [
+"Looks at the screen in pauses",
+"在停顿时查看屏幕",
+"Mira la pantalla en las pausas"
+],
+"Википедия": [
+"Wikipedia",
+"维基百科",
+"Wikipedia"
+],
+"Вкл.": [
+"On",
+"开",
+"Sí"
+],
+"Включено": [
+"On",
+"开启",
+"Activado"
+],
+"Включить": [
+"Turn on",
+"开启",
+"Activar"
+],
+"Включён": [
+"On",
+"已开启",
+"Activado"
+],
+"Включён: память находит связанное по смыслу, а не только по словам (обработано записей: {0}).": [
+"On: memory finds related entries by meaning, not only by words ({0} entries processed).",
+"已开启：记忆按语义而不仅按字词查找相关内容（已处理 {0} 条）。",
+"Activado: la memoria encuentra lo relacionado por significado, no solo por palabras (entradas procesadas: {0})."
+],
+"Внизу окна, обычными словами — как другу.": [
+"At the bottom of the window, in plain words — like to a friend.",
+"在窗口底部，用平常的话——就像和朋友聊天。",
+"Abajo en la ventana, con palabras sencillas, como a un amigo."
+],
+"Во время звонка с озвучкой": [
+"During a call with voice",
+"语音通话期间",
+"Durante una llamada con voz"
+],
+"Вопрос": [
+"Question",
+"问题",
+"Pregunta"
+],
+"Вперёд": [
+"Forward",
+"前进",
+"Adelante"
+],
+"Вписать (0)": [
+"Fit (0)",
+"适应窗口（0）",
+"Ajustar (0)"
+],
+"Все модели": [
+"All models",
+"所有模型",
+"Todos los modelos"
+],
+"Все настройки вернутся к рекомендуемым. Чаты и скачанные модели не пострадают.": [
+"All settings will return to the recommended ones. Chats and downloaded models won't be affected.",
+"所有设置都将恢复为推荐值。聊天和已下载的模型不受影响。",
+"Toda la configuración volverá a la recomendada. Los chats y los modelos descargados no se verán afectados."
+],
+"Всего": [
+"Total",
+"合计",
+"Total"
+],
+"Всего {0}. Удалённую модель можно скачать снова.": [
+"{0} in total. A deleted model can be downloaded again.",
+"共 {0}。删除的模型可以重新下载。",
+"{0} en total. Un modelo eliminado se puede volver a descargar."
+],
+"Вы": [
+"You",
+"你",
+"Tú"
+],
+"Выбор только из K самых вероятных слов. 0 — без ограничения.": [
+"Choose only from the K most likely words. 0 — no limit.",
+"仅从概率最高的 K 个词中选择。0 — 不限制。",
+"Elige solo entre las K palabras más probables. 0 — sin límite."
+],
+"Выбрать модель": [
+"Choose a model",
+"选择模型",
+"Elegir modelo"
+],
+"Выбрать…": [
+"Choose…",
+"选择…",
+"Elegir…"
+],
+"Выкл.": [
+"Off",
+"关",
+"No"
+],
+"Выключено": [
+"Off",
+"关闭",
+"Desactivado"
+],
+"Выполняется…": [
+"Running…",
+"运行中…",
+"Ejecutando…"
+],
+"Высокий": [
+"High",
+"高",
+"Alto"
+],
+"Высокое": [
+"High",
+"高",
+"Alta"
+],
+"Высокое · 1280×704, 5 с": [
+"High · 1280×704, 5 s",
+"高 · 1280×704，5 秒",
+"Alta · 1280×704, 5 s"
+],
+"ГБ": [
+"GB",
+"GB",
+"GB"
+],
+"ГБ) —": [
+"GB) —",
+"GB）——",
+"GB) —"
+],
+"Говорит": [
+"Speaking",
+"正在说话",
+"Hablando"
+],
+"Голос": [
+"Voice",
+"语音",
+"Voz"
+],
+"Голос и микрофон": [
+"Voice and microphone",
+"语音与麦克风",
+"Voz y micrófono"
+],
+"Голос по описанию.": [
+"Voice from a description.",
+"根据描述生成的声音。",
+"Voz según una descripción."
+],
+"Голоса:": [
+"Voices:",
+"声音：",
+"Voces:"
+],
+"Голосовая модель": [
+"Voice model",
+"语音模型",
+"Modelo de voz"
+],
+"Голосовая модель скачана": [
+"Voice model downloaded",
+"语音模型已下载",
+"Modelo de voz descargado"
+],
+"Голосовые модели": [
+"Voice models",
+"语音模型",
+"Modelos de voz"
+],
+"Готово": [
+"Done",
+"完成",
+"Listo"
+],
+"Готовые голоса: {0}.": [
+"Built-in voices: {0}.",
+"预设声音：{0}。",
+"Voces incluidas: {0}."
+],
+"Да, запустить на #{0}": [
+"Yes, start on #{0}",
+"是，在 #{0} 发起",
+"Sí, iniciar en #{0}"
+],
+"Да, отправить в #{0}": [
+"Yes, send to #{0}",
+"是，发送到 #{0}",
+"Sí, enviar a #{0}"
+],
+"Данные": [
+"Data",
+"数据",
+"Datos"
+],
+"Движки ставятся один раз и нужны всем своим моделям; модели удаляются кнопкой «Удалить» выше.": [
+"Engines are installed once and shared by their models; models are deleted with the “Delete” button above.",
+"引擎只需安装一次，供其所有模型使用；模型可用上方的“删除”按钮删除。",
+"Los motores se instalan una vez y los usan todos sus modelos; los modelos se eliminan con el botón «Eliminar» de arriba."
+],
+"Движок": [
+"Engine",
+"引擎",
+"Motor"
+],
+"Движок ·": [
+"Engine ·",
+"引擎 ·",
+"Motor ·"
+],
+"Движок:": [
+"Engine:",
+"引擎：",
+"Motor:"
+],
+"Действия с чатом": [
+"Chat actions",
+"聊天操作",
+"Acciones del chat"
+],
+"Держит «удивительность» текста постоянной. 0 — выключен, 2 — версия 2.0.": [
+"Keeps the text's “surprise” constant. 0 — off, 2 — version 2.0.",
+"使文本的“意外度”保持恒定。0 — 关闭，2 — 2.0 版。",
+"Mantiene constante la «sorpresa» del texto. 0 — desactivado, 2 — versión 2.0."
+],
+"Длительность": [
+"Duration",
+"时长",
+"Duración"
+],
+"Для MoE-моделей (A3B, A4B…): веса экспертов первых N слоёв держатся в ОЗУ. Освобождает видеопамять почти без потери скорости.": [
+"For MoE models (A3B, A4B…): expert weights of the first N layers stay in RAM. Frees video memory with almost no loss of speed.",
+"适用于 MoE 模型（A3B、A4B…）：前 N 层的专家权重保存在内存中。几乎不降速即可释放显存。",
+"Para modelos MoE (A3B, A4B…): los pesos de los expertos de las primeras N capas se quedan en la RAM. Libera memoria de vídeo casi sin perder velocidad."
+],
+"Для видео нужна ComfyUI Desktop: установи её, затем скачай модель здесь.": [
+"Video needs ComfyUI Desktop: install it, then download the model here.",
+"视频需要 ComfyUI Desktop：请先安装它，然后在这里下载模型。",
+"El vídeo necesita ComfyUI Desktop: instálalo y luego descarga el modelo aquí."
+],
+"Для видео нужна модель Wan 2.2 TI2V-5B ({0}, лицензия Apache 2.0): она скачается в папку моделей ComfyUI. Работает на видеокарте; ролик в 3 секунды делается несколько минут.": [
+"Video needs the Wan 2.2 TI2V-5B model ({0}, Apache 2.0 license): it will be downloaded into ComfyUI's model folder. It runs on the GPU; a 3-second clip takes a few minutes.",
+"视频需要 Wan 2.2 TI2V-5B 模型（{0}，Apache 2.0 许可证）：它将下载到 ComfyUI 的模型文件夹中。在显卡上运行；生成 3 秒视频需要几分钟。",
+"El vídeo necesita el modelo Wan 2.2 TI2V-5B ({0}, licencia Apache 2.0): se descargará en la carpeta de modelos de ComfyUI. Funciona en la tarjeta gráfica; un clip de 3 segundos tarda unos minutos."
+],
+"Для историй и идей": [
+"For stories and ideas",
+"适合故事和创意",
+"Para historias e ideas"
+],
+"Для каких моделей": [
+"Which models",
+"适用模型",
+"Para qué modelos"
+],
+"Для фактов, кода и инструкций": [
+"For facts, code and instructions",
+"适合事实、代码和说明",
+"Para hechos, código e instrucciones"
+],
+"Добавить MCP-сервер": [
+"Add MCP server",
+"添加 MCP 服务器",
+"Añadir servidor MCP"
+],
+"Добавить вариант": [
+"Add option",
+"添加选项",
+"Añadir opción"
+],
+"Добро пожаловать": [
+"Welcome",
+"欢迎",
+"Bienvenido"
+],
+"Долговременная память": [
+"Long-term memory",
+"长期记忆",
+"Memoria a largo plazo"
+],
+"Другие программы и облако": [
+"Other apps and cloud",
+"其他程序与云端",
+"Otras apps y la nube"
+],
+"Думает": [
+"Thinking",
+"思考中",
+"Pensando"
+],
+"Если ComfyUI запущен на этом компьютере, обычно это http://127.0.0.1:8188.": [
+"If ComfyUI runs on this computer, it's usually http://127.0.0.1:8188.",
+"如果 ComfyUI 在本机运行，通常是 http://127.0.0.1:8188。",
+"Si ComfyUI se ejecuta en este equipo, suele ser http://127.0.0.1:8188."
+],
+"Если заговорить, пока компаньон отвечает, он замолчит и выслушает. С колонками вместо наушников может срабатывать от его собственного голоса — тогда выключи.": [
+"If you start talking while the companion answers, it stops and listens. With speakers instead of headphones it may react to its own voice — then turn this off.",
+"在伙伴回答时开口说话，它会停下来倾听。如果使用音箱而非耳机，它可能会被自己的声音触发——这时请关闭此项。",
+"Si hablas mientras el compañero responde, se callará y te escuchará. Con altavoces en lugar de auriculares puede reaccionar a su propia voz; en ese caso, desactívalo."
+],
+"Если модель не помещается в лимит, она не загрузится и программа объяснит почему.": [
+"If a model doesn't fit within the limit, it won't load and the app will explain why.",
+"如果模型超出限制，将不会加载，程序会说明原因。",
+"Si un modelo no cabe en el límite, no se cargará y el programa explicará por qué."
+],
+"Желаемая удивительность.": [
+"Desired surprise.",
+"期望的意外度。",
+"Sorpresa deseada."
+],
+"Забыть": [
+"Forget",
+"遗忘",
+"Olvidar"
+],
+"Забыть разговоры": [
+"Forget conversations",
+"遗忘对话",
+"Olvidar conversaciones"
+],
+"Забыть факты": [
+"Forget facts",
+"遗忘事实",
+"Olvidar hechos"
+],
+"Завершилось с кодом {0}": [
+"Exited with code {0}",
+"已退出，代码 {0}",
+"Terminó con el código {0}"
+],
+"Завершить звонок": [
+"End call",
+"结束通话",
+"Terminar llamada"
+],
+"Загрузка идёт — прогресс виден в панели слева. Окно можно не закрывать.": [
+"Downloading — progress is shown in the left panel. No need to keep this window open.",
+"正在下载——进度显示在左侧面板中。不必保持此窗口打开。",
+"Descargando: el progreso se ve en el panel izquierdo. No hace falta dejar esta ventana abierta."
+],
+"Загрузка модели": [
+"Loading the model",
+"正在加载模型",
+"Cargando el modelo"
+],
+"Загрузка описания…": [
+"Loading description…",
+"正在加载描述…",
+"Cargando descripción…"
+],
+"Загрузка популярных моделей…": [
+"Loading popular models…",
+"正在加载热门模型…",
+"Cargando modelos populares…"
+],
+"Загрузка списка файлов…": [
+"Loading the file list…",
+"正在加载文件列表…",
+"Cargando la lista de archivos…"
+],
+"Загрузка чатов…": [
+"Loading chats…",
+"正在加载聊天…",
+"Cargando chats…"
+],
+"Загрузка…": [
+"Loading…",
+"加载中…",
+"Cargando…"
+],
+"Загрузки": [
+"Downloads",
+"下载",
+"Descargas"
+],
+"Закрепить": [
+"Pin",
+"置顶",
+"Fijar"
+],
+"Закреплённые": [
+"Pinned",
+"已置顶",
+"Fijados"
+],
+"Закрыть (Esc)": [
+"Close (Esc)",
+"关闭（Esc）",
+"Cerrar (Esc)"
+],
+"Закрыть вкладку": [
+"Close tab",
+"关闭标签页",
+"Cerrar pestaña"
+],
+"Закрыть панель (Ctrl+D)": [
+"Close panel (Ctrl+D)",
+"关闭面板（Ctrl+D）",
+"Cerrar panel (Ctrl+D)"
+],
+"Запись WAV на 5–15 секунд. Модели с клонированием (XTTS, Chatterbox, F5-TTS, VoxCPM, OmniVoice, IndexTTS2 и другие) будут говорить этим голосом, если в поле «Голос» выбрать «Мой образец голоса».": [
+"A 5–15 second WAV recording. Voice-cloning models (XTTS, Chatterbox, F5-TTS, VoxCPM, OmniVoice, IndexTTS2 and others) will speak in this voice if you choose “My voice sample” in the “Voice” field.",
+"5–15 秒的 WAV 录音。若在“语音”中选择“我的声音样本”，具有声音克隆功能的模型（XTTS、Chatterbox、F5-TTS、VoxCPM、OmniVoice、IndexTTS2 等）将用这个声音说话。",
+"Una grabación WAV de 5–15 segundos. Los modelos que clonan voces (XTTS, Chatterbox, F5-TTS, VoxCPM, OmniVoice, IndexTTS2 y otros) hablarán con esta voz si eliges «Mi muestra de voz» en el campo «Voz»."
+],
+"Запомнить": [
+"Remember",
+"记住",
+"Recordar"
+],
+"Запустится через {0}": [
+"Will run with {0}",
+"将通过 {0} 运行",
+"Se ejecutará con {0}"
+],
+"Запустить": [
+"Run",
+"运行",
+"Ejecutar"
+],
+"Запустить опрос": [
+"Start poll",
+"发起投票",
+"Iniciar encuesta"
+],
+"Запустить этот опрос для зрителей Twitch": [
+"Run this poll for Twitch viewers",
+"为 Twitch 观众发起此投票",
+"Lanzar esta encuesta para los espectadores de Twitch"
+],
+"Звонок": [
+"Call",
+"通话",
+"Llamada"
+],
+"Звук ПК": [
+"PC sound",
+"电脑声音",
+"Sonido del PC"
+],
+"Звук компьютера": [
+"Computer sound",
+"电脑声音",
+"Sonido del ordenador"
+],
+"Здесь компаньон читает и правит файлы, когда просишь что-то сделать с кодом.": [
+"Here the companion reads and edits files when you ask it to do something with code.",
+"当你让伙伴处理代码时，它会在这里读取和修改文件。",
+"Aquí el compañero lee y edita archivos cuando le pides algo con el código."
+],
+"Зерно (seed)": [
+"Seed",
+"随机种子（seed）",
+"Semilla (seed)"
+],
+"Изменения действуют на все модели, кроме тех, где заданы свои.": [
+"Changes apply to all models except those with their own.",
+"更改适用于所有模型，单独设置过的模型除外。",
+"Los cambios se aplican a todos los modelos, salvo los que tienen los suyos."
+],
+"Изменено параметров: {0}.": [
+"Parameters changed: {0}.",
+"已更改参数：{0} 个。",
+"Parámetros cambiados: {0}."
+],
+"Изменить": [
+"Edit",
+"编辑",
+"Editar"
+],
+"Иногда сам замечает важное": [
+"Sometimes notices important things on its own",
+"有时会主动注意到重要的事",
+"A veces nota lo importante por sí mismo"
+],
+"Иногда убирает самые предсказуемые слова — текст живее. 0 — выключено.": [
+"Sometimes drops the most predictable words for livelier text. 0 — off.",
+"有时会去掉最可预测的词，让文本更生动。0 — 关闭。",
+"A veces quita las palabras más predecibles: el texto queda más vivo. 0 — desactivado."
+],
+"Инструкции": [
+"Instructions",
+"说明",
+"Instrucciones"
+],
+"Инструменты в ответах": [
+"Tools in answers",
+"回答中的工具",
+"Herramientas en las respuestas"
+],
+"Инструменты и навыки": [
+"Tools and skills",
+"工具与技能",
+"Herramientas y habilidades"
+],
+"Интеграции": [
+"Integrations",
+"集成",
+"Integraciones"
+],
+"Интеграция Twitch выключена в настройках.": [
+"The Twitch integration is turned off in settings.",
+"Twitch 集成已在设置中关闭。",
+"La integración de Twitch está desactivada en la configuración."
+],
+"Интервал снимков экрана для комментариев, от 10 до 600 секунд.": [
+"Interval between screen glances for comments, 10 to 600 seconds.",
+"用于评论的屏幕截图间隔，10 到 600 秒。",
+"Intervalo entre capturas de pantalla para comentar, de 10 a 600 segundos."
+],
+"Искать в сообщениях": [
+"Search messages",
+"搜索消息",
+"Buscar en mensajes"
+],
+"Использовать": [
+"Use",
+"使用",
+"Usar"
+],
+"Используется": [
+"In use",
+"使用中",
+"En uso"
+],
+"Используется, когда включено прослушивание.": [
+"Used while listening is on.",
+"开启聆听时使用。",
+"Se usa cuando la escucha está activada."
+],
+"Ищет во всех чатах, по тексту ответов и вопросов.": [
+"Searches all chats, in both questions and answers.",
+"在所有聊天中搜索问题和回答的内容。",
+"Busca en todos los chats, en el texto de preguntas y respuestas."
+],
+"Ищет на Hugging Face и в каталоге audio.cpp. У каждой модели видно, каким движком она запустится; движок ставится сам при первой загрузке.": [
+"Searches Hugging Face and the audio.cpp catalog. Each model shows which engine will run it; the engine installs itself with the first download.",
+"在 Hugging Face 和 audio.cpp 目录中搜索。每个模型都会显示使用哪个引擎运行；引擎会在首次下载时自动安装。",
+"Busca en Hugging Face y en el catálogo de audio.cpp. Cada modelo muestra con qué motor se ejecutará; el motor se instala solo con la primera descarga."
+],
+"К списку файлов": [
+"Back to files",
+"返回文件列表",
+"Volver a los archivos"
+],
+"Как быстро он подстраивается.": [
+"How fast it adapts.",
+"调整的速度。",
+"Qué tan rápido se ajusta."
+],
+"Как быстро растёт штраф с длиной повтора.": [
+"How fast the penalty grows with the repeat's length.",
+"惩罚随重复长度增长的速度。",
+"Qué tan rápido crece la penalización con la longitud de la repetición."
+],
+"Как в Windows": [
+"As in Windows",
+"跟随 Windows",
+"Como en Windows"
+],
+"Как компаньон должен себя вести. Применяется к следующим сообщениям.": [
+"How the companion should behave. Applies to the next messages.",
+"伙伴应如何表现。从下一条消息开始生效。",
+"Cómo debe comportarse el compañero. Se aplica a los siguientes mensajes."
+],
+"Как подключаться": [
+"How to connect",
+"连接方式",
+"Cómo conectarse"
+],
+"Как получить токен": [
+"How to get a token",
+"如何获取令牌",
+"Cómo obtener un token"
+],
+"Как решит модель": [
+"Model decides",
+"由模型决定",
+"Lo decide el modelo"
+],
+"Как решит модель ({0})": [
+"Model decides ({0})",
+"由模型决定（{0}）",
+"Lo decide el modelo ({0})"
+],
+"Какие слова считаются слишком предсказуемыми.": [
+"Which words count as too predictable.",
+"哪些词被视为过于可预测。",
+"Qué palabras se consideran demasiado predecibles."
+],
+"Канал": [
+"Channel",
+"频道",
+"Canal"
+],
+"Картинки и видео": [
+"Images and video",
+"图片与视频",
+"Imágenes y vídeo"
+],
+"Качество видео": [
+"Video quality",
+"视频质量",
+"Calidad del vídeo"
+],
+"Ключ из личного кабинета сервиса.": [
+"A key from the service's account page.",
+"来自该服务个人中心的密钥。",
+"Una clave del panel de tu cuenta en el servicio."
+],
+"Ключ сохранён. Введи новый, чтобы заменить.": [
+"Key saved. Enter a new one to replace it.",
+"密钥已保存。输入新密钥即可替换。",
+"Clave guardada. Escribe una nueva para reemplazarla."
+],
+"Кнопка звонка внизу: говори вслух, помощник ответит голосом.": [
+"The call button at the bottom: speak aloud and the assistant answers by voice.",
+"底部的通话按钮：大声说话，助手会用语音回答。",
+"El botón de llamada abajo: habla en voz alta y el asistente responderá con voz."
+],
+"Когда применять": [
+"When to use",
+"何时使用",
+"Cuándo usarla"
+],
+"Когда разговор перестаёт помещаться в контекст, его начало сжимается моделью в краткое содержание, чтобы она не забывала важное.": [
+"When a conversation no longer fits the context, the model compresses its beginning into a summary so it doesn't forget what matters.",
+"当对话超出上下文时，模型会将开头部分压缩成摘要，以免遗忘重要内容。",
+"Cuando la conversación ya no cabe en el contexto, el modelo resume su comienzo para no olvidar lo importante."
+],
+"Код": [
+"Code",
+"代码",
+"Código"
+],
+"Код, названия моделей и цифры всегда остаются моноширинными.": [
+"Code, model names and numbers always stay monospaced.",
+"代码、模型名称和数字始终使用等宽字体。",
+"El código, los nombres de modelos y los números siempre son monoespaciados."
+],
+"Команда": [
+"Command",
+"命令",
+"Comando"
+],
+"Команда запуска": [
+"Start command",
+"启动命令",
+"Comando de inicio"
+],
+"Командная строка": [
+"Command Prompt",
+"命令提示符",
+"Símbolo del sistema"
+],
+"Компаньон просит разрешения на скачивание.": [
+"The companion asks permission to download.",
+"伙伴请求下载许可。",
+"El compañero pide permiso para descargar."
+],
+"Компаньон читает ответ вслух по предложениям, пока модель ещё его пишет.": [
+"The companion reads the answer aloud sentence by sentence while the model is still writing it.",
+"在模型仍在书写时，伙伴会逐句朗读回答。",
+"El compañero lee la respuesta en voz alta frase a frase mientras el modelo aún la escribe."
+],
+"Контекст": [
+"Context",
+"上下文",
+"Contexto"
+],
+"Копировать": [
+"Copy",
+"复制",
+"Copiar"
+],
+"Копировать ответ": [
+"Copy answer",
+"复制回答",
+"Copiar respuesta"
+],
+"Крестик прячет окно в трей (значок у часов), ответы и вопросы модели приходят уведомлениями. Выйти совсем — правой кнопкой по значку → «Выйти».": [
+"The close button hides the window to the tray (the icon by the clock); the model's answers and questions arrive as notifications. To quit completely — right-click the icon → “Quit”.",
+"关闭按钮会把窗口隐藏到托盘（时钟旁的图标），模型的回答和提问会以通知形式出现。要彻底退出——右键点击图标 →“退出”。",
+"La X oculta la ventana en la bandeja (el icono junto al reloj); las respuestas y preguntas del modelo llegan como notificaciones. Para salir del todo: clic derecho en el icono → «Salir»."
+],
+"Куда": [
+"Where",
+"保存到",
+"Destino"
+],
+"Латиница и дефис, например weekly-report.": [
+"Latin letters and hyphens, e.g. weekly-report.",
+"拉丁字母和连字符，例如 weekly-report。",
+"Letras latinas y guiones, por ejemplo weekly-report."
+],
+"Латиница, цифры, дефис. Им подписываются инструменты сервера.": [
+"Latin letters, digits, hyphens. The server's tools are labeled with it.",
+"拉丁字母、数字和连字符。服务器的工具将以此命名。",
+"Letras latinas, cifras y guiones. Con él se nombran las herramientas del servidor."
+],
+"Лимиты памяти": [
+"Memory limits",
+"内存限制",
+"Límites de memoria"
+],
+"Лицензия:": [
+"License:",
+"许可证：",
+"Licencia:"
+],
+"Любой сервер с OpenAI API, например vLLM или text-generation-webui: адрес до /v1.": [
+"Any server with an OpenAI API, e.g. vLLM or text-generation-webui: the address up to /v1.",
+"任何兼容 OpenAI API 的服务器，例如 vLLM 或 text-generation-webui：填写到 /v1 的地址。",
+"Cualquier servidor con API de OpenAI, como vLLM o text-generation-webui: la dirección hasta /v1."
+],
+"Максимум видеопамяти": [
+"Maximum video memory",
+"显存上限",
+"Máximo de memoria de vídeo"
+],
+"Максимум оперативной памяти": [
+"Maximum RAM",
+"内存上限",
+"Máximo de RAM"
+],
+"Максимум токенов в ответе": [
+"Maximum tokens per answer",
+"每次回答的最大词元数",
+"Máximo de tokens por respuesta"
+],
+"Меньше видеопамяти: 8K контекста, сжатый кэш": [
+"Less video memory: 8K context, compressed cache",
+"更省显存：8K 上下文，压缩缓存",
+"Menos memoria de vídeo: contexto de 8K, caché comprimida"
+],
+"Место на диске": [
+"Disk space",
+"磁盘空间",
+"Espacio en disco"
+],
+"Микрофон": [
+"Microphone",
+"麦克风",
+"Micrófono"
+],
+"Микрофон выключен": [
+"Microphone off",
+"麦克风已关闭",
+"Micrófono desactivado"
+],
+"Моделей в памяти одновременно": [
+"Models loaded at once",
+"同时加载的模型数",
+"Modelos cargados a la vez"
+],
+"Моделей: {0}": [
+"Models: {0}",
+"模型：{0}",
+"Modelos: {0}"
+],
+"Модели (llama.cpp и подключённые сервисы)": [
+"Models (llama.cpp and connected services)",
+"模型（llama.cpp 及已连接的服务）",
+"Modelos (llama.cpp y servicios conectados)"
+],
+"Модели Ollama": [
+"Ollama models",
+"Ollama 模型",
+"Modelos de Ollama"
+],
+"Модели из этих программ и сервисов появятся в общем списке моделей, и их можно выбрать для любого чата. Ключи хранятся зашифрованными средствами Windows и отправляются только своему сервису.": [
+"Models from these apps and services appear in the common model list and can be chosen for any chat. Keys are stored encrypted by Windows and are sent only to their own service.",
+"这些程序和服务的模型会出现在通用模型列表中，可用于任何聊天。密钥由 Windows 加密保存，只会发送给对应的服务。",
+"Los modelos de estas apps y servicios aparecerán en la lista común de modelos y se pueden elegir para cualquier chat. Las claves se guardan cifradas por Windows y solo se envían a su propio servicio."
+],
+"Модели на диске": [
+"Models on disk",
+"磁盘上的模型",
+"Modelos en disco"
+],
+"Модели озвучки и распознавания": [
+"Speech and recognition models",
+"语音合成与识别模型",
+"Modelos de voz y reconocimiento"
+],
+"Модели с Hugging Face": [
+"Models from Hugging Face",
+"来自 Hugging Face 的模型",
+"Modelos de Hugging Face"
+],
+"Модель": [
+"Model",
+"模型",
+"Modelo"
+],
+"Модель Wan 2.2 (Apache 2.0) готова. Попроси «сними видео…» или приложи картинку и попроси сделать из неё видео.": [
+"The Wan 2.2 model (Apache 2.0) is ready. Ask “make a video of…” or attach a picture and ask to turn it into a video.",
+"Wan 2.2 模型（Apache 2.0）已就绪。可以说“拍一段……的视频”，或附上图片让它生成视频。",
+"El modelo Wan 2.2 (Apache 2.0) está listo. Pide «haz un vídeo de…» o adjunta una imagen y pide convertirla en vídeo."
+],
+"Модель {0} сменена. Чтобы она заработала, программу нужно перезапустить. Чаты и настройки сохранятся.": [
+"The {0} model has been changed. Restart the app for it to take effect. Chats and settings will be kept.",
+"已更换{0}模型。需要重启程序才能生效。聊天和设置会保留。",
+"Se cambió el modelo de {0}. Reinicia el programa para que funcione. Los chats y la configuración se conservarán."
+],
+"Модель выбирает из самых вероятных слов, пока их сумма не наберёт эту долю.": [
+"The model picks from the most likely words until their total reaches this share.",
+"模型从概率最高的词中选择，直到其累计概率达到该比例。",
+"El modelo elige entre las palabras más probables hasta que su suma alcanza esta proporción."
+],
+"Модель забудет все сохранённые факты.": [
+"The model will forget all saved facts.",
+"模型将遗忘所有已保存的事实。",
+"El modelo olvidará todos los hechos guardados."
+],
+"Модель забудет все факты и прошлые разговоры. Сами чаты останутся.": [
+"The model will forget all facts and past conversations. The chats themselves stay.",
+"模型将遗忘所有事实和过去的对话。聊天本身会保留。",
+"El modelo olvidará todos los hechos y las conversaciones pasadas. Los chats se conservan."
+],
+"Модель займёт не больше; остальные слои пойдут в оперативную память.": [
+"The model will use no more than this; other layers go to RAM.",
+"模型占用不会超过此值；其余层将放入内存。",
+"El modelo no usará más; las demás capas irán a la RAM."
+],
+"Модель перестанет находить прошлые разговоры. Сами чаты останутся.": [
+"The model will stop finding past conversations. The chats themselves stay.",
+"模型将无法再找到过去的对话。聊天本身会保留。",
+"El modelo dejará de encontrar conversaciones pasadas. Los chats se conservan."
+],
+"Модель помнит факты о тебе и находит нужное в прошлых разговорах из всех чатов. Всё хранится только на этом компьютере.": [
+"The model remembers facts about you and finds what it needs in past conversations from all chats. Everything stays on this computer.",
+"模型会记住关于你的事实，并从所有聊天的历史对话中查找所需内容。所有数据只保存在这台电脑上。",
+"El modelo recuerda datos sobre ti y encuentra lo necesario en conversaciones pasadas de todos los chats. Todo se guarda solo en este equipo."
+],
+"Модель сама называет новые чаты": [
+"The model names new chats itself",
+"由模型为新聊天命名",
+"El modelo pone nombre a los chats nuevos"
+],
+"Модель сама решает, когда открыть сайт во встроенном браузере, найти что-то в интернете, взять навык или вызвать инструмент MCP-сервера. Каждый вызов виден в чате.": [
+"The model decides when to open a site in the built-in browser, search the web, use a skill or call an MCP server tool. Every call is shown in the chat.",
+"模型会自行决定何时在内置浏览器中打开网站、上网搜索、使用技能或调用 MCP 服务器工具。每次调用都会显示在聊天中。",
+"El modelo decide cuándo abrir un sitio en el navegador integrado, buscar en internet, usar una habilidad o llamar a una herramienta de un servidor MCP. Cada llamada se ve en el chat."
+],
+"Модель скачана": [
+"Model downloaded",
+"模型已下载",
+"Modelo descargado"
+],
+"Модель:": [
+"Model:",
+"模型：",
+"Modelo:"
+],
+"Можно писать дальше: сообщение отправится после текущего ответа": [
+"Keep typing: the message will be sent after the current answer",
+"可以继续输入：消息将在当前回答结束后发送",
+"Puedes seguir escribiendo: el mensaje se enviará tras la respuesta actual"
+],
+"Мягко запрещает дословно повторять длинные куски. 0 — выключен, 0.8 — обычное значение.": [
+"Gently forbids repeating long passages word for word. 0 — off, 0.8 — typical value.",
+"温和地禁止逐字重复较长片段。0 — 关闭，0.8 — 常用值。",
+"Impide con suavidad repetir literalmente fragmentos largos. 0 — desactivado, 0.8 — valor habitual."
+],
+"Навык {0}": [
+"Skill {0}",
+"技能 {0}",
+"Habilidad {0}"
+],
+"Навык — инструкция для модели на определённый случай: как писать отчёт, как отвечать клиентам, как оформлять код. Модель видит их список и берёт нужный сама. Можно попросить модель «сохрани это как навык».": [
+"A skill is an instruction for the model for a particular case: how to write a report, how to answer customers, how to format code. The model sees the list and picks the one it needs. You can ask the model to “save this as a skill”.",
+"技能是给模型的特定场景说明：如何写报告、如何回复客户、如何排版代码。模型能看到技能列表并自行选用。你可以对模型说“把这个保存为技能”。",
+"Una habilidad es una instrucción para el modelo para un caso concreto: cómo redactar un informe, cómo responder a clientes, cómo formatear código. El modelo ve la lista y elige la que necesita. Puedes pedirle «guarda esto como habilidad»."
+],
+"Навыки": [
+"Skills",
+"技能",
+"Habilidades"
+],
+"Назад": [
+"Back",
+"后退",
+"Atrás"
+],
+"Название": [
+"Name",
+"名称",
+"Nombre"
+],
+"Название модели": [
+"Model name",
+"模型名称",
+"Nombre del modelo"
+],
+"Найди и исправь ошибку в проекте": [
+"Find and fix a bug in the project",
+"找出并修复项目中的错误",
+"Encuentra y corrige un error en el proyecto"
+],
+"Найти другие на Hugging Face…": [
+"Find others on Hugging Face…",
+"在 Hugging Face 上查找更多…",
+"Buscar otros en Hugging Face…"
+],
+"Найти модель": [
+"Find a model",
+"查找模型",
+"Buscar modelo"
+],
+"Найти модель эмбеддингов, например qwen3 embedding, bge-m3, e5": [
+"Find an embedding model, e.g. qwen3 embedding, bge-m3, e5",
+"查找嵌入模型，例如 qwen3 embedding、bge-m3、e5",
+"Busca un modelo de embeddings, por ejemplo qwen3 embedding, bge-m3, e5"
+],
+"Найти чат": [
+"Find a chat",
+"查找聊天",
+"Buscar chat"
+],
+"Написать в чат…": [
+"Write to chat…",
+"发送到聊天…",
+"Escribir en el chat…"
+],
+"Напиши сообщение": [
+"Write a message",
+"发送消息",
+"Escribe un mensaje"
+],
+"Напиши сообщение, попроси нарисовать картинку или сделать презентацию": [
+"Write a message, ask for a picture or a presentation",
+"输入消息，或让它画图、做演示文稿",
+"Escribe un mensaje, pide una imagen o una presentación"
+],
+"Например, piper ru, xtts, kokoro или qwen3-tts": [
+"For example, piper en, xtts, kokoro or qwen3-tts",
+"例如 piper zh、xtts、kokoro 或 qwen3-tts",
+"Por ejemplo, piper es, xtts, kokoro o qwen3-tts"
+],
+"Например, whisper russian, gigaam или parakeet": [
+"For example, whisper english, parakeet or canary",
+"例如 whisper chinese、paraformer 或 sensevoice",
+"Por ejemplo, whisper spanish, parakeet o canary"
+],
+"Например: Привет, это мой голос для компаньона.": [
+"For example: Hi, this is my voice for the companion.",
+"例如：你好，这是我给伙伴用的声音。",
+"Por ejemplo: Hola, esta es mi voz para el compañero."
+],
+"Например: я пишу на Python и люблю короткие ответы": [
+"For example: I code in Python and like short answers",
+"例如：我用 Python 编程，喜欢简短的回答",
+"Por ejemplo: programo en Python y me gustan las respuestas cortas"
+],
+"Нарисуй уютный ночной город под дождём": [
+"Draw a cozy night city in the rain",
+"画一座雨夜中温馨的城市",
+"Dibuja una acogedora ciudad nocturna bajo la lluvia"
+],
+"Настройки": [
+"Settings",
+"设置",
+"Configuración"
+],
+"Настройки (Ctrl+,)": [
+"Settings (Ctrl+,)",
+"设置（Ctrl+,）",
+"Configuración (Ctrl+,)"
+],
+"Начни вводить название модели, например Qwen3 или Gemma.": [
+"Start typing a model name, e.g. Qwen3 or Gemma.",
+"开始输入模型名称，例如 Qwen3 或 Gemma。",
+"Empieza a escribir el nombre de un modelo, por ejemplo Qwen3 o Gemma."
+],
+"Нашлось": [
+"Found",
+"找到",
+"Encontrados"
+],
+"Нашлось репозиториев: {0}. Выбери один.": [
+"Repositories found: {0}. Choose one.",
+"找到 {0} 个仓库。请选择一个。",
+"Repositorios encontrados: {0}. Elige uno."
+],
+"Не влезет в видеопамять целиком: часть уйдёт в ОЗУ, и всё будет работать медленнее.": [
+"Won't fit entirely in video memory: part will go to RAM and everything will run slower.",
+"无法完全放入显存：部分将放入内存，整体会变慢。",
+"No cabe entera en la memoria de vídeo: una parte irá a la RAM y todo irá más lento."
+],
+"Не выгружать из ОЗУ (mlock)": [
+"Keep in RAM (mlock)",
+"锁定在内存中（mlock）",
+"Mantener en RAM (mlock)"
+],
+"Не запустится: {0}": [
+"Won't run: {0}",
+"无法运行：{0}",
+"No funcionará: {0}"
+],
+"Не отправлено.": [
+"Not sent.",
+"未发送。",
+"No enviado."
+],
+"Не получилось.": [
+"Didn't work.",
+"未成功。",
+"No funcionó."
+],
+"Не получилось: {0}.": [
+"Didn't work: {0}.",
+"未成功：{0}。",
+"No funcionó: {0}."
+],
+"Не скачивать": [
+"Don't download",
+"不下载",
+"No descargar"
+],
+"Не удалось начать загрузку.": [
+"Couldn't start the download.",
+"无法开始下载。",
+"No se pudo iniciar la descarga."
+],
+"Не удалось получить файлы.": [
+"Couldn't get the files.",
+"无法获取文件。",
+"No se pudieron obtener los archivos."
+],
+"Не удалось прочитать презентацию.": [
+"Couldn't read the presentation.",
+"无法读取演示文稿。",
+"No se pudo leer la presentación."
+],
+"Не удалось связаться с Hugging Face. Проверь интернет или скачай модель вручную через меню выбора модели.": [
+"Couldn't reach Hugging Face. Check your internet connection or download a model manually from the model menu.",
+"无法连接 Hugging Face。请检查网络，或通过模型选择菜单手动下载模型。",
+"No se pudo conectar con Hugging Face. Comprueba internet o descarga un modelo manualmente desde el menú de modelos."
+],
+"Не удалось удалить.": [
+"Couldn't delete.",
+"无法删除。",
+"No se pudo eliminar."
+],
+"Не удалось узнать у модели: {0}": [
+"Couldn't ask the model: {0}",
+"无法从模型获取：{0}",
+"No se pudo consultar al modelo: {0}"
+],
+"Недавние": [
+"Recent",
+"最近",
+"Recientes"
+],
+"Нет моделей": [
+"No models",
+"没有模型",
+"No hay modelos"
+],
+"Нет связи с движком": [
+"No connection to the engine",
+"无法连接到引擎",
+"Sin conexión con el motor"
+],
+"Ниже — точнее и однообразнее, выше — творческее и случайнее.": [
+"Lower — more precise and uniform, higher — more creative and random.",
+"越低越精确、越单一；越高越有创意、越随机。",
+"Más bajo: más preciso y uniforme; más alto: más creativo y aleatorio."
+],
+"Низкий": [
+"Low",
+"低",
+"Bajo"
+],
+"Ничего не найдено": [
+"Nothing found",
+"未找到",
+"No se encontró nada"
+],
+"Ничего не нашлось, попробуй другое название.": [
+"Nothing found, try another name.",
+"未找到，请换个名称试试。",
+"No se encontró nada, prueba con otro nombre."
+],
+"Ничего не нашлось.": [
+"Nothing found.",
+"未找到。",
+"No se encontró nada."
+],
+"Новая вкладка": [
+"New tab",
+"新标签页",
+"Pestaña nueva"
+],
+"Новый MCP-сервер": [
+"New MCP server",
+"新 MCP 服务器",
+"Nuevo servidor MCP"
+],
+"Новый навык": [
+"New skill",
+"新技能",
+"Nueva habilidad"
+],
+"Новый ответ": [
+"New answer",
+"新回答",
+"Respuesta nueva"
+],
+"Новый чат": [
+"New chat",
+"新聊天",
+"Chat nuevo"
+],
+"Новый чат (Ctrl+N)": [
+"New chat (Ctrl+N)",
+"新聊天（Ctrl+N）",
+"Chat nuevo (Ctrl+N)"
+],
+"Нужен перезапуск": [
+"Restart needed",
+"需要重启",
+"Hace falta reiniciar"
+],
+"Нужно разрешение": [
+"Requires the scope",
+"需要权限",
+"Se necesita el permiso"
+],
+"Нужны установленные Node.js (npx) или uv (uvx) — смотри README сервера.": [
+"Requires Node.js (npx) or uv (uvx) installed — see the server's README.",
+"需要已安装 Node.js（npx）或 uv（uvx）——请查看服务器的 README。",
+"Necesita Node.js (npx) o uv (uvx) instalados: consulta el README del servidor."
+],
+"Облачные модели по своему ключу": [
+"Cloud models with your own key",
+"使用自己密钥的云端模型",
+"Modelos en la nube con tu propia clave"
+],
+"Обновить": [
+"Reload",
+"刷新",
+"Recargar"
+],
+"Обновить список": [
+"Refresh list",
+"刷新列表",
+"Actualizar lista"
+],
+"Образец голоса": [
+"Voice sample",
+"声音样本",
+"Muestra de voz"
+],
+"Объясни простыми словами, как работает видеокарта": [
+"Explain in simple words how a graphics card works",
+"用通俗的话解释显卡是如何工作的",
+"Explica con palabras sencillas cómo funciona una tarjeta gráfica"
+],
+"Обычно": [
+"Normal",
+"标准",
+"Normal"
+],
+"Обычно · 832×480, 3 с": [
+"Normal · 832×480, 3 s",
+"标准 · 832×480，3 秒",
+"Normal · 832×480, 3 s"
+],
+"Озвучивать ответы": [
+"Read answers aloud",
+"朗读回答",
+"Leer respuestas en voz alta"
+],
+"Озвучить": [
+"Read aloud",
+"朗读",
+"Leer en voz alta"
+],
+"Озвучка": [
+"Speech",
+"语音合成",
+"Voz"
+],
+"Озвучка и распознавание…": [
+"Speech and recognition…",
+"语音合成与识别…",
+"Voz y reconocimiento…"
+],
+"Окно можно закрыть: загрузка продолжится, её видно в панели слева.": [
+"You can close the window: the download continues and is shown in the left panel.",
+"可以关闭此窗口：下载会继续，并显示在左侧面板中。",
+"Puedes cerrar la ventana: la descarga continuará y se verá en el panel izquierdo."
+],
+"Окно повторов": [
+"Repeat window",
+"重复检测窗口",
+"Ventana de repetición"
+],
+"Описание исходной модели": [
+"Description of the original model",
+"原始模型的描述",
+"Descripción del modelo original"
+],
+"Определение модели…": [
+"Identifying the model…",
+"正在识别模型…",
+"Identificando el modelo…"
+],
+"Опрос": [
+"Poll",
+"投票",
+"Encuesta"
+],
+"Опрос в Twitch": [
+"Twitch poll",
+"Twitch 投票",
+"Encuesta en Twitch"
+],
+"Опрос для зрителей запускается на твоём канале после подтверждения.": [
+"The poll for viewers starts on your channel after you confirm.",
+"确认后，将在你的频道为观众发起投票。",
+"La encuesta para los espectadores se inicia en tu canal tras confirmarla."
+],
+"Опрос запущен.": [
+"Poll started.",
+"投票已发起。",
+"Encuesta iniciada."
+],
+"Опрос не запущен.": [
+"Poll not started.",
+"投票未发起。",
+"La encuesta no se inició."
+],
+"Остальные": [
+"Others",
+"其他",
+"Otros"
+],
+"Остановить": [
+"Stop",
+"停止",
+"Detener"
+],
+"Остановить (Esc)": [
+"Stop (Esc)",
+"停止（Esc）",
+"Detener (Esc)"
+],
+"От 2 до 5, каждый до 25 символов.": [
+"2 to 5, each up to 25 characters.",
+"2 到 5 个，每个最多 25 个字符。",
+"De 2 a 5, cada una de hasta 25 caracteres."
+],
+"Отбрасывает слова, которые намного менее вероятны, чем лучшее.": [
+"Drops words that are much less likely than the best one.",
+"舍弃比最佳词概率低得多的词。",
+"Descarta las palabras mucho menos probables que la mejor."
+],
+"Ответить заново": [
+"Answer again",
+"重新回答",
+"Responder de nuevo"
+],
+"Ответы": [
+"Answers",
+"回答",
+"Respuestas"
+],
+"Ответы, код и презентации. Если выключить, текущий ответ остановится.": [
+"Answers, code and presentations. Turning it off stops the current answer.",
+"回答、代码和演示文稿。关闭后当前回答将停止。",
+"Respuestas, código y presentaciones. Si lo desactivas, la respuesta actual se detendrá."
+],
+"Открепить": [
+"Unpin",
+"取消置顶",
+"Desfijar"
+],
+"Открой проводник": [
+"Open File Explorer",
+"打开文件资源管理器",
+"Abre el Explorador de archivos"
+],
+"Открыть": [
+"Open",
+"打开",
+"Abrir"
+],
+"Открыть в обычном браузере": [
+"Open in your regular browser",
+"在常用浏览器中打开",
+"Abrir en tu navegador habitual"
+],
+"Открыть в программе": [
+"Open in an app",
+"用程序打开",
+"Abrir en una app"
+],
+"Открыть в программе Windows": [
+"Open in a Windows app",
+"用 Windows 程序打开",
+"Abrir en una app de Windows"
+],
+"Открыть в редакторе справа и запустить": [
+"Open in the editor on the right and run",
+"在右侧编辑器中打开并运行",
+"Abrir en el editor de la derecha y ejecutar"
+],
+"Открыть журнал": [
+"Open log",
+"打开日志",
+"Abrir registro"
+],
+"Открыть папку": [
+"Open folder",
+"打开文件夹",
+"Abrir carpeta"
+],
+"Открыть просмотр": [
+"Open viewer",
+"打开预览",
+"Abrir visor"
+],
+"Отмена": [
+"Cancel",
+"取消",
+"Cancelar"
+],
+"Отменено": [
+"Cancelled",
+"已取消",
+"Cancelado"
+],
+"Отменить": [
+"Cancel",
+"取消",
+"Cancelar"
+],
+"Отменить загрузку": [
+"Cancel download",
+"取消下载",
+"Cancelar descarga"
+],
+"Отображать файл в память (mmap)": [
+"Memory-map the file (mmap)",
+"内存映射文件（mmap）",
+"Mapear el archivo en memoria (mmap)"
+],
+"Отправится после текущего ответа": [
+"Will be sent after the current answer",
+"将在当前回答结束后发送",
+"Se enviará tras la respuesta actual"
+],
+"Отправить": [
+"Send",
+"发送",
+"Enviar"
+],
+"Отправить (Enter)": [
+"Send (Enter)",
+"发送（Enter）",
+"Enviar (Enter)"
+],
+"Отправка сообщений в чат канала.": [
+"Sending messages to the channel chat.",
+"向频道聊天发送消息。",
+"Envío de mensajes al chat del canal."
+],
+"Отправка…": [
+"Sending…",
+"发送中…",
+"Enviando…"
+],
+"Отправлено.": [
+"Sent.",
+"已发送。",
+"Enviado."
+],
+"Отправляется ровно одно сообщение после твоего подтверждения.": [
+"Exactly one message is sent after you confirm.",
+"确认后只会发送一条消息。",
+"Se envía exactamente un mensaje tras tu confirmación."
+],
+"Отпусти, чтобы прикрепить картинку": [
+"Drop to attach the picture",
+"松开即可附加图片",
+"Suelta para adjuntar la imagen"
+],
+"Оформление": [
+"Appearance",
+"外观",
+"Apariencia"
+],
+"Очистить": [
+"Clear",
+"清除",
+"Borrar"
+],
+"Очистить всю память": [
+"Clear all memory",
+"清除全部记忆",
+"Borrar toda la memoria"
+],
+"Очистить память?": [
+"Clear memory?",
+"清除记忆？",
+"¿Borrar la memoria?"
+],
+"Очистка": [
+"Cleanup",
+"清理",
+"Limpieza"
+],
+"Ошибка": [
+"Error",
+"错误",
+"Error"
+],
+"Память": [
+"Memory",
+"记忆",
+"Memoria"
+],
+"Память разговора": [
+"Conversation memory",
+"对话记忆",
+"Memoria de la conversación"
+],
+"Папка проекта": [
+"Project folder",
+"项目文件夹",
+"Carpeta del proyecto"
+],
+"Папка с данными": [
+"Data folder",
+"数据文件夹",
+"Carpeta de datos"
+],
+"Параметры модели": [
+"Model parameters",
+"模型参数",
+"Parámetros del modelo"
+],
+"Параметры модели, облако, инструменты, память, код и интеграции": [
+"Model parameters, cloud, tools, memory, code and integrations",
+"模型参数、云端、工具、记忆、代码和集成",
+"Parámetros del modelo, nube, herramientas, memoria, código e integraciones"
+],
+"Перебивать голосом": [
+"Interrupt by voice",
+"语音打断",
+"Interrumpir con la voz"
+],
+"Перебить": [
+"Interrupt",
+"打断",
+"Interrumpir"
+],
+"Переводит твой голос в текст во время звонка.": [
+"Turns your voice into text during a call.",
+"通话时将你的语音转换为文字。",
+"Convierte tu voz en texto durante una llamada."
+],
+"Перезапустить сейчас": [
+"Restart now",
+"立即重启",
+"Reiniciar ahora"
+],
+"Переименовать": [
+"Rename",
+"重命名",
+"Renombrar"
+],
+"Переменные окружения": [
+"Environment variables",
+"环境变量",
+"Variables de entorno"
+],
+"Пишет ответ": [
+"Writing an answer",
+"正在回答",
+"Escribiendo la respuesta"
+],
+"Пиши обычным языком. Компаньон отвечает, рисует, собирает презентации, правит код и делает действия на компьютере.": [
+"Write in plain language. The companion answers, draws, makes presentations, edits code and performs actions on the computer.",
+"用平常的语言写下即可。伙伴会回答、画图、制作演示文稿、修改代码，并在电脑上执行操作。",
+"Escribe con naturalidad. El compañero responde, dibuja, crea presentaciones, edita código y realiza acciones en el ordenador."
+],
+"По желанию — голос": [
+"Optional — voice",
+"可选——语音",
+"Opcional: voz"
+],
+"По одной на строку: ИМЯ=значение. Например токены, которые просит сервер.": [
+"One per line: NAME=value. For example, tokens the server asks for.",
+"每行一个：名称=值。例如服务器需要的令牌。",
+"Una por línea: NOMBRE=valor. Por ejemplo, los tokens que pide el servidor."
+],
+"По умолчанию {0}": [
+"Default: {0}",
+"默认：{0}",
+"Por defecto: {0}"
+],
+"По умолчанию у модели: {0}.": [
+"Model default: {0}.",
+"模型默认值：{0}。",
+"Valor predeterminado del modelo: {0}."
+],
+"По этому описанию модель решает, нужен ли навык.": [
+"The model uses this description to decide whether the skill is needed.",
+"模型根据此描述判断是否需要该技能。",
+"Con esta descripción el modelo decide si necesita la habilidad."
+],
+"Повторить": [
+"Retry",
+"重试",
+"Reintentar"
+],
+"Повторы короче этого не штрафуются.": [
+"Repeats shorter than this aren't penalized.",
+"短于此长度的重复不受惩罚。",
+"Las repeticiones más cortas no se penalizan."
+],
+"Подбор модели под твою видеокарту…": [
+"Choosing a model for your graphics card…",
+"正在为你的显卡挑选模型…",
+"Eligiendo un modelo para tu tarjeta gráfica…"
+],
+"Подключается": [
+"Connecting",
+"连接中",
+"Conectando"
+],
+"Подключено, моделей: {0}.": [
+"Connected, models: {0}.",
+"已连接，模型：{0} 个。",
+"Conectado, modelos: {0}."
+],
+"Подталкивает к новым темам.": [
+"Nudges toward new topics.",
+"促使谈论新话题。",
+"Empuja hacia temas nuevos."
+],
+"Позвонить": [
+"Call",
+"通话",
+"Llamar"
+],
+"Позвонить: {0}": [
+"Call: {0}",
+"通话：{0}",
+"Llamar: {0}"
+],
+"Позже": [
+"Later",
+"稍后",
+"Más tarde"
+],
+"Поиск Google": [
+"Google Search",
+"Google 搜索",
+"Búsqueda de Google"
+],
+"Поиск на Hugging Face…": [
+"Searching Hugging Face…",
+"正在 Hugging Face 上搜索…",
+"Buscando en Hugging Face…"
+],
+"Поиск не удался.": [
+"Search failed.",
+"搜索失败。",
+"La búsqueda falló."
+],
+"Поиск по смыслу": [
+"Search by meaning",
+"语义搜索",
+"Búsqueda por significado"
+],
+"Поиск по сообщениям": [
+"Message search",
+"消息搜索",
+"Búsqueda en mensajes"
+],
+"Поиск…": [
+"Searching…",
+"搜索中…",
+"Buscando…"
+],
+"Пока без сообщений": [
+"No messages yet",
+"暂无消息",
+"Aún sin mensajes"
+],
+"Пока пусто. Скажи модели «запомни, что…», и факт появится здесь.": [
+"Empty for now. Tell the model “remember that…” and the fact will appear here.",
+"暂时为空。对模型说“记住……”，事实就会出现在这里。",
+"Vacío por ahora. Di al modelo «recuerda que…» y el dato aparecerá aquí."
+],
+"Показать панель (Ctrl+B)": [
+"Show panel (Ctrl+B)",
+"显示面板（Ctrl+B）",
+"Mostrar panel (Ctrl+B)"
+],
+"Пользоваться памятью": [
+"Use memory",
+"使用记忆",
+"Usar la memoria"
+],
+"Популярные": [
+"Popular",
+"热门",
+"Populares"
+],
+"Потоки процессора": [
+"CPU threads",
+"CPU 线程数",
+"Hilos de CPU"
+],
+"Предыдущий слайд": [
+"Previous slide",
+"上一张幻灯片",
+"Diapositiva anterior"
+],
+"Презентация PowerPoint": [
+"PowerPoint presentation",
+"PowerPoint 演示文稿",
+"Presentación de PowerPoint"
+],
+"Пресет": [
+"Preset",
+"预设",
+"Preajuste"
+],
+"При запуске (контекст {0}K)": [
+"When loaded (context {0}K)",
+"加载时（上下文 {0}K）",
+"Al cargarse (contexto {0}K)"
+],
+"При запуске через {0}": [
+"When run with {0}",
+"通过 {0} 运行时",
+"Al ejecutarse con {0}"
+],
+"При запуске ≈ {0} видеопамяти: {1}{2} {3}": [
+"When loaded ≈ {0} of video memory: {1}{2} {3}",
+"加载时约占 {0} 显存：{1}{2} {3}",
+"Al cargarse ≈ {0} de memoria de vídeo: {1}{2} {3}"
+],
+"При запуске, без учёта контекста": [
+"When loaded, not counting the context",
+"加载时（不含上下文）",
+"Al cargarse, sin contar el contexto"
+],
+"Прикрепить картинку (можно вставить Ctrl+V или перетащить)": [
+"Attach a picture (you can also paste with Ctrl+V or drag it in)",
+"附加图片（也可以用 Ctrl+V 粘贴或拖放）",
+"Adjuntar una imagen (también puedes pegarla con Ctrl+V o arrastrarla)"
+],
+"Применяются сразу, без перезагрузки модели.": [
+"Apply immediately, without reloading the model.",
+"立即生效，无需重新加载模型。",
+"Se aplican al momento, sin recargar el modelo."
+],
+"Проверить": [
+"Check",
+"检查",
+"Comprobar"
+],
+"Проверка, подойдёт ли этот GGUF для NeMo-Speech…": [
+"Checking whether this GGUF works with NeMo-Speech…",
+"正在检查此 GGUF 是否适用于 NeMo-Speech…",
+"Comprobando si este GGUF sirve para NeMo-Speech…"
+],
+"Проверка…": [
+"Checking…",
+"检查中…",
+"Comprobando…"
+],
+"Программы на этом компьютере": [
+"Apps on this computer",
+"本机上的程序",
+"Apps en este equipo"
+],
+"Прочее": [
+"Other",
+"其他",
+"Otros"
+],
+"Работа в фоне": [
+"Running in the background",
+"后台运行",
+"Funcionamiento en segundo plano"
+],
+"Работа с кодом": [
+"Working with code",
+"代码工作",
+"Trabajo con código"
+],
+"Работает на процессоре, видеопамять не нужна. Скачается": [
+"Runs on the CPU, no video memory needed. Download size:",
+"在 CPU 上运行，无需显存。下载大小：",
+"Funciona en el procesador, no necesita memoria de vídeo. Se descargará"
+],
+"Рабочая панель": [
+"Workspace",
+"工作面板",
+"Panel de trabajo"
+],
+"Рабочая панель: браузер и файлы (Ctrl+D)": [
+"Workspace: browser and files (Ctrl+D)",
+"工作面板：浏览器和文件（Ctrl+D）",
+"Panel de trabajo: navegador y archivos (Ctrl+D)"
+],
+"Рабочая панель: браузер, файлы, код (Ctrl+D)": [
+"Workspace: browser, files, code (Ctrl+D)",
+"工作面板：浏览器、文件、代码（Ctrl+D）",
+"Panel de trabajo: navegador, archivos, código (Ctrl+D)"
+],
+"Размер пакета": [
+"Batch size",
+"批大小",
+"Tamaño de lote"
+],
+"Размышление": [
+"Thinking",
+"思考",
+"Razonamiento"
+],
+"Размышление: {0}": [
+"Thinking: {0}",
+"思考：{0}",
+"Razonamiento: {0}"
+],
+"Размышляет": [
+"Thinks",
+"思考",
+"Razona"
+],
+"Разрешить модели пользоваться инструментами": [
+"Allow the model to use tools",
+"允许模型使用工具",
+"Permitir que el modelo use herramientas"
+],
+"Распознавание речи": [
+"Speech recognition",
+"语音识别",
+"Reconocimiento de voz"
+],
+"Расчёт памяти…": [
+"Estimating memory…",
+"正在估算内存…",
+"Calculando memoria…"
+],
+"Расширенные настройки": [
+"Advanced settings",
+"高级设置",
+"Configuración avanzada"
+],
+"Редкие комментарии": [
+"Occasional comments",
+"偶尔评论",
+"Comentarios ocasionales"
+],
+"Рекомендуем": [
+"We recommend",
+"推荐",
+"Recomendamos"
+],
+"Рекомендуемые значения для большинства моделей": [
+"Recommended values for most models",
+"适用于大多数模型的推荐值",
+"Valores recomendados para la mayoría de los modelos"
+],
+"Рекомендуемый файл (Q4_K_M) выбран сразу; можно выбрать другую квантизацию.": [
+"The recommended file (Q4_K_M) is selected; you can choose another quantization.",
+"已自动选择推荐文件（Q4_K_M）；也可以选择其他量化版本。",
+"El archivo recomendado (Q4_K_M) ya está elegido; puedes elegir otra cuantización."
+],
+"Рисование картинок.": [
+"Drawing pictures.",
+"绘制图片。",
+"Dibujo de imágenes."
+],
+"Русский": [
+"Русский",
+"Русский",
+"Русский"
+],
+"С размышлением": [
+"With thinking",
+"思考",
+"Con razonamiento"
+],
+"Сбалансированный": [
+"Balanced",
+"均衡",
+"Equilibrado"
+],
+"Сброс настроек": [
+"Reset settings",
+"重置设置",
+"Restablecer configuración"
+],
+"Сбросить": [
+"Reset",
+"重置",
+"Restablecer"
+],
+"Сбросить все настройки": [
+"Reset all settings",
+"重置所有设置",
+"Restablecer toda la configuración"
+],
+"Сбросить изменения": [
+"Reset changes",
+"重置更改",
+"Descartar cambios"
+],
+"Сбросить настройки?": [
+"Reset settings?",
+"重置设置？",
+"¿Restablecer la configuración?"
+],
+"Светлая": [
+"Light",
+"浅色",
+"Clara"
+],
+"Светлая тема": [
+"Light theme",
+"浅色主题",
+"Tema claro"
+],
+"Сворачивать в трей при закрытии": [
+"Minimize to tray on close",
+"关闭时最小化到托盘",
+"Minimizar a la bandeja al cerrar"
+],
+"Сделай презентацию про Марс на 6 слайдов": [
+"Make a 6-slide presentation about Mars",
+"制作一份关于火星的 6 页演示文稿",
+"Haz una presentación de 6 diapositivas sobre Marte"
+],
+"Сейчас память ищет по словам. Модель эмбеддингов научит её искать по смыслу: найди любую ниже (рекомендуем Qwen3-Embedding-0.6B, 610 МБ, Apache 2.0). Она работает на процессоре и не занимает видеопамять.": [
+"Memory now searches by words. An embedding model teaches it to search by meaning: find any below (we recommend Qwen3-Embedding-0.6B, 610 MB, Apache 2.0). It runs on the CPU and uses no video memory.",
+"目前记忆按字词搜索。嵌入模型可以让它按语义搜索：在下方查找任意模型（推荐 Qwen3-Embedding-0.6B，610 MB，Apache 2.0）。它在 CPU 上运行，不占用显存。",
+"Ahora la memoria busca por palabras. Un modelo de embeddings le enseña a buscar por significado: busca cualquiera abajo (recomendamos Qwen3-Embedding-0.6B, 610 MB, Apache 2.0). Funciona en el procesador y no usa memoria de vídeo."
+],
+"Сейчас память ищет по словам. Небольшая модель Qwen3-Embedding ({0}, лицензия Apache 2.0) научит её искать по смыслу. Работает на процессоре, видеопамять не занимает.": [
+"Memory now searches by words. The small Qwen3-Embedding model ({0}, Apache 2.0 license) will teach it to search by meaning. It runs on the CPU and uses no video memory.",
+"目前记忆按字词搜索。小型模型 Qwen3-Embedding（{0}，Apache 2.0 许可证）可以让它按语义搜索。在 CPU 上运行，不占用显存。",
+"Ahora la memoria busca por palabras. El pequeño modelo Qwen3-Embedding ({0}, licencia Apache 2.0) le enseñará a buscar por significado. Funciona en el procesador y no usa memoria de vídeo."
+],
+"Сжатие контекста в памяти (KV-кэш)": [
+"Context compression in memory (KV cache)",
+"上下文内存压缩（KV 缓存）",
+"Compresión del contexto en memoria (caché KV)"
+],
+"Сжимать раннюю часть разговора": [
+"Compress the early part of the conversation",
+"压缩对话的早期部分",
+"Comprimir la parte inicial de la conversación"
+],
+"Система": [
+"System",
+"系统",
+"Sistema"
+],
+"Системный промпт": [
+"System prompt",
+"系统提示词",
+"Prompt del sistema"
+],
+"Скачай модель": [
+"Download a model",
+"请下载模型",
+"Descarga un modelo"
+],
+"Скачано. Выбери её в Настройки → Голос и микрофон.": [
+"Downloaded. Choose it in Settings → Voice and microphone.",
+"已下载。请在 设置 → 语音与麦克风 中选择它。",
+"Descargado. Elígelo en Configuración → Voz y micrófono."
+],
+"Скачать": [
+"Download",
+"下载",
+"Descargar"
+],
+"Скачать модель для видео (": [
+"Download the video model (",
+"下载视频模型（",
+"Descargar el modelo de vídeo ("
+],
+"Скачать модель памяти (": [
+"Download the memory model (",
+"下载记忆模型（",
+"Descargar el modelo de memoria ("
+],
+"Скачать модель с Hugging Face…": [
+"Download a model from Hugging Face…",
+"从 Hugging Face 下载模型…",
+"Descargar un modelo de Hugging Face…"
+],
+"Скачать рекомендуемую модель": [
+"Download the recommended model",
+"下载推荐模型",
+"Descargar el modelo recomendado"
+],
+"Скачать с Hugging Face…": [
+"Download from Hugging Face…",
+"从 Hugging Face 下载…",
+"Descargar de Hugging Face…"
+],
+"Скачать с сайта": [
+"Download from the website",
+"从官网下载",
+"Descargar del sitio web"
+],
+"Скачать файл?": [
+"Download the file?",
+"下载文件？",
+"¿Descargar el archivo?"
+],
+"Скачивает GGUF-файл в папку моделей. Если в репозитории есть mmproj, модель сможет смотреть на картинки.": [
+"Downloads a GGUF file into the models folder. If the repository has an mmproj, the model will be able to see pictures.",
+"将 GGUF 文件下载到模型文件夹。如果仓库中有 mmproj，模型就能看图片。",
+"Descarga un archivo GGUF en la carpeta de modelos. Si el repositorio tiene un mmproj, el modelo podrá ver imágenes."
+],
+"Сколько последних токенов учитывает штраф. −1 — весь контекст.": [
+"How many recent tokens the penalty considers. −1 — the whole context.",
+"惩罚考虑的最近词元数。−1 — 整个上下文。",
+"Cuántos tokens recientes tiene en cuenta la penalización. −1: todo el contexto."
+],
+"Сколько текста модель помнит за раз. Больше — длиннее память разговора, но больше видеопамяти. Модель перезагрузится.": [
+"How much text the model keeps at once. More means longer conversation memory but more video memory. The model will reload.",
+"模型一次能记住多少文本。越大对话记忆越长，但占用显存越多。模型将重新加载。",
+"Cuánto texto recuerda el modelo a la vez. Más significa una memoria de conversación más larga, pero más memoria de vídeo. El modelo se recargará."
+],
+"Сколько токенов запроса обрабатывается за раз. Больше — быстрее чтение длинного текста, но больше памяти.": [
+"How many prompt tokens are processed at once. More reads long text faster but uses more memory.",
+"一次处理的提示词元数。越大读取长文本越快，但占用内存越多。",
+"Cuántos tokens de la petición se procesan a la vez. Más lee el texto largo más rápido, pero usa más memoria."
+],
+"Скопировано": [
+"Copied",
+"已复制",
+"Copiado"
+],
+"Скорость {0} токенов в секунду, измерено на последних ответах.": [
+"Speed {0} tokens per second, measured on recent answers.",
+"速度 {0} 词元/秒，根据最近的回答测得。",
+"Velocidad: {0} tokens por segundo, medida en las últimas respuestas."
+],
+"Скорость ≈ {0} токенов в секунду, оценка по пропускной способности памяти; после первых ответов покажется измеренная.": [
+"Speed ≈ {0} tokens per second, estimated from memory bandwidth; the measured speed will show after the first answers.",
+"速度约 {0} 词元/秒，按内存带宽估算；首批回答后将显示实测速度。",
+"Velocidad ≈ {0} tokens por segundo, estimada por el ancho de banda de la memoria; tras las primeras respuestas se verá la medida."
+],
+"Скрыть": [
+"Hide",
+"隐藏",
+"Ocultar"
+],
+"Скрыть панель (Ctrl+B)": [
+"Hide panel (Ctrl+B)",
+"隐藏面板（Ctrl+B）",
+"Ocultar panel (Ctrl+B)"
+],
+"Скрыть рабочую панель (Ctrl+D)": [
+"Hide workspace (Ctrl+D)",
+"隐藏工作面板（Ctrl+D）",
+"Ocultar panel de trabajo (Ctrl+D)"
+],
+"Следующий слайд": [
+"Next slide",
+"下一张幻灯片",
+"Siguiente diapositiva"
+],
+"Слоёв на видеокарте": [
+"Layers on the GPU",
+"显卡上的层数",
+"Capas en la tarjeta gráfica"
+],
+"Слушает": [
+"Listening",
+"聆听中",
+"Escuchando"
+],
+"Слушает и смотрит": [
+"Listening and watching",
+"聆听并观看中",
+"Escuchando y mirando"
+],
+"Слышит видео и игры": [
+"Hears videos and games",
+"能听到视频和游戏",
+"Oye vídeos y juegos"
+],
+"Слышит тебя": [
+"Hears you",
+"听到你了",
+"Te escucha"
+],
+"Слышит, что ты говоришь": [
+"Hears what you say",
+"能听到你说的话",
+"Oye lo que dices"
+],
+"Смотреть на экран раз в": [
+"Look at the screen every",
+"查看屏幕的间隔",
+"Mirar la pantalla cada"
+],
+"Снижает частые слова.": [
+"Reduces frequent words.",
+"减少高频词。",
+"Reduce las palabras frecuentes."
+],
+"Создать навык": [
+"Create skill",
+"创建技能",
+"Crear habilidad"
+],
+"Сообщение": [
+"Message",
+"消息",
+"Mensaje"
+],
+"Сообщение в Twitch": [
+"Twitch message",
+"Twitch 消息",
+"Mensaje en Twitch"
+],
+"Сохранено": [
+"Saved",
+"已保存",
+"Guardado"
+],
+"Сохранено: {0}": [
+"Saved: {0}",
+"已保存：{0}",
+"Guardado: {0}"
+],
+"Сохранить": [
+"Save",
+"保存",
+"Guardar"
+],
+"Сохранить копию": [
+"Save a copy",
+"保存副本",
+"Guardar una copia"
+],
+"Средний": [
+"Medium",
+"中",
+"Medio"
+],
+"Существующий файл не будет перезаписан. Скачанное ничего не запускает.": [
+"An existing file won't be overwritten. The download won't run anything.",
+"不会覆盖已有文件。下载的内容不会自动运行。",
+"No se sobrescribirá un archivo existente. Lo descargado no se ejecuta."
+],
+"Творческий": [
+"Creative",
+"创意",
+"Creativo"
+],
+"Тема": [
+"Theme",
+"主题",
+"Tema"
+],
+"Температура": [
+"Temperature",
+"温度",
+"Temperatura"
+],
+"Токен HF (для закрытых моделей)": [
+"HF token (for gated models)",
+"HF 令牌（用于受限模型）",
+"Token de HF (para modelos restringidos)"
+],
+"Только для {0}; поверх общих настроек.": [
+"Only for {0}; on top of the common settings.",
+"仅适用于 {0}；覆盖通用设置。",
+"Solo para {0}; por encima de la configuración común."
+],
+"Только для этого окна, обычное окно Компаньона не меняется.": [
+"Only for this window; the classic Companion window doesn't change.",
+"仅对本窗口生效，不影响经典伙伴窗口。",
+"Solo para esta ventana; la ventana clásica del Compañero no cambia."
+],
+"Только эта модель": [
+"This model only",
+"仅此模型",
+"Solo este modelo"
+],
+"Точно удалить?": [
+"Delete for sure?",
+"确定删除？",
+"¿Eliminar seguro?"
+],
+"Точный": [
+"Precise",
+"精确",
+"Preciso"
+],
+"Точный текст записи. Части моделей он нужен, чтобы лучше скопировать голос.": [
+"The exact words of the recording. Some models need it to copy the voice better.",
+"录音的准确文本。部分模型需要它来更好地复制声音。",
+"El texto exacto de la grabación. Algunos modelos lo necesitan para copiar mejor la voz."
+],
+"Тут лежат настройки, все чаты, журналы и нарисованные картинки. Настройки общие с обычным окном Компаньона.": [
+"Settings, all chats, logs and drawn pictures are here. Settings are shared with the classic Companion window.",
+"这里存放设置、所有聊天、日志和生成的图片。设置与经典伙伴窗口共享。",
+"Aquí están la configuración, todos los chats, los registros y las imágenes generadas. La configuración se comparte con la ventana clásica del Compañero."
+],
+"Ты": [
+"You",
+"你",
+"Tú"
+],
+"Тёмная": [
+"Dark",
+"深色",
+"Oscura"
+],
+"Тёмная тема": [
+"Dark theme",
+"深色主题",
+"Tema oscuro"
+],
+"У каждого чата своя модель. Несколько моделей держатся загруженными и могут отвечать в разных чатах одновременно; модель без дела выгружается, если следующая не помещается рядом с ней в видеопамять.": [
+"Each chat has its own model. Several models stay loaded and can answer in different chats at the same time; an idle model is unloaded if the next one doesn't fit beside it in video memory.",
+"每个聊天都有自己的模型。多个模型可以同时保持加载，并在不同聊天中同时回答；如果下一个模型放不进显存，闲置的模型会被卸载。",
+"Cada chat tiene su modelo. Varios modelos permanecen cargados y pueden responder a la vez en chats distintos; un modelo inactivo se descarga si el siguiente no cabe a su lado en la memoria de vídeo."
+],
+"У этой модели нет описания на Hugging Face.": [
+"This model has no description on Hugging Face.",
+"该模型在 Hugging Face 上没有描述。",
+"Este modelo no tiene descripción en Hugging Face."
+],
+"Убрать вариант": [
+"Remove option",
+"删除选项",
+"Quitar opción"
+],
+"Убрать картинку": [
+"Remove picture",
+"移除图片",
+"Quitar imagen"
+],
+"Уведомления, когда окно скрыто или в другом окне": [
+"Notifications when the window is hidden or you're in another window",
+"窗口隐藏或在其他窗口时显示通知",
+"Notificaciones cuando la ventana está oculta o estás en otra ventana"
+],
+"Увеличить (+)": [
+"Zoom in (+)",
+"放大（+）",
+"Ampliar (+)"
+],
+"Удалить": [
+"Delete",
+"删除",
+"Eliminar"
+],
+"Удалить MCP-сервер?": [
+"Delete MCP server?",
+"删除 MCP 服务器？",
+"¿Eliminar el servidor MCP?"
+],
+"Удалить ключ": [
+"Delete key",
+"删除密钥",
+"Eliminar clave"
+],
+"Удалить навык?": [
+"Delete skill?",
+"删除技能？",
+"¿Eliminar la habilidad?"
+],
+"Удалить с диска": [
+"Delete from disk",
+"从磁盘删除",
+"Eliminar del disco"
+],
+"Удалить чат?": [
+"Delete chat?",
+"删除聊天？",
+"¿Eliminar el chat?"
+],
+"Удалить чат…": [
+"Delete chat…",
+"删除聊天…",
+"Eliminar chat…"
+],
+"Удалить…": [
+"Delete…",
+"删除…",
+"Eliminar…"
+],
+"Уменьшить (−)": [
+"Zoom out (−)",
+"缩小（−）",
+"Reducir (−)"
+],
+"Ускорение (спекулятивное декодирование)": [
+"Speed-up (speculative decoding)",
+"加速（推测解码）",
+"Aceleración (decodificación especulativa)"
+],
+"Установка": [
+"Installing",
+"安装中",
+"Instalando"
+],
+"Файл": [
+"File",
+"文件",
+"Archivo"
+],
+"Файл не выбран": [
+"No file chosen",
+"未选择文件",
+"Ningún archivo elegido"
+],
+"Файлы": [
+"Files",
+"文件",
+"Archivos"
+],
+"Факты": [
+"Facts",
+"事实",
+"Hechos"
+],
+"Физический пакет": [
+"Physical batch",
+"物理批大小",
+"Lote físico"
+],
+"Часть пакета, которая считается на видеокарте за раз.": [
+"The part of the batch computed on the GPU at once.",
+"每次在显卡上计算的批次部分。",
+"La parte del lote que se calcula en la tarjeta gráfica de una vez."
+],
+"Чаты": [
+"Chats",
+"聊天",
+"Chats"
+],
+"Чем выше, тем дольше и больше видеопамяти.": [
+"Higher takes longer and uses more video memory.",
+"越高耗时越长、占用显存越多。",
+"Cuanto más alta, más tiempo y más memoria de vídeo."
+],
+"Чем выше, тем тише голос он услышит, но и шум тоже.": [
+"Higher picks up quieter voices, but also more noise.",
+"越高越能听到小声说话，但也会听到更多噪音。",
+"Cuanto más alta, más baja la voz que oirá, pero también el ruido."
+],
+"Читает ответы вслух.": [
+"Reads answers aloud.",
+"朗读回答。",
+"Lee las respuestas en voz alta."
+],
+"Что и как делать, по шагам. Можно Markdown.": [
+"What to do and how, step by step. Markdown is allowed.",
+"要做什么、怎么做，分步骤写。支持 Markdown。",
+"Qué hacer y cómo, paso a paso. Se admite Markdown."
+],
+"Что найти?": [
+"What to find?",
+"要找什么？",
+"¿Qué buscar?"
+],
+"Что сказано в образце": [
+"What is said in the sample",
+"样本中所说的内容",
+"Qué se dice en la muestra"
+],
+"Что слышит и видит": [
+"What it hears and sees",
+"能听到和看到什么",
+"Qué oye y ve"
+],
+"Что слышит и видит компаньон": [
+"What the companion hears and sees",
+"伙伴能听到和看到什么",
+"Qué oye y ve el compañero"
+],
+"Чтобы поменять источники, заверши звонок.": [
+"To change the sources, end the call.",
+"要更改来源，请先结束通话。",
+"Para cambiar las fuentes, termina la llamada."
+],
+"Чувствительность микрофона": [
+"Microphone sensitivity",
+"麦克风灵敏度",
+"Sensibilidad del micrófono"
+],
+"Шрифт": [
+"Font",
+"字体",
+"Fuente"
+],
+"Штраф за повторы": [
+"Repeat penalty",
+"重复惩罚",
+"Penalización por repetición"
+],
+"Штраф за присутствие": [
+"Presence penalty",
+"存在惩罚",
+"Penalización por presencia"
+],
+"Штраф за частоту": [
+"Frequency penalty",
+"频率惩罚",
+"Penalización por frecuencia"
+],
+"Щёлкни, чтобы переименовать": [
+"Click to rename",
+"点击重命名",
+"Haz clic para renombrar"
+],
+"Экономный": [
+"Economy",
+"节省",
+"Económico"
+],
+"Экран": [
+"Screen",
+"屏幕",
+"Pantalla"
+],
+"Экспертов MoE на процессоре": [
+"MoE experts on the CPU",
+"放在 CPU 上的 MoE 专家",
+"Expertos MoE en el procesador"
+],
+"Экспорт в Markdown": [
+"Export to Markdown",
+"导出为 Markdown",
+"Exportar a Markdown"
+],
+"Экспорт в текст": [
+"Export to text",
+"导出为文本",
+"Exportar a texto"
+],
+"Эта модель всегда размышляет.": [
+"This model always thinks.",
+"该模型总是会思考。",
+"Este modelo siempre razona."
+],
+"Эта модель не размышляет.": [
+"This model doesn't think.",
+"该模型不会思考。",
+"Este modelo no razona."
+],
+"Эти параметры применяются при следующем ответе: модель перезагрузится.": [
+"These parameters apply with the next answer: the model will reload.",
+"这些参数将在下次回答时生效：模型将重新加载。",
+"Estos parámetros se aplican en la siguiente respuesta: el modelo se recargará."
+],
+"Этот интерфейс открывается файлом «Запустить веб-интерфейс» в папке Компаньона.": [
+"This interface is opened with the “Запустить веб-интерфейс” file in the Companion folder.",
+"此界面通过伙伴文件夹中的“Запустить веб-интерфейс”文件打开。",
+"Esta interfaz se abre con el archivo «Запустить веб-интерфейс» de la carpeta del Compañero."
+],
+"Этот файл не показывается в программе. Открой его кнопкой выше.": [
+"This file can't be shown in the app. Open it with the button above.",
+"此文件无法在程序中显示。请用上方按钮打开。",
+"Este archivo no se puede mostrar en el programa. Ábrelo con el botón de arriba."
+],
+"Эту модель программа не запустит:": [
+"The app can't run this model:",
+"程序无法运行此模型：",
+"El programa no ejecutará este modelo:"
+],
+"Язык / Language": [
+"Language",
+"语言 / Language",
+"Idioma / Language"
+],
+"Язык интерфейса. Модель тоже будет отвечать на нём.": [
+"The interface language. The model will answer in it too.",
+"界面语言。模型也会用这种语言回答。",
+"El idioma de la interfaz. El modelo también responderá en él."
+],
+"адрес или поиск": [
+"address or search",
+"地址或搜索",
+"dirección o búsqueda"
+],
+"без заголовка": [
+"untitled",
+"无标题",
+"sin título"
+],
+"в памяти ≈ {0}": [
+"in memory ≈ {0}",
+"内存约 {0}",
+"en memoria ≈ {0}"
+],
+"веса {0}": [
+"weights {0}",
+"权重 {0}",
+"pesos {0}"
+],
+"вставь ключ": [
+"paste the key",
+"粘贴密钥",
+"pega la clave"
+],
+"встроенный": [
+"built-in",
+"内置",
+"integrado"
+],
+"выбери, что слушать": [
+"choose what to listen to",
+"选择要聆听的来源",
+"elige qué escuchar"
+],
+"выбрана": [
+"selected",
+"已选",
+"elegido"
+],
+"выключен": [
+"off",
+"已关闭",
+"desactivado"
+],
+"выключено": [
+"off",
+"已关闭",
+"desactivado"
+],
+"готово": [
+"done",
+"完成",
+"listo"
+],
+"для всех моделей": [
+"for all models",
+"所有模型",
+"para todos los modelos"
+],
+"запустится при первом ответе": [
+"starts with the first answer",
+"将在首次回答时启动",
+"se iniciará con la primera respuesta"
+],
+"звук ПК": [
+"PC sound",
+"电脑声音",
+"sonido del PC"
+],
+"звук компьютера": [
+"computer sound",
+"电脑声音",
+"sonido del ordenador"
+],
+"и ещё {0}": [
+"and {0} more",
+"以及另外 {0} 个",
+"y {0} más"
+],
+"из {0}": [
+"of {0}",
+"/ {0}",
+"de {0}"
+],
+"изменено": [
+"changed",
+"已更改",
+"cambiado"
+],
+"инструментов: {0}": [
+"tools: {0}",
+"工具：{0} 个",
+"herramientas: {0}"
+],
+"канал": [
+"channel",
+"频道",
+"canal"
+],
+"код": [
+"code",
+"代码",
+"código"
+],
+"компьютер": [
+"computer",
+"电脑",
+"ordenador"
+],
+"контекст {0}K {1}": [
+"context {0}K {1}",
+"上下文 {0}K {1}",
+"contexto {0}K {1}"
+],
+"микрофон": [
+"microphone",
+"麦克风",
+"micrófono"
+],
+"моделей: {0}": [
+"models: {0}",
+"模型：{0} 个",
+"modelos: {0}"
+],
+"модель не выбрана": [
+"no model chosen",
+"未选择模型",
+"ningún modelo elegido"
+],
+"на процессоре": [
+"on the CPU",
+"在 CPU 上",
+"en el procesador"
+],
+"нарисовать": [
+"draw",
+"绘图",
+"dibujar"
+],
+"не выбран": [
+"not chosen",
+"未选择",
+"no elegido"
+],
+"не запустится": [
+"won't run",
+"无法运行",
+"no funcionará"
+],
+"не удалось узнать, см. страницу модели": [
+"unknown, see the model page",
+"无法获取，请查看模型页面",
+"no se pudo saber, consulta la página del modelo"
+],
+"не указано": [
+"not specified",
+"未指定",
+"no indicado"
+],
+"не установлена": [
+"not installed",
+"未安装",
+"no instalada"
+],
+"некоммерческая": [
+"non-commercial",
+"非商业",
+"no comercial"
+],
+"объяснить": [
+"explain",
+"解释",
+"explicar"
+],
+"озвучки": [
+"speech",
+"语音合成",
+"voz"
+],
+"отменено": [
+"cancelled",
+"已取消",
+"cancelado"
+],
+"ошибка": [
+"error",
+"错误",
+"error"
+],
+"по модели": [
+"per model",
+"按模型",
+"según el modelo"
+],
+"по умолчанию": [
+"default",
+"默认",
+"por defecto"
+],
+"по умолчанию (": [
+"default (",
+"默认（",
+"por defecto ("
+],
+"презентация": [
+"presentation",
+"演示文稿",
+"presentación"
+],
+"проверка…": [
+"checking…",
+"检查中…",
+"comprobando…"
+],
+"прочее {0}": [
+"other {0}",
+"其他 {0}",
+"otros {0}"
+],
+"распознавания": [
+"recognition",
+"语音识别",
+"reconocimiento"
+],
+"рассуждения": [
+"reasoning",
+"推理",
+"razonamiento"
+],
+"свой": [
+"custom",
+"自定义",
+"propio"
+],
+"сек.": [
+"sec",
+"秒",
+"s"
+],
+"симв.": [
+"chars",
+"字符",
+"caract."
+],
+"скачана": [
+"downloaded",
+"已下载",
+"descargado"
+],
+"сообщение": [
+"message",
+"条消息",
+"mensaje"
+],
+"сообщений": [
+"messages",
+"条消息",
+"mensajes"
+],
+"сообщения": [
+"messages",
+"条消息",
+"mensajes"
+],
+"спросит про картинку": [
+"will ask about the picture",
+"将询问图片内容",
+"preguntará por la imagen"
+],
+"стоп": [
+"stop",
+"停止",
+"detener"
+],
+"токен": [
+"token",
+"令牌",
+"token"
+],
+"токенов ·": [
+"tokens ·",
+"词元 ·",
+"tokens ·"
+],
+"экран": [
+"screen",
+"屏幕",
+"pantalla"
+],
+"этой модели": [
+"of this model",
+"此模型",
+"de este modelo"
+],
+"−1 — без ограничения.": [
+"−1 — no limit.",
+"−1 — 不限制。",
+"−1 — sin límite."
+],
+"−1 — сколько поместится (рекомендуется). 0 — всё на процессоре.": [
+"−1 — as many as fit (recommended). 0 — everything on the CPU.",
+"−1 — 尽可能多（推荐）。0 — 全部放在 CPU 上。",
+"−1 — todas las que quepan (recomendado). 0 — todo en el procesador."
+],
+"−1 — случайное. Одинаковое зерно даёт одинаковые ответы на одинаковые вопросы.": [
+"−1 — random. The same seed gives the same answers to the same questions.",
+"−1 — 随机。相同的种子对相同的问题给出相同的回答。",
+"−1 — aleatoria. La misma semilla da las mismas respuestas a las mismas preguntas."
+]
+}

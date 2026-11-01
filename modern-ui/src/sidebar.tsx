@@ -1,5 +1,5 @@
 import { useMemo, useState, type RefObject } from "react";
-import type { ChatSummary, EngineState } from "./bridge";
+import type { ChatSummary, EngineState, WebApi } from "./bridge";
 import { Icon } from "./icons";
 import { IconButton, Logo, MenuButton } from "./ui";
 
@@ -30,7 +30,9 @@ function ChatRow({ chat, active, disabled, actions }: { chat: ChatSummary; activ
   return (
     <div className={`chat-row ${active ? "active" : ""}`}>
       <button type="button" className="chat-row-main" disabled={disabled} onClick={() => actions.select(chat)} onDoubleClick={() => { setTitle(chat.title); setRenaming(true); }} title={chat.title}>
-        <span className="chat-row-title">{chat.pinned && <Icon name="pin" size={12} className="pin-mark" />}{chat.title}</span>
+        <span className="chat-row-title">{chat.pinned && <Icon name="pin" size={12} className="pin-mark" />}{chat.title}
+          {chat.busy && <span className="chat-busy" title="Пишет ответ"><i /><i /><i /></span>}
+          {!chat.busy && chat.unread && <span className="chat-unread" title="Новый ответ" />}</span>
         <span className="chat-row-preview">{chat.preview || "Пока без сообщений"}</span>
       </button>
       <MenuButton label="Действия с чатом" className="chat-row-menu" items={[
@@ -40,14 +42,14 @@ function ChatRow({ chat, active, disabled, actions }: { chat: ChatSummary; activ
         { icon: "share", label: "Экспорт в Markdown", onClick: () => actions.exportChat(chat, true) },
         { icon: "file", label: "Экспорт в текст", onClick: () => actions.exportChat(chat, false) },
         "divider",
-        { icon: "trash", label: "Удалить…", danger: true, disabled: disabled && !active, onClick: () => actions.remove(chat) },
+        { icon: "trash", label: "Удалить…", danger: true, disabled: Boolean(chat.busy), onClick: () => actions.remove(chat) },
       ]} />
     </div>
   );
 }
 
-export function Sidebar({ state, actions, searchRef, onNewChat, onSearchMessages, onSettings, onHide }:
-  { state: EngineState; actions: ChatActions; searchRef: RefObject<HTMLInputElement | null>; onNewChat: () => void;
+export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMessages, onSettings, onHide }:
+  { api: WebApi; state: EngineState; actions: ChatActions; searchRef: RefObject<HTMLInputElement | null>; onNewChat: () => void;
     onSearchMessages: () => void; onSettings: () => void; onHide: () => void }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
@@ -58,7 +60,7 @@ export function Sidebar({ state, actions, searchRef, onNewChat, onSearchMessages
   const recent = filtered.filter((chat) => !chat.pinned);
   const rows = (chats: ChatSummary[]) => chats.map((chat) => (
     <ChatRow key={`${chat.id}-${chat.title}-${chat.pinned}`} chat={chat} active={chat.id === state.activeChatId}
-      disabled={state.busy && chat.id !== state.activeChatId} actions={actions} />
+      disabled={false} actions={actions} />
   ));
   const connected = state.models.length > 0;
   return (
@@ -69,7 +71,7 @@ export function Sidebar({ state, actions, searchRef, onNewChat, onSearchMessages
         <IconButton icon="sidebar" label="Скрыть панель (Ctrl+B)" onClick={onHide} />
       </div>
 
-      <button type="button" className="new-chat" onClick={onNewChat} disabled={state.busy} title="Ctrl+N">
+      <button type="button" className="new-chat" onClick={onNewChat} title="Ctrl+N">
         <Icon name="compose" size={17} /><span>Новый чат</span>
       </button>
 
@@ -87,11 +89,29 @@ export function Sidebar({ state, actions, searchRef, onNewChat, onSearchMessages
         {!filtered.length && <div className="nav-empty">Ничего не найдено</div>}
       </nav>
 
+      {state.downloads.length > 0 && (
+        <div className="side-downloads" aria-label="Загрузки">
+          {state.downloads.map((row) => (
+            <div key={row.kind} className={`side-download ${row.state}`}>
+              <div className="side-download-head">
+                <Icon name={row.state === "error" ? "alert" : row.state === "done" ? "check" : "download"} size={14} />
+                <span className="side-download-title" title={row.title}>{row.title || (row.kind === "model" ? "Модель" : "Голосовая модель")}</span>
+                <span className="side-download-pct">{row.state === "running" ? `${row.percent}%` : row.state === "done" ? "готово" : row.state === "cancelled" ? "отменено" : "ошибка"}</span>
+                {row.state === "running" && <IconButton icon="close" label="Отменить загрузку" size={13}
+                  onClick={() => { void (row.kind === "model" ? api.hf_cancel() : api.voice_cancel()); }} />}
+              </div>
+              <div className="progress-track"><i style={{ width: `${row.percent}%` }} /></div>
+              {row.message && <small title={row.message}>{row.message}</small>}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="side-foot">
         <div className="conn">
           <span className={`status-dot ${connected ? "ok" : "warn"}`} />
           <div className="conn-copy"><strong>{connected ? "llama.cpp готов" : "Нет моделей"}</strong>
-            <small>{state.listening.running ? "Слушаю и смотрю" : connected ? `Моделей: ${state.models.length}` : "Скачай модель"}</small></div>
+            <small>{state.listening.running ? "Слушает и смотрит" : connected ? `Моделей: ${state.models.length}` : "Скачай модель"}</small></div>
         </div>
         <IconButton icon="settings" label="Настройки (Ctrl+,)" onClick={onSettings} />
       </div>

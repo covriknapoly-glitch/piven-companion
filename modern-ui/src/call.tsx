@@ -5,7 +5,7 @@ import { Logo } from "./ui";
 
 type Phase = "connecting" | "listening" | "hearing" | "thinking" | "speaking" | "muted";
 const PHASE_TEXT: Record<Phase, string> = {
-  connecting: "Подключается", listening: "Слушает", hearing: "Слышу тебя",
+  connecting: "Подключается", listening: "Слушает", hearing: "Слышит тебя",
   thinking: "Думает", speaking: "Говорит", muted: "Микрофон выключен",
 };
 

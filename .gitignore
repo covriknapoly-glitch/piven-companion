@@ -4,6 +4,8 @@
 /*
 !/.gitignore
 !/README.md
+!/LICENSE
+!/NOTICE
 !/requirements.txt
 !/app/
 !/docs/
@@ -34,3 +36,7 @@
 __pycache__/
 *.pyc
 *.log
+
+# Installer script; the built setup.exe stays local
+!/installer/
+/installer/Output/

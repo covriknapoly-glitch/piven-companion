@@ -39,7 +39,8 @@ def _request(url: str, token: str, client_id: str | None = None,
         if exc.code == 429:
             raise RuntimeError("Twitch отклонил запрос по лимиту. Отправка остановлена; повторных попыток не будет.")
         if exc.code in (401, 403):
-            raise RuntimeError("Twitch не разрешил отправку. Проверь токен, scope user:write:chat и доступ к каналу.")
+            raise RuntimeError("Twitch не разрешил действие. Проверь токен, его разрешения и доступ к каналу "
+                               "(опросы доступны только каналам-партнёрам и компаньонам Twitch).")
         raise RuntimeError(f"Twitch вернул ошибку {exc.code}: {detail}")
 
 
@@ -68,6 +69,29 @@ def send_once(channel: str, message: str, token: str) -> str:
         reason = sent.get("drop_reason") or {}
         raise RuntimeError(reason.get("message") or "Twitch не отправил это сообщение.")
     return f"Отправлено в #{channel}."
+
+
+def create_poll(channel: str, question: str, choices: list, seconds: int, token: str) -> str:
+    """Start a poll on the user's own channel (token with channel:manage:polls; Affiliate or Partner channel)."""
+    validation = _request(VALIDATE, token, validate=True)
+    client_id, user_id = validation.get("client_id"), validation.get("user_id")
+    if not client_id or not user_id:
+        raise RuntimeError("Twitch не вернул данные учётной записи для этого токена.")
+    if "channel:manage:polls" not in validation.get("scopes", []):
+        raise RuntimeError("Токену не выдано разрешение channel:manage:polls.")
+    if str(validation.get("login", "")).lower() != channel.lower():
+        raise RuntimeError("Опрос можно запустить только на своём канале: токен принадлежит другому каналу.")
+    question = " ".join(str(question).split())[:60]
+    choices = [" ".join(str(item).split())[:25] for item in choices if str(item).strip()][:5]
+    if not question or not 2 <= len(choices) <= 5:
+        raise RuntimeError("Нужен вопрос до 60 символов и от 2 до 5 вариантов до 25 символов.")
+    result = _request(f"{API}/polls", token, client_id, {
+        "broadcaster_id": user_id, "title": question,
+        "choices": [{"title": item} for item in choices], "duration": max(15, min(1800, int(seconds))),
+    })
+    if not result.get("data"):
+        raise RuntimeError("Twitch не создал опрос.")
+    return f"Опрос запущен на канале {channel}: «{question}»."
 
 
 def history(settings: dict) -> list[dict]:

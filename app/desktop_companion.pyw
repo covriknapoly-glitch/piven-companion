@@ -1666,10 +1666,16 @@ class CompanionApp(QMainWindow, CompanionCore):
         header = QHBoxLayout(top_bar); header.setContentsMargins(18, 8, 14, 8); header.setSpacing(12)
         brand_icon = QLabel(); brand_icon.setObjectName("brandLogoHeader")
         brand_icon.setAlignment(Qt.AlignmentFlag.AlignCenter); brand_icon.setFixedSize(52, 52)
-        logo = QPixmap(str(APP_DIR / "assets" / "piven_logo_flat.png"))
-        if not logo.isNull():
-            brand_icon.setPixmap(logo.scaled(QSize(52, 52), Qt.AspectRatioMode.KeepAspectRatio,
-                                             Qt.TransformationMode.SmoothTransformation))
+        # The logo is a one-colour SVG; it is painted in the window's text colour so it suits the theme.
+        renderer = QSvgRenderer(str(APP_DIR / "assets" / "piven_logo.svg"))
+        if renderer.isValid():
+            ratio = self.devicePixelRatioF()
+            logo = QPixmap(int(44 * ratio), int(44 * ratio)); logo.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(logo); renderer.render(painter)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            painter.fillRect(logo.rect(), brand_icon.palette().windowText().color()); painter.end()
+            logo.setDevicePixelRatio(ratio)
+            brand_icon.setPixmap(logo)
         header.addWidget(brand_icon)
         brand = QVBoxLayout(); brand.setContentsMargins(0, 0, 0, 0); brand.setSpacing(0); header.addLayout(brand)
         title = QLabel("PIVEN"); title.setObjectName("brandTitle"); brand.addWidget(title)
@@ -1720,7 +1726,7 @@ class CompanionApp(QMainWindow, CompanionCore):
         status_card = QFrame(); status_card.setObjectName("statusCard"); status_layout = QVBoxLayout(status_card); status_layout.setContentsMargins(12, 10, 12, 10); status_layout.setSpacing(4); side.addWidget(status_card)
         status_head = QHBoxLayout(); status_head.setSpacing(8); self.status_dot = QLabel("●"); self.status_dot.setObjectName("statusDot"); status_head.addWidget(self.status_dot)
         self.status_title = QLabel("Подключаю Ollama…"); self.status_title.setObjectName("statusTitle"); status_head.addWidget(self.status_title, 1); status_layout.addLayout(status_head)
-        self.status_pill = QLabel("Проверяю локальную модель"); self.status_pill.setObjectName("status"); self.status_pill.setWordWrap(True); status_layout.addWidget(self.status_pill)
+        self.status_pill = QLabel("Проверка локальной модели"); self.status_pill.setObjectName("status"); self.status_pill.setWordWrap(True); status_layout.addWidget(self.status_pill)
         side.addStretch(1)
 
         chat_card = QFrame(); chat_card.setObjectName("chatCard"); content.addWidget(chat_card, 1)
@@ -1788,7 +1794,7 @@ class CompanionApp(QMainWindow, CompanionCore):
         self._thinking_dot_timer = QTimer(self); self._thinking_dot_timer.setInterval(150)
         self._thinking_dot_timer.timeout.connect(self._animate_thinking_dots)
         activity_text = QVBoxLayout(); activity_text.setContentsMargins(0, 0, 0, 0); activity_text.setSpacing(0); activity_layout.addLayout(activity_text)
-        self.activity_label = QLabel("Думаю…"); self.activity_label.setObjectName("chatActivityTitle"); activity_text.addWidget(self.activity_label)
+        self.activity_label = QLabel("Думает…"); self.activity_label.setObjectName("chatActivityTitle"); activity_text.addWidget(self.activity_label)
         self.activity_detail = QLabel(""); self.activity_detail.setObjectName("chatActivityDetail"); activity_text.addWidget(self.activity_detail)
         self.activity_cancel_btn = QToolButton(); self.activity_cancel_btn.setIcon(vector_icon("stop", MONO["text"], 15)); self.activity_cancel_btn.setIconSize(QSize(15, 15)); add_icon_hover_motion(self.activity_cancel_btn, 15); self.activity_cancel_btn.setObjectName("messageAction"); self.activity_cancel_btn.setToolTip("Прервать текущее действие · Esc"); self.activity_cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor); self.activity_cancel_btn.setFixedSize(30, 30); self.activity_cancel_btn.clicked.connect(self._interrupt_current_action); activity_layout.addWidget(self.activity_cancel_btn); self.activity_cancel_btn.hide()
         self.activity_panel.setMaximumWidth(360); self.activity_panel.setFixedHeight(50); self.activity_panel.hide(); cv.addWidget(self.activity_panel, 0, Qt.AlignmentFlag.AlignLeft)
@@ -3510,7 +3516,7 @@ class CompanionApp(QMainWindow, CompanionCore):
             self.chat.show_chat_hint("Ответ скопирован")
         elif action == "speak":
             self._set_activity("Запускает Qwen3-TTS")
-            self.chat.show_chat_hint("Запускаю озвучивание")
+            self.chat.show_chat_hint("Запуск озвучивания")
             threading.Thread(target=self._speak, args=(text,), daemon=True).start()
         elif action == "retry":
             self._set_activity("Повторяю запрос")
@@ -3691,29 +3697,29 @@ class CompanionApp(QMainWindow, CompanionCore):
         elif "агент" in low:
             title,detail="Работаю с проектом","Изучаю файлы и выполняю задачу"
         elif "освобождает память" in low:
-            title,detail="Готовлю видеопамять","Выгружаю остальные локальные модели"
+            title,detail="Подготовка видеопамяти","Выгружаю остальные локальные модели"
         elif "comfyui генерирует" in low or "изображение" in low and any(word in low for word in ("генер", "созда")):
-            title,detail="Создаю изображение","Локальная модель выполняет генерацию"
+            title,detail="Создание изображения","Локальная модель выполняет генерацию"
         elif "загружает workflow" in low:
-            title,detail="Подготавливаю изображение","Загружаю workflow в ComfyUI"
+            title,detail="Подготавливаю изображение","Загрузка workflow в ComfyUI"
         elif "отправляет запрос в comfyui" in low:
-            title,detail="Отправляю запрос","Передаю описание в ComfyUI"
+            title,detail="Отправка запроса","Передаю описание в ComfyUI"
         elif "генерирует" in low:
             title,detail="Печатает","Ollama генерирует ответ"
         elif "добавлено в очередь" in low:
-            title,detail="В очереди","Отвечу после текущего ответа"
+            title,detail="В очереди","Ответит после текущего ответа"
         elif "аудиозахват на паузе" in low:
-            title,detail="Думаю","Микрофон и системный звук выключены до ответа"
+            title,detail="Думает","Микрофон и системный звук выключены до ответа"
         elif "обдумывает" in low or "думает" in low or "ждёт ответа" in low:
-            title,detail="Думаю","Аудиозахват на паузе до ответа"
+            title,detail="Думает","Аудиозахват на паузе до ответа"
         elif "смотрит на экран" in low:
-            title,detail="Изучаю экран","Ищу важные детали"
+            title,detail="Изучаю экран","Ищет важные детали"
         elif "обновляет список моделей" in low:
-            title,detail="Обновляю модели","Проверяю Ollama"
+            title,detail="Обновление моделей","Проверка Ollama"
         elif "устанавливает аудиокомпонент" in low:
             title,detail="Устанавливаю аудио","Это может занять несколько минут"
         elif "останавливает" in low or "останавливается" in low:
-            title,detail=("Останавливаю","Прерываю текущий запрос") if "действие" in low else ("Останавливаюсь…","Завершаю захват аудио")
+            title,detail=("Останавливаю","Прерывание текущего запроса") if "действие" in low else ("Останавливаюсь…","Завершаю захват аудио")
         elif "ответ получен" in low:
             title,detail="Ответ готов",""
         elif "запрос прерван" in low or "озвучивание прервано" in low:
@@ -3739,25 +3745,25 @@ class CompanionApp(QMainWindow, CompanionCore):
         elif "готов к работе" in low:
             title,detail="Готов к работе","Выбери действие или отправь сообщение"
         elif "запускает parakeet" in low:
-            title,detail="Запускаю распознавание","Подключаю локальный Parakeet на CUDA"
+            title,detail="Запуск распознавания","Подключаю локальный Parakeet на CUDA"
         elif "comfyui" in low and "запускает локальный" in low:
-            title,detail="Запускаю ComfyUI","Подготавливаю генерацию изображения"
+            title,detail="Запуск ComfyUI","Подготавливаю генерацию изображения"
         elif "голосовой запрос на изображение" in low:
-            title,detail="Понял запрос на изображение","Передаю описание в ComfyUI"
+            title,detail="Запрос на изображение принят","Передаю описание в ComfyUI"
         elif "распознаёт речь" in low:
-            title,detail="Распознаю речь","Parakeet обрабатывает аудио на GPU"
+            title,detail="Распознавание речи","Parakeet обрабатывает аудио на GPU"
         elif "говорит · qwen3-tts" in low:
             title,detail="Говорю",""
         elif "готовит русскую речь" in low or "запускает qwen3-tts" in low:
-            title,detail="Готовлю голос",""
+            title,detail="Подготовка голоса",""
         elif "слушает микрофон" in low:
-            title,detail="Слушаю…","Микрофон активен"
+            title,detail="Слушает…","Микрофон активен"
         elif "слушает звук пк" in low:
-            title,detail="Слушаю…","Слежу за звуком компьютера"
+            title,detail="Слушает…","Слежу за звуком компьютера"
         elif "слушает" in low:
-            title,detail="Слушаю…","Жду, когда ты заговоришь"
+            title,detail="Слушает…","Ждёт, когда ты заговоришь"
         else:
-            title,detail=("Слушаю","Жду, когда ты заговоришь") if self.running else ("Готов к работе","Выбери действие или отправь сообщение")
+            title,detail=("Слушает","Ждёт, когда ты заговоришь") if self.running else ("Готов к работе","Выбери действие или отправь сообщение")
         if self.activity_label.text() != title:
             self.activity_label.setText(title)
         if self.activity_started_at is not None:
@@ -3857,7 +3863,7 @@ class CompanionApp(QMainWindow, CompanionCore):
             finally:
                 finished.set()
 
-        dialog = QProgressDialog("Скачиваю файл…", "Отмена", 0, 0, self)
+        dialog = QProgressDialog("Скачивание файла…", "Отмена", 0, 0, self)
         dialog.setWindowTitle(APP_NAME)
         dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
         dialog.setMinimumDuration(0)
@@ -3982,7 +3988,7 @@ class CompanionApp(QMainWindow, CompanionCore):
             search_state["generation"] += 1
             generation = search_state["generation"]
             models_list.clear()
-            detail.setText("Ищу модели на Hugging Face…")
+            detail.setText("Поиск моделей на Hugging Face…")
             signals = HuggingFaceSignals(dialog)
 
             def found(models):
@@ -4113,7 +4119,7 @@ class CompanionApp(QMainWindow, CompanionCore):
             if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo_id):
                 QMessageBox.warning(dialog, "Hugging Face", "Введи ID репозитория в формате автор/модель.")
                 return
-            detail.setText("Ищу GGUF-файлы в репозитории…")
+            detail.setText("Поиск GGUF-файлов в репозитории…")
             signals = HuggingFaceSignals(dialog)
 
             def found(records):
@@ -4181,7 +4187,7 @@ class CompanionApp(QMainWindow, CompanionCore):
             token = token_box.text().strip()
             destination_root = DATA_DIR / "huggingface_models" / repo_id.replace("/", "--")
             destination = destination_root.joinpath(*relative_parts)
-            progress = QProgressDialog("Подключаюсь к Hugging Face…", "Отмена", 0, 100, dialog)
+            progress = QProgressDialog("Подключение к Hugging Face…", "Отмена", 0, 100, dialog)
             progress.setWindowTitle("Загрузка модели")
             progress.setWindowModality(Qt.WindowModality.WindowModal)
             progress.setMinimumDuration(0)
@@ -4244,7 +4250,7 @@ class CompanionApp(QMainWindow, CompanionCore):
                                     size_text = f"{received / (1024 ** 3):.2f} ГБ"
                                     if total:
                                         size_text += f" / {total / (1024 ** 3):.2f} ГБ"
-                                    signals.progress.emit(percent, f"Скачиваю с Hugging Face · {size_text}")
+                                    signals.progress.emit(percent, f"Скачивание с Hugging Face · {size_text}")
                         if isinstance(expected, (int, float)) and expected > 0 and received != expected:
                             raise RuntimeError(f"Размер скачанного файла не совпадает с Hugging Face: {received} из {int(expected)} байт.")
                         os.replace(partial, destination)
@@ -4311,7 +4317,7 @@ class CompanionApp(QMainWindow, CompanionCore):
 
         cached = self.settings.get("thinking_capabilities", {}).get(model)
         if cached is None:
-            box.addItem("Загружаю уровни…", "__auto__")
+            box.addItem("Загрузка уровней…", "__auto__")
             box.setEnabled(False)
             box.blockSignals(False)
             if model not in self._thinking_lookup_inflight:
@@ -4627,7 +4633,7 @@ class CompanionApp(QMainWindow, CompanionCore):
             self._active_ollama_response = None
             self.busy = True
             self.selected_model = model
-            self.events.put(("activity", "Распознал задачу по проекту · агент изучает файлы"))
+            self.events.put(("activity", "Задача по проекту · агент изучает файлы"))
             threading.Thread(target=self._run_coding_agent, args=(text, model, str(project_root)), daemon=True).start()
             return
         if route in ("image", "video", "audio"):
@@ -4641,7 +4647,7 @@ class CompanionApp(QMainWindow, CompanionCore):
                 QMessageBox.warning(self, APP_NAME, "Не найден workflow ComfyUI. Укажи JSON-файл в Настройки → Интеграции → ComfyUI."); return
             self.input.clear()
             self._append("user",text)
-            self.events.put(("activity", "Распознал запрос на изображение · запускает ComfyUI"))
+            self.events.put(("activity", "Запрос на изображение · запуск ComfyUI"))
             self._start_image_generation(text)
             return
         model=self.model_box.currentText().strip()

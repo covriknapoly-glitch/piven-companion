@@ -23,6 +23,7 @@ import urllib.request
 import zipfile
 
 import process_job
+import resumable
 from pathlib import Path
 
 import voice_engines
@@ -328,7 +329,7 @@ def _remove(target):
     target = Path(target)
     roots = [VOICE_DIR.resolve(), (TTS_DIR / "models").resolve()]
     if not any(root in target.resolve().parents for root in roots):
-        raise RuntimeError(f"Путь вне папок озвучки, не трогаю его: {target}")
+        raise RuntimeError(f"Путь вне папок озвучки и не будет удалён: {target}")
     if target.is_dir():
         size = _folder_size(target)
         shutil.rmtree(target)
@@ -436,7 +437,7 @@ def search(kind, query, token=""):
     """Speech recognition or synthesis models on Hugging Face, most downloaded first."""
     text = urllib.parse.quote(str(query or "").strip())
     tag = "automatic-speech-recognition" if kind == "asr" else "text-to-speech"
-    items = _hf_json(f"/api/models?search={text}&pipeline_tag={tag}&limit=60&full=true&config=true&sort=downloads", token)
+    items = _hf_json(f"/api/models?search={text}&pipeline_tag={tag}&limit=100&full=true&config=true&sort=downloads&direction=-1", token)
     hits = []
     for item in items:
         if "tiny-random" in item["id"]:
@@ -448,12 +449,13 @@ def search(kind, query, token=""):
         hits.append({"id": item["id"], "downloads": item.get("downloads", 0), "gated": bool(item.get("gated")),
                      "engine": engine or "", "engineLabel": ENGINE_LABELS.get(engine, ""), "reason": reason,
                      "license": license_text(code) if code else "", "nonCommercial": non_commercial(code)})
-    hits.sort(key=lambda hit: not hit["engine"])
-    try:  # audio.cpp's own catalogue first: it runs natively and fast
-        import audiocpp_catalog
-        hits = audiocpp_catalog.search(kind, query) + hits
-    except Exception:
-        pass
+    hits.sort(key=lambda hit: not hit["engine"])  # most downloaded first, the ones this program can run on top
+    if str(query or "").strip():
+        try:  # audio.cpp packages matching the query (they run natively and fast), after the Hugging Face results
+            import audiocpp_catalog
+            hits += audiocpp_catalog.search(kind, query)
+        except Exception:
+            pass
     return hits
 
 
@@ -534,7 +536,7 @@ def _details(kind, repo, engine, token=""):
                   if item["path"].endswith(".onnx") and (item["path"] + ".json" in paths
                                                         or str(Path(item["path"]).parent / "config.json").replace("\\", "/").lstrip("./") in paths)]
         if not voices:
-            return {"supported": False, "reason": "Не нашёл в репозитории голос Piper (файл .onnx с настройками .json)."}
+            return {"supported": False, "reason": "В репозитории нет голоса Piper (файла .onnx с настройками .json)."}
         return {"supported": True, "engine": "piper", "files": voices, "bytes": voices[0]["size"]}
     if engine in voice_engines.ENGINES:
         keep = _snapshot_files(engine, files)
@@ -560,40 +562,40 @@ def tts_details(repo, token=""):
             "voices": _speakers(config), "bytes": sum(item.get("size") or 0 for item in files)}
 
 
-def _download(url, destination, size, sha256, cancel_event, on_bytes, token=""):
-    """Download into destination.download, check size (and SHA-256 when known), then move into place."""
+def _download(url, destination, size, sha256, cancel_event, on_bytes, token="", on_wait=None):
+    """Download into destination.download, check size (and SHA-256 when known), then move into place.
+    A lost connection pauses the download; it continues from the same place when the network is back."""
     partial = destination.with_name(destination.name + ".download")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    digest = hashlib.sha256()
-    received = 0
+    headers = {"User-Agent": USER_AGENT, **({"Authorization": f"Bearer {token}"} if token else {})}
     try:
-        headers = {"User-Agent": USER_AGENT, **({"Authorization": f"Bearer {token}"} if token else {})}
-        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60) as response, partial.open("wb") as output:
-            while True:
-                if cancel_event.is_set():
-                    raise InterruptedError("Загрузка отменена.")
-                chunk = response.read(4 * 1024 * 1024)
-                if not chunk:
-                    break
-                output.write(chunk)
-                digest.update(chunk)
-                received += len(chunk)
-                on_bytes(received)
-        if received != size:
+        received = resumable.fetch(url, partial, headers, cancel_event, on_bytes, on_wait or _wait_note)
+        if size and received != size:
             raise RuntimeError(f"Файл {destination.name} скачался не полностью: {received} из {size} байт.")
-        if sha256 and digest.hexdigest() != sha256:
-            raise RuntimeError(f"Контрольная сумма {destination.name} не совпала, файл повреждён.")
+        if sha256:
+            digest = hashlib.sha256()
+            with partial.open("rb") as handle:
+                for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                    digest.update(block)
+            if digest.hexdigest() != sha256:
+                raise RuntimeError(f"Контрольная сумма {destination.name} не совпала, файл повреждён.")
         os.replace(partial, destination)
-    except BaseException:
+    except (InterruptedError, RuntimeError):  # cancelled or broken: start over next time
         partial.unlink(missing_ok=True)
         raise
+
+
+def _wait_note(message):
+    """Shows "no connection, waiting" in the running install's progress (set by install())."""
+    show = getattr(_wait_note, "progress", None)
+    if show:
+        show(message)
 
 
 def _install_nemo(progress, cancel_event, share):
     archive = VOICE_DIR / NEMO_ZIP
     if not (archive.is_file() and archive.stat().st_size == NEMO_SIZE):
         _download(NEMO_URL, archive, NEMO_SIZE, NEMO_SHA256, cancel_event,
-                  lambda received: progress(share * received / NEMO_SIZE, f"Скачиваю NeMo-Speech: {received / 2**20:.0f} МБ"))
+                  lambda received: progress(share * received / NEMO_SIZE, f"Скачивание NeMo-Speech: {received / 2**20:.0f} МБ"))
     progress(share, "Распаковываю NeMo-Speech")
     extract = VOICE_DIR / "nemo-speech-extract"
     shutil.rmtree(extract, ignore_errors=True)
@@ -630,7 +632,7 @@ def install_asr(model_id, progress, cancel_event, file=None, token=""):
     if not installed:
         _download(info["url"], path, info["bytes"], info["sha256"], cancel_event,
                   lambda received: progress(share + (100 - share) * received / max(info["bytes"], 1),
-                                            f"Скачиваю {info['title']}: {received / 2**20:.0f} из {info['bytes'] / 2**20:.0f} МБ"), token)
+                                            f"Скачивание {info['title']}: {received / 2**20:.0f} из {info['bytes'] / 2**20:.0f} МБ"), token)
     progress(100, f"{info['title']} готова")
     return model_id
 
@@ -682,6 +684,11 @@ def _ensure_packages(progress, cancel_event, engine="qwen"):
     return voice_engines.ensure_engine(engine, progress, cancel_event)
 
 
+NETWORK_MARKS = ("ConnectionError", "ConnectTimeout", "ReadTimeout", "Timeout", "MaxRetryError", "Max retries",
+                 "NameResolutionError", "getaddrinfo", "RemoteDisconnected", "IncompleteRead", "ProtocolError",
+                 "Connection aborted", "Connection reset", "LocalEntryNotFoundError", "HTTP Error 5", "502", "503", "504")
+
+
 def _snapshot(repo, title, size, start, progress, cancel_event, token="", ignore=None, local_dir=None):
     """Download a repository: into the shared Hugging Face cache, or with `local_dir` into a plain folder
     (no symbolic links, which Windows refuses without developer mode)."""
@@ -692,7 +699,7 @@ def _snapshot(repo, title, size, start, progress, cancel_event, token="", ignore
         while not stop.wait(1.5):
             done = _folder_size(cache)
             progress(start + (99 - start) * min(done / max(size, 1), 1),
-                     f"Скачиваю {title}: {done / 2**30:.1f} из {size / 2**30:.1f} ГБ")
+                     f"Скачивание {title}: {done / 2**30:.1f} из {size / 2**30:.1f} ГБ")
     threading.Thread(target=measure, daemon=True).start()
     env = os.environ.copy()
     env.update({"HF_HOME": str(TTS_HF_HOME), "PYTHONUTF8": "1", "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
@@ -701,7 +708,19 @@ def _snapshot(repo, title, size, start, progress, cancel_event, token="", ignore
     target = f", local_dir={json.dumps(str(local_dir))}" if local_dir else ""
     call = f"from huggingface_hub import snapshot_download; snapshot_download({json.dumps(repo)}, ignore_patterns={json.dumps(ignore or [])}{target})"
     try:
-        _run([str(TTS_PYTHON), "-c", call], cancel_event, lambda line: None, env=env)
+        pause = 2.0
+        while True:
+            try:
+                _run([str(TTS_PYTHON), "-c", call], cancel_event, lambda line: None, env=env)
+                break
+            except RuntimeError as error:
+                # huggingface_hub keeps the partial files; after a lost connection it continues where it stopped
+                if not any(mark in str(error) for mark in NETWORK_MARKS):
+                    raise
+                progress(start + (99 - start) * min(_folder_size(cache) / max(size, 1), 1), resumable.WAIT_MESSAGE)
+                if cancel_event.wait(pause):
+                    raise InterruptedError("Установка отменена.")
+                pause = min(pause * 2, 30.0)
     finally:
         stop.set()
 
@@ -757,7 +776,7 @@ def install_piper(repo, file, progress, cancel_event, token=""):
         quoted = "/".join(urllib.parse.quote(part, safe="") for part in source.split("/"))
         url = f"https://huggingface.co/{urllib.parse.quote(repo, safe='/')}/resolve/main/{quoted}"
         _download(url, target, paths.get(source, 0), "", cancel_event,
-                  lambda received: progress(start + (100 - start) * (done + received) / total, f"Скачиваю голос Piper: {(done + received) / 2**20:.0f} МБ"), token)
+                  lambda received: progress(start + (100 - start) * (done + received) / total, f"Скачивание голоса Piper: {(done + received) / 2**20:.0f} МБ"), token)
         done += paths.get(source, 0)
     title = f"{repo.split('/')[-1]} · {Path(file['path']).stem}" if Path(file["path"]).stem != "model" else repo.split("/")[-1]
     model_id = f"piper:{repo}/{file['path']}"
@@ -770,6 +789,12 @@ def install_piper(repo, file, progress, cancel_event, token=""):
 def install(kind, model_id, progress, cancel_event, extra=None, token=""):
     """Install a built-in model, or with `extra` one found by search; returns the model's id."""
     extra = extra or {}
+    reported, report = [0], progress
+
+    def progress(percent, message):
+        reported[0] = percent
+        report(percent, message)
+    _wait_note.progress = lambda message: report(reported[0], message)
     engine = extra.get("engine", "")
     if engine == "audiocpp":
         import audiocpp_catalog

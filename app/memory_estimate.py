@@ -153,12 +153,36 @@ def kv_cache_bytes(meta, context):
     return int(total * 2)
 
 
-# Memory bandwidth in GB/s of common NVIDIA cards (longest name first wins), and of dual-channel DDR5 RAM.
+# Memory bandwidth in GB/s of common cards (longest name first wins).
 GPU_BANDWIDTH = {"RTX 5090": 1792, "RTX 5080": 960, "RTX 5070 Ti": 896, "RTX 5070": 672, "RTX 5060 Ti": 448, "RTX 5060": 448,
-                 "RTX 4090": 1008, "RTX 4080": 717, "RTX 4070 Ti": 504, "RTX 4070": 504, "RTX 4060 Ti": 288, "RTX 4060": 272,
-                 "RTX 3090": 936, "RTX 3080": 760, "RTX 3070": 448, "RTX 3060 Ti": 448, "RTX 3060": 360, "RTX 2080": 448}
-RAM_BANDWIDTH = 60
-EFFICIENCY = 0.65  # share of the peak bandwidth llama.cpp reaches while generating
+                 "RTX 5050": 320, "RTX 4090": 1008, "RTX 4080 SUPER": 736, "RTX 4080": 717, "RTX 4070 Ti SUPER": 672,
+                 "RTX 4070 Ti": 504, "RTX 4070 SUPER": 504, "RTX 4070": 504, "RTX 4060 Ti": 288, "RTX 4060": 272,
+                 "RTX 3090 Ti": 1008, "RTX 3090": 936, "RTX 3080 Ti": 912, "RTX 3080": 760, "RTX 3070 Ti": 608, "RTX 3070": 448,
+                 "RTX 3060 Ti": 448, "RTX 3060": 360, "RTX 3050": 224, "RTX 2080 Ti": 616, "RTX 2080": 448, "RTX 2070": 448,
+                 "RTX 2060": 336, "GTX 1660": 192, "GTX 1080 Ti": 484, "GTX 1080": 320, "GTX 1070": 256,
+                 "RTX A6000": 768, "RTX A4000": 448, "A100": 1555, "H100": 2039, "L40": 864}
+EFFICIENCY = 0.65        # share of the peak bandwidth llama.cpp reaches while generating
+LAYER_OVERHEAD = 0.00004 # seconds per layer and token for kernel launches; what limits small models
+KV_FILL = 0.25           # how full the context typically is while answering (the KV cache is read every token)
+_ram = []
+
+
+def ram_bandwidth():
+    """Peak RAM bandwidth in GB/s from the installed modules: transfer rate × 8 bytes × channels (two at most)."""
+    if _ram:
+        return _ram[0]
+    value = 50.0
+    try:
+        result = subprocess.run(["powershell", "-NoProfile", "-Command",
+                                 "Get-CimInstance Win32_PhysicalMemory | ForEach-Object { $_.ConfiguredClockSpeed }"],
+                                capture_output=True, text=True, timeout=15, creationflags=NO_WINDOW)
+        speeds = [int(line) for line in result.stdout.split() if line.strip().isdigit() and int(line) > 0]
+        if speeds:
+            value = min(speeds) * 8 * min(len(speeds), 2) / 1000
+    except Exception:
+        pass
+    _ram.append(value)
+    return value
 
 
 def active_fraction(meta):
@@ -171,23 +195,48 @@ def active_fraction(meta):
     return 1.0
 
 
-def speed(weights, meta, total, kv, other):
-    """Rough generation speed in tokens per second, assuming llama.cpp keeps what fits on the GPU."""
+def speed(weights, meta, total, kv, other, reserved=0, vram_limit=0):
+    """Rough generation speed in tokens per second. Generation is memory-bound: every token reads the active
+    weights (from video memory or, for what did not fit, from RAM) and the filled part of the KV cache, plus
+    a fixed launch cost per layer. `reserved`: video memory other programs hold (voice models);
+    `vram_limit`: the user's cap for the model."""
     gpu_total, name = gpu_memory(), gpu_name()
     gpu_bandwidth = next((value for key, value in sorted(GPU_BANDWIDTH.items(), key=lambda item: -len(item[0])) if key in name), 400)
-    per_token = weights * active_fraction(meta)
-    on_gpu = 1.0 if not gpu_total or total <= gpu_total * 0.95 else max(0.0, min(1.0, (gpu_total * 0.95 - kv - other) / max(weights, 1)))
-    seconds = per_token * on_gpu / (gpu_bandwidth * 1e9 * EFFICIENCY) + per_token * (1 - on_gpu) / (RAM_BANDWIDTH * 1e9 * EFFICIENCY)
+    room = gpu_total * 0.95 - reserved if gpu_total else 0
+    if vram_limit:
+        room = min(room, vram_limit) if gpu_total else vram_limit
+    arch = meta.get("general.architecture", "")
+    experts, used = _number(meta.get(f"{arch}.expert_count")), _number(meta.get(f"{arch}.expert_used_count"))
+    routed = used / experts if experts and used and experts > used else 1.0
+    # Mixture of experts: attention and shared layers (~5 %) are read every token and go to the GPU first;
+    # of the experts only `routed` of them is read. A dense model reads everything, layer by layer.
+    shared = weights * 0.05 if routed < 1 else weights
+    room_weights = max(0.0, room - kv - other) if gpu_total else 0.0
+    if total <= room:
+        gpu_read, ram_read = shared + (weights - shared) * routed, 0.0
+    elif routed < 1:
+        gpu_experts = max(0.0, min(weights - shared, room_weights - shared))
+        gpu_read = min(shared, room_weights) + gpu_experts * routed
+        ram_read = max(0.0, shared - room_weights) + (weights - shared - gpu_experts) * routed
+    else:
+        on_gpu = min(1.0, room_weights / max(weights, 1))
+        gpu_read, ram_read = weights * on_gpu, weights * (1 - on_gpu)
+    gpu_rate, ram_rate = gpu_bandwidth * 1e9 * EFFICIENCY, ram_bandwidth() * 1e9 * EFFICIENCY
+    kv_read = kv * KV_FILL
+    seconds = (gpu_read / gpu_rate + ram_read / ram_rate
+               + kv_read / (gpu_rate if gpu_read >= ram_read else ram_rate)
+               + LAYER_OVERHEAD * (_number(meta.get(f"{meta.get('general.architecture', '')}.block_count")) or 32))
     return round(1 / seconds, 1) if seconds > 0 else 0.0
 
 
-def estimate(weights, meta, context, projector=0):
-    """{"total", "weights", "kv", "other" (bytes), "speed" (tokens/s, estimated)}."""
-    kv = kv_cache_bytes(meta, context)
+def estimate(weights, meta, context, projector=0, kv_share=1.0, reserved=0, vram_limit=0):
+    """{"total", "weights", "kv", "other" (bytes), "speed" (tokens/s, estimated)}.
+    kv_share: size of a compressed KV cache relative to f16; reserved / vram_limit: see speed()."""
+    kv = kv_cache_bytes(meta, context) * kv_share
     other = COMPUTE_BYTES + (projector + PROJECTOR_EXTRA if projector else 0)
     total = int(weights + kv + other)
     return {"total": total, "weights": int(weights), "kv": int(kv), "other": int(other),
-            "speed": speed(weights, meta, total, kv, other), "measured": False}
+            "speed": speed(weights, meta, total, kv, other, reserved, vram_limit), "measured": False}
 
 
 def _gpu_info():

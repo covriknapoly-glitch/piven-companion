@@ -5,7 +5,6 @@ import { Markdown } from "./markdown";
 import { IconButton, Logo, fileName, formatElapsed } from "./ui";
 
 const IMAGE_PATTERN = /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i;
-export const ROLE_WIDTH: Record<string, number> = { assistant: 660, user: 480, computer: 480, system: 520, thinking: 660 };
 
 /** Loads a local image through the bridge (the page cannot read files directly). */
 export function useImage(api: WebApi, path: string, enabled = true) {
@@ -13,10 +12,23 @@ export function useImage(api: WebApi, path: string, enabled = true) {
   useEffect(() => {
     let alive = true;
     setSrc("");
-    if (enabled && IMAGE_PATTERN.test(path)) void api.image_data(path).then((data) => { if (alive) setSrc(data); });
+    if (enabled && (IMAGE_PATTERN.test(path) || /\.(mp4|webm|mkv)$/i.test(path))) void api.image_data(path).then((data) => { if (alive) setSrc(data); });
     return () => { alive = false; };
   }, [api, path, enabled]);
   return src;
+}
+
+function VideoAttachment({ api, path }: { api: WebApi; path: string }) {
+  const src = useImage(api, path);
+  return (
+    <div className="attachment-video">
+      {src ? <video src={src} controls loop playsInline /> : <div className="attachment-image loading" />}
+      <span className="attachment-actions">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => { void api.open_file(path); }}>Открыть</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { void api.save_copy(path); }}>Сохранить копию</button>
+      </span>
+    </div>
+  );
 }
 
 export function Attachment({ api, path, onView }: { api: WebApi; path: string; onView: (path: string) => void }) {
@@ -29,6 +41,7 @@ export function Attachment({ api, path, onView }: { api: WebApi; path: string; o
       </button>
     );
   }
+  if (/\.(mp4|webm|mkv)$/i.test(path)) return <VideoAttachment api={api} path={path} />;
   const isDeck = /\.pptx$/i.test(path);
   return (
     <div className="attachment-file">
@@ -39,83 +52,6 @@ export function Attachment({ api, path, onView }: { api: WebApi; path: string; o
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => { void api.save_copy(path); }}>Сохранить копию</button>
       </span>
     </div>
-  );
-}
-
-function CardShell({ kind, head, children }: { kind: string; head: ReactNode; children: ReactNode }) {
-  return (
-    <article className={`card card-${kind}`}>
-      <header className="card-head" data-drag-handle title="Потяни, чтобы переместить">{head}</header>
-      <div className="card-body">{children}</div>
-    </article>
-  );
-}
-
-export function MessageCard({ api, item, model, canRetry, onCopy, onView, onRetry }:
-  { api: WebApi; item: DialogueItem; model: string; canRetry: boolean; onCopy: (text: string) => void; onView: (path: string) => void; onRetry: () => void }) {
-  const attachments = item.images.length > 0 && (
-    <div className="attachments">{item.images.map((path) => <Attachment key={path} api={api} path={path} onView={onView} />)}</div>
-  );
-  if (item.role === "system") {
-    return (
-      <CardShell kind="system" head={<><span className="card-badge"><Icon name="monitor" size={14} /></span><strong>Система</strong></>}>
-        <p className="plain small">{item.text}</p>{attachments}
-      </CardShell>
-    );
-  }
-  if (item.role === "user" || item.role === "computer") {
-    const fromSpeakers = item.role === "computer";
-    return (
-      <CardShell kind="user" head={<>
-        <span className="card-badge user"><Icon name={fromSpeakers ? "volume" : "user"} size={14} /></span>
-        <strong>{fromSpeakers ? "Звук компьютера" : "Вы"}</strong>
-        <span className="card-spacer" />
-        <IconButton icon="copy" label="Копировать" size={15} className="card-action" onClick={() => onCopy(item.text)} />
-      </>}>
-        {attachments}{item.text && <p className="plain">{item.text}</p>}
-      </CardShell>
-    );
-  }
-  return (
-    <CardShell kind="assistant" head={<>
-      <span className="card-avatar"><Logo size={28} /></span>
-      <strong>PIVEN</strong><span className="card-meta">{model}</span>
-      <span className="card-spacer" />
-      <IconButton icon="copy" label="Копировать ответ" size={15} className="card-action" onClick={() => onCopy(item.text)} />
-      <IconButton icon="volume" label="Озвучить" size={15} className="card-action" onClick={() => { void api.speak(item.text); }} />
-      {canRetry && <IconButton icon="retry" label="Ответить заново" size={15} className="card-action" onClick={onRetry} />}
-    </>}>
-      <div className="scrollable">{item.text && <Markdown text={item.text} onCopy={onCopy} />}{attachments}</div>
-    </CardShell>
-  );
-}
-
-export function ThinkingCard({ state, onStop }: { state: EngineState; onStop: () => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
-  const elapsed = state.busySince ? Math.max(0, Math.floor(now / 1000 - state.busySince)) : 0;
-  return (
-    <CardShell kind="thinking" head={<>
-      <span className="card-avatar"><Logo size={28} pulse /></span>
-      <strong>PIVEN</strong><span className="card-meta">{state.settings.model}</span>
-      <span className="card-spacer" />
-      <button type="button" className="btn btn-ghost btn-sm" onClick={onStop} title="Esc"><Icon name="stop" size={13} /> Остановить</button>
-    </>}>
-      <div className="thinking-line">
-        <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
-        <span className="activity">{state.activity || "Думаю"}</span>
-        <span className="elapsed">{formatElapsed(elapsed)}</span>
-      </div>
-      {state.reasoning && (
-        <>
-          <button type="button" className="link-btn" onClick={() => setExpanded((value) => !value)}>
-            <Icon name="chevronRight" size={14} className={expanded ? "rot90" : ""} /> {expanded ? "Скрыть рассуждения" : "Показать рассуждения"}
-          </button>
-          {expanded && <pre className="reasoning scrollable">{state.reasoning.slice(-4000)}</pre>}
-        </>
-      )}
-    </CardShell>
   );
 }
 
@@ -156,7 +92,7 @@ export function Lightbox({ api, path, onClose }: { api: WebApi; path: string; on
           onMouseDown={(event) => { drag.current = { x: event.clientX, y: event.clientY, ox: offset.x, oy: offset.y }; }}
           onMouseMove={(event) => { const start = drag.current; if (start && event.buttons === 1) setOffset({ x: start.ox + event.clientX - start.x, y: start.oy + event.clientY - start.y }); }}
           onMouseUp={() => { drag.current = null; }} />
-      ) : <div className="lightbox-loading">Загружаю…</div>}
+      ) : <div className="lightbox-loading">Загрузка…</div>}
     </div>
   );
 }
