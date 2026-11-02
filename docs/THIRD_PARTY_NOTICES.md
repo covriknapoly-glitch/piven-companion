@@ -8,10 +8,9 @@ PIVEN Companion использует и распространяет вмест�
 
 | Компонент | Лицензия | Где |
 |---|---|---|
-| React, React DOM, Scheduler (Meta Platforms) | MIT | встроены в `modern-ui/dist/app.js`; `docs/licenses/react*-MIT.txt`, `scheduler-MIT.txt` |
-| Material Symbols (Google) | Apache 2.0 | `assets/icons/material` (обычное окно); `docs/licenses/Apache-2.0.txt` |
-| Symbols Nerd Font (Nerd Fonts) | MIT; значки внутри: Codicons (Microsoft) — CC BY 4.0, Material Design Icons — Apache 2.0, Font Awesome — CC BY 4.0 | иконки веб-интерфейса, подмножество `modern-ui/src/assets/fonts/SymbolsNerdFont-Icons.ttf`; `SymbolsNerdFont-MIT.txt` рядом |
-| Lack (Adrien Midzic, Velvetyne), Martian Grotesk Wide (Evil Martians), Cascadia Code (Microsoft), Smiley Sans / 得意黑 (atelierAnchor, без изменений, для китайского интерфейса) — веб-интерфейс; JetBrains Mono, Ledger, Manrope, Shantell Sans — обычное окно | SIL Open Font License 1.1 | `assets/fonts`, `modern-ui/src/assets/fonts` (тексты `*-OFL.txt` рядом) |
+| React, React DOM, Scheduler (Meta Platforms) | MIT | встроены в `ui/dist/app.js`; `docs/licenses/react*-MIT.txt`, `scheduler-MIT.txt` |
+| Symbols Nerd Font (Nerd Fonts) | MIT; значки внутри: Codicons (Microsoft) — CC BY 4.0, Material Design Icons — Apache 2.0, Font Awesome — CC BY 4.0 | иконки интерфейса, подмножество `ui/src/assets/fonts/SymbolsNerdFont-Icons.ttf`; `SymbolsNerdFont-MIT.txt` рядом |
+| Lack (Adrien Midzic, Velvetyne), Martian Grotesk Wide (Evil Martians), Cascadia Code (Microsoft), Smiley Sans / 得意黑 (atelierAnchor, без изменений, для китайского интерфейса) | SIL Open Font License 1.1 | `ui/src/assets/fonts` (тексты `*-OFL.txt` рядом) |
 
 ## В установщике (не в репозитории)
 
@@ -21,7 +20,6 @@ PIVEN Companion использует и распространяет вмест�
 | llama.cpp / ggml | MIT (`docs/licenses/llama.cpp-MIT.txt`) |
 | LLVM OpenMP (`libomp.dll`, из сборки llama.cpp) | Apache 2.0 with LLVM Exceptions (`llama.cpp/bin/LICENSE-LLVM-OpenMP`) |
 | NVIDIA CUDA Runtime, cuBLAS (`cudart64_13.dll`, `cublas64_13.dll`, `cublasLt64_13.dll`) | NVIDIA CUDA Toolkit EULA — распространяемые компоненты (Attachment A) |
-| PySide6, shiboken6 (Qt for Python) | LGPL-3.0 — библиотеки не изменены и лежат отдельными файлами в `.qt_runtime`, их можно заменить своей сборкой |
 | pywebview | BSD-3-Clause |
 | pythonnet, clr_loader | MIT |
 | bottle, proxy_tools | MIT |

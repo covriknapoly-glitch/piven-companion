@@ -1,43 +1,29 @@
-# Everything is ignored by default; only the program's own files are listed.
-# Not in git: neural-network models and their runtimes (voice engines),
-# the bundled Python / Qt / packages, the archive, logs and caches.
 /*
 !/.gitignore
 !/README.md
 !/LICENSE
 !/NOTICE
 !/requirements.txt
+!/Запустить PIVEN.cmd
 !/app/
-!/docs/
-!/Запустить компаньон.cmd
-!/Запустить веб-интерфейс.cmd
 !/assets/
-# Logo drafts the program does not load
 /assets/piven_logo.png
 /assets/piven_logo_2026.png
+!/docs/
 !/skills/
 !/tests/
-
-!/modern-ui/
-/modern-ui/node_modules/
-
-# Voice engines: only the launch scripts and notes; models, binaries and venvs stay local.
-!/voice/
-/voice/*
-!/voice/README.md
-!/voice/asr-bridge.py
-!/voice/start-*.bat
-!/voice-servers/
-/voice-servers/*
-!/voice-servers/README.md
-!/voice-servers/server.py
-!/voice-servers/hf_voice_server.py
-!/voice-servers/start-qwen-tts.bat
+!/installer/
+/installer/Output/
+!/ui/
+/ui/node_modules/
+!/voice-engines/
+/voice-engines/*
+!/voice-engines/README.md
+!/voice-engines/model_server.py
+!/voice-engines/qwen-tts/
+/voice-engines/qwen-tts/*
+!/voice-engines/qwen-tts/server.py
 
 __pycache__/
 *.pyc
 *.log
-
-# Installer script; the built setup.exe stays local
-!/installer/
-/installer/Output/

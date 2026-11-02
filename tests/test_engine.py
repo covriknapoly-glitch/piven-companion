@@ -1,4 +1,3 @@
-"""Engine checks that need no window, model or network: python -m unittest discover tests"""
 import json
 import queue
 import re
@@ -12,20 +11,19 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "app"))
+sys.path.insert(0, str(ROOT))
 
-import companion_core as core   # noqa: E402  (sets up the bundled package paths)
-import computer_skill           # noqa: E402
-import llama_backend            # noqa: E402
-import preview_server           # noqa: E402
-import providers                # noqa: E402
-from presentation_skill import _normalize   # noqa: E402
+from app.chat import engine as core
+from app.tools import computer
+from app.models import llama
+from app.tools import preview
+from app.models import integrations
+from app.tools.presentation import _normalize
 
 Core = core.CompanionCore
 
 
 def fake_core(**fields):
-    """Just the state the tested CompanionCore methods read, without starting the companion."""
     base = dict(events=queue.Queue(), action_cancel=threading.Event(), busy=False, settings={"ui_language": "ru"},
                 messages=[{"role": "system", "content": "s"}], dialogue_items=[], _save_conversation=lambda: None,
                 _chat_summary=lambda: "")
@@ -35,10 +33,10 @@ def fake_core(**fields):
 
 class ContextFitting(unittest.TestCase):
     def setUp(self):
-        llama_backend.model_params["m"] = {"ctx_size": 2560, "compress_context": False}
+        llama.model_params["m"] = {"ctx_size": 2560, "compress_context": False}
 
     def tearDown(self):
-        llama_backend.model_params.pop("m", None)
+        llama.model_params.pop("m", None)
 
     def test_tool_descriptions_take_room_from_history(self):
         turns = [{"role": "user" if i % 2 == 0 else "assistant", "content": "x" * 600} for i in range(6)]
@@ -67,38 +65,38 @@ class Presentation(unittest.TestCase):
 class ComputerCommands(unittest.TestCase):
     def test_unknown_command_lists_the_real_ones(self):
         with self.assertRaisesRegex(ValueError, "Команды «build_game» нет. Доступны: .*create_file"):
-            computer_skill.execute_computer_action({"computer_action": "build_game"})
+            computer.execute_computer_action({"computer_action": "build_game"})
 
     def test_invented_names_map_to_real_commands(self):
-        self.assertEqual(computer_skill._ACTION_ALIASES["save_file"], "write_file")
-        self.assertEqual(computer_skill._ACTION_ALIASES["mkdir"], "create_folder")
-        self.assertTrue(set(computer_skill._ACTION_ALIASES.values()) <= set(computer_skill.COMPUTER_ACTIONS))
+        self.assertEqual(computer._ACTION_ALIASES["save_file"], "write_file")
+        self.assertEqual(computer._ACTION_ALIASES["mkdir"], "create_folder")
+        self.assertTrue(set(computer._ACTION_ALIASES.values()) <= set(computer.COMPUTER_ACTIONS))
 
     def test_write_file_rewrites_only_what_this_request_made(self):
         with tempfile.TemporaryDirectory() as folder:
             old = Path(folder) / "old.txt"
             old.write_text("mine", encoding="utf-8")
             created = []
-            computer_skill._file_action("write_file", {"path": str(Path(folder) / "game.js"), "content": "a"}, created)
-            computer_skill._file_action("write_file", {"path": str(Path(folder) / "game.js"), "content": "b"}, created)
+            computer._file_action("write_file", {"path": str(Path(folder) / "game.js"), "content": "a"}, created)
+            computer._file_action("write_file", {"path": str(Path(folder) / "game.js"), "content": "b"}, created)
             self.assertEqual((Path(folder) / "game.js").read_text(encoding="utf-8"), "b")
             with self.assertRaisesRegex(ValueError, "нельзя перезаписать"):
-                computer_skill._file_action("write_file", {"path": str(old), "content": "x"}, created)
+                computer._file_action("write_file", {"path": str(old), "content": "x"}, created)
             self.assertEqual(old.read_text(encoding="utf-8"), "mine")
 
     def test_undo_deletes_only_unchanged_files_and_empty_folders(self):
         with tempfile.TemporaryDirectory() as folder:
             created = []
             game = Path(folder) / "Game"
-            computer_skill._file_action("create_folder", {"path": str(game)}, created)
-            computer_skill._file_action("create_file", {"path": str(game / "a.js"), "content": "1"}, created)
-            computer_skill._file_action("create_file", {"path": str(game / "b.js"), "content": "2"}, created)
+            computer._file_action("create_folder", {"path": str(game)}, created)
+            computer._file_action("create_file", {"path": str(game / "a.js"), "content": "1"}, created)
+            computer._file_action("create_file", {"path": str(game / "b.js"), "content": "2"}, created)
             record = Core._undo_record(created)
             (game / "b.js").write_text("changed by the user", encoding="utf-8")
             removed, kept = Core.undo_files(record)
             self.assertFalse((game / "a.js").exists())
             self.assertTrue((game / "b.js").exists())
-            self.assertTrue(game.exists())   # still holds the changed file
+            self.assertTrue(game.exists())
             self.assertIn(str(game / "b.js"), kept)
 
     def test_making_something_counts_as_asking_for_files(self):
@@ -139,10 +137,10 @@ class EditingMessages(unittest.TestCase):
 
 
 class SavedErrors(unittest.TestCase):
-    def setUp(self):   # the window module is a .pyw file, so it is loaded by path
+    def setUp(self):
         import importlib.machinery, importlib.util
-        loader = importlib.machinery.SourceFileLoader("web_companion", str(ROOT / "app" / "web_companion.pyw"))
-        spec = importlib.util.spec_from_loader("web_companion", loader)
+        loader = importlib.machinery.SourceFileLoader("main_window", str(ROOT / "app" / "window" / "main.pyw"))
+        spec = importlib.util.spec_from_loader("main_window", loader)
         self.web = importlib.util.module_from_spec(spec)
         loader.exec_module(self.web)
 
@@ -162,7 +160,7 @@ class SavedErrors(unittest.TestCase):
 
 class MemoryModels(unittest.TestCase):
     def test_switch_removes_earlier_models_and_unfinished_downloads(self):
-        import memory
+        from app.chat import memory
         with tempfile.TemporaryDirectory() as folder:
             models = Path(folder) / "model"
             models.mkdir()
@@ -175,18 +173,18 @@ class MemoryModels(unittest.TestCase):
 class ThinkingLevels(unittest.TestCase):
     def test_effort_levels_in_round_brackets(self):
         template = "{%- if reasoning_effort not in ('xhigh', 'medium', 'low') %}{%- set e = reasoning_effort|default('xhigh') %}"
-        self.assertEqual(llama_backend.effort_levels(template), (["low", "medium", "xhigh"], "xhigh"))
+        self.assertEqual(llama.effort_levels(template), (["low", "medium", "xhigh"], "xhigh"))
 
     def test_switch_only_template_gets_budget_levels(self):
-        with mock.patch.object(llama_backend, "_template", return_value="{% if enable_thinking %}<think>{% endif %}"), \
-                mock.patch.object(llama_backend, "model_files", return_value={"q": (Path("q.gguf"), None)}):
-            self.assertEqual(llama_backend.thinking_modes("q"), ([False, "low", "medium", "high"], "high"))
+        with mock.patch.object(llama, "_template", return_value="{% if enable_thinking %}<think>{% endif %}"), \
+                mock.patch.object(llama, "model_files", return_value={"q": (Path("q.gguf"), None)}):
+            self.assertEqual(llama.thinking_modes("q"), ([False, "low", "medium", "high"], "high"))
 
     def test_claude_generations(self):
-        self.assertEqual(providers.thinking_modes("anthropic:claude-opus-5-5")[0][0], "low")   # cannot be switched off
-        self.assertIn(False, providers.thinking_modes("anthropic:claude-sonnet-5-5")[0])
-        self.assertEqual(providers._claude_thinking("claude-haiku-4-5")[2], "budget")
-        self.assertEqual(providers.thinking_modes("anthropic:claude-3-5-haiku-20241022"), ([], None))
+        self.assertEqual(integrations.thinking_modes("anthropic:claude-opus-5-5")[0][0], "low")
+        self.assertIn(False, integrations.thinking_modes("anthropic:claude-sonnet-5-5")[0])
+        self.assertEqual(integrations._claude_thinking("claude-haiku-4-5")[2], "budget")
+        self.assertEqual(integrations.thinking_modes("anthropic:claude-3-5-haiku-20241022"), ([], None))
 
 
 class ProviderRequests(unittest.TestCase):
@@ -196,10 +194,10 @@ class ProviderRequests(unittest.TestCase):
         def capture(request, timeout=0):
             sent.append(json.loads(request.data))
             raise OSError("captured")
-        with mock.patch.object(providers.urllib.request, "urlopen", capture), \
-                mock.patch.object(providers, "settings_of", lambda p: {"enabled": True, "url": providers.PROVIDERS[p]["url"], "key": "k"}):
+        with mock.patch.object(integrations.urllib.request, "urlopen", capture), \
+                mock.patch.object(integrations, "settings_of", lambda p: {"enabled": True, "url": integrations.PROVIDERS[p]["url"], "key": "k"}):
             try:
-                providers.chat(name, [{"role": "user", "content": "hi"}], sampling={"temperature": 0.7}, think=think)
+                integrations.chat(name, [{"role": "user", "content": "hi"}], sampling={"temperature": 0.7}, think=think)
             except Exception:
                 pass
         return sent[-1]
@@ -224,7 +222,7 @@ class ProviderRequests(unittest.TestCase):
 
 class Translations(unittest.TestCase):
     def test_every_entry_is_complete(self):
-        data = json.loads((ROOT / "modern-ui/src/i18n/strings.json").read_text(encoding="utf-8"))
+        data = json.loads((ROOT / "ui/src/i18n/strings.json").read_text(encoding="utf-8"))
         for key, values in data.items():
             self.assertEqual(len(values), 3, key)
             for text in values:
@@ -238,10 +236,10 @@ class Preview(unittest.TestCase):
             page = Path(folder) / "index.html"
             page.write_text("<h1>ok</h1>", encoding="utf-8")
             try:
-                with urllib.request.urlopen(preview_server.url_for(page), timeout=5) as response:
+                with urllib.request.urlopen(preview.url_for(page), timeout=5) as response:
                     self.assertEqual(response.read(), b"<h1>ok</h1>")
             finally:
-                preview_server.stop_all()
+                preview.stop_all()
 
 
 if __name__ == "__main__":
