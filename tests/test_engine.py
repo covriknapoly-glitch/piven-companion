@@ -138,6 +138,28 @@ class EditingMessages(unittest.TestCase):
         self.assertIsNone(Core.cut_history_at(state, 0))
 
 
+class SavedErrors(unittest.TestCase):
+    def setUp(self):   # the window module is a .pyw file, so it is loaded by path
+        import importlib.machinery, importlib.util
+        loader = importlib.machinery.SourceFileLoader("web_companion", str(ROOT / "app" / "web_companion.pyw"))
+        spec = importlib.util.spec_from_loader("web_companion", loader)
+        self.web = importlib.util.module_from_spec(spec)
+        loader.exec_module(self.web)
+
+    def test_error_line_is_recorded_in_the_active_chat(self):
+        recorded = []
+        state = types.SimpleNamespace(active_chat_id="a", _record=lambda role, text: recorded.append((role, text)))
+        self.web.WebCompanion._show_error(state, "a", "boom")
+        self.assertEqual(recorded, [("error", "boom")])
+
+    def test_error_line_goes_to_a_background_chat(self):
+        appended = []
+        state = types.SimpleNamespace(active_chat_id="a", _changed=lambda: None,
+                                      append_to_chat=lambda chat, role, text: appended.append((chat, role, text)))
+        self.web.WebCompanion._show_error(state, "b", "boom")
+        self.assertEqual(appended, [("b", "error", "boom")])
+
+
 class ThinkingLevels(unittest.TestCase):
     def test_effort_levels_in_round_brackets(self):
         template = "{%- if reasoning_effort not in ('xhigh', 'medium', 'low') %}{%- set e = reasoning_effort|default('xhigh') %}"

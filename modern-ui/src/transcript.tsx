@@ -122,8 +122,8 @@ function Message({ api, item, index, canRetry, canEdit, onCopy, onView, onRetry,
     <div className="attachments">{item.images.map((path) => <Attachment key={path} api={api} path={path} onView={onView} />)}</div>
   );
   if (item.role === "poll") return <PollCard api={api} text={item.text} index={index} />;
-  if (item.role === "system") {
-    return <div className="msg msg-system" id={`msg-${index}`}><span className="msg-mark">#</span><p className="plain">{item.text}</p>{attachments}</div>;
+  if (item.role === "system" || item.role === "error") {
+    return <div className={`msg msg-system ${item.role === "error" ? "msg-error" : ""}`} id={`msg-${index}`}><span className="msg-mark">#</span><p className="plain">{item.text}</p>{attachments}</div>;
   }
   if (item.role === "user" || item.role === "computer") {
     return (
@@ -230,7 +230,6 @@ export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, on
             onCopy={onCopy} onView={onView} onRetry={onRetry} onEdit={onEdit} />
         ))}
         {state.busy && <Working state={state} onStop={onStop} />}
-        {state.error && !state.busy && <div className="msg msg-system msg-error"><span className="msg-mark">#</span><p className="plain">{state.error}</p></div>}
       </>
     );
   }

@@ -753,7 +753,7 @@ class CompanionCore:
                 self.active_chat_id = self.chats[0]["id"]
             active_chat = next(chat for chat in self.chats if chat.get("id") == self.active_chat_id)
             self.dialogue_items = [item for item in active_chat.get("items", [])
-                                   if isinstance(item, dict) and item.get("role") in ("user", "assistant", "system", "computer")]
+                                   if isinstance(item, dict) and item.get("role") in ("user", "assistant", "system", "computer", "poll", "error")]
             restored_messages = [item for item in active_chat.get("messages", [])
                                  if isinstance(item, dict) and item.get("role") in ("user", "assistant")]
             self.messages.extend({"role": item["role"], "content": str(item.get("content", ""))}
@@ -925,7 +925,7 @@ class CompanionCore:
         chat = next((item for item in self.chats if item.get("id") == chat_id), None)
         if chat is None:
             raise ValueError("Чат не найден.")
-        role_names = {"user": "Вы", "assistant": "Компаньон", "system": "Система", "computer": "Звук компьютера"}
+        role_names = {"user": "Вы", "assistant": "Компаньон", "system": "Система", "computer": "Звук компьютера", "error": "Ошибка"}
         title = str(chat.get("title") or "Чат")
         lines = [f"# {title}", ""] if markdown else [title, "=" * len(title), ""]
         for entry in chat.get("items", []):

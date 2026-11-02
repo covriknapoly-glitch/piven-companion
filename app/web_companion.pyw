@@ -97,7 +97,6 @@ class WebCompanion(CompanionCore):
         self._allowed_files = set()
         # A pending download confirmation, answered from the page (see _confirm_download).
         self._confirm = None
-        self._error = None  # the last failed answer {"chat", "text", "id"}: shown under its chat for ERROR_SECONDS, never saved
         self._confirm_answer = threading.Event()
         self._browser_request = None  # the model asked to show a page: {"url", "nonce"}; the page opens its panel
         self.tray = None          # the notification-area icon (tray.Tray), when it could be created
@@ -113,22 +112,14 @@ class WebCompanion(CompanionCore):
     def _changed(self):
         self._version += 1
 
-    ERROR_SECONDS = 20
-
     def _show_error(self, chat_id, text):
-        """Show a failed answer under its chat for a while instead of writing it into the history. Under the state lock."""
-        error_id = uuid.uuid4().hex
-        self._error = {"chat": chat_id, "text": str(text), "id": error_id}
-        self._changed()
-
-        def clear():
-            with self._state_lock:
-                if self._error and self._error["id"] == error_id:
-                    self._error = None
-                    self._changed()
-        timer = threading.Timer(self.ERROR_SECONDS, clear)
-        timer.daemon = True
-        timer.start()
+        """Write a failed answer into its chat as an "error" line, so the chat does not later look unanswered.
+        The model never sees these lines (its history is kept apart). Under the state lock."""
+        if chat_id == self.active_chat_id:
+            self._record("error", str(text))
+        else:
+            self.append_to_chat(chat_id, "error", str(text))
+            self._changed()
 
     def known_files(self):
         with self._state_lock:
@@ -162,7 +153,6 @@ class WebCompanion(CompanionCore):
                               "options": dict(zip(("mic", "loopback", "screen", "proactive"), map(bool, self.capture_options)))},
                 "call": dict(zip(("speaking", "hearing", "muted"), self._call_flags())),
                 "confirm": self._confirm,
-                "error": self._error["text"] if self._error and self._error["chat"] == self.active_chat_id else "",
                 "downloads": self._downloads(),
                 "browserRequest": self._browser_request,
                 "activity": self._activity,

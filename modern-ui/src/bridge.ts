@@ -3,7 +3,7 @@
  * `window.pywebview.api` (web_companion.pyw → WebApi), which works on the same
  * chats and settings as the Qt window through companion_core.
  */
-export type ChatRole = "user" | "assistant" | "system" | "computer" | "poll";
+export type ChatRole = "user" | "assistant" | "system" | "computer" | "poll" | "error";
 
 export interface DialogueItem {
   role: ChatRole;
@@ -51,7 +51,6 @@ export interface EngineState {
   listening: { running: boolean; options: ListenOptions };
   call: { speaking: boolean; hearing: boolean; muted: boolean };
   confirm: DownloadConfirm | null;
-  error: string;
   downloads: DownloadRow[];
   browserRequest: { url: string; nonce: number } | null;
   activity: string;
