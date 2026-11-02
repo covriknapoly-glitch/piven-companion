@@ -13,7 +13,8 @@ const ATTRIBUTES = ["placeholder", "title", "aria-label"];
 const CYRILLIC = /[А-Яа-яЁё]/;
 
 const dictionary = strings as unknown as Record<string, [string, string, string]>;
-const patterns = Object.keys(dictionary).filter((key) => /\{\d\}/.test(key)).map((key) => ({
+// Longer patterns first: "Не удалось получить ответ модели: запрос не поместился…{0}" before "…модели: {0}".
+const patterns = Object.keys(dictionary).filter((key) => /\{\d\}/.test(key)).sort((a, b) => b.length - a.length).map((key) => ({
   key,
   test: new RegExp("^" + key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\{(\d)\\\}/g, "(?<p$1>.+?)") + "$", "s"),
 }));
@@ -36,15 +37,26 @@ export function translate(text: string): string | null {
     if (!match) continue;
     let result = dictionary[key][column];
     Object.entries(match.groups ?? {}).forEach(([name, value]) => {
-      const inner = dictionary[value.trim()];
-      result = result.replace(`{${name.slice(1)}}`, inner ? inner[column] : value);
+      const word = value.trim();
+      // an inserted text is translated on its own too, also when it is a pattern ("…: Слайд 4 должен быть…")
+      const inner = word === clean ? null : translate(word);
+      // a known word written in lower case inside a sentence ("Размышление: низкий") keeps that case translated
+      const capital: string[] | undefined = inner ? undefined : dictionary[word.charAt(0).toUpperCase() + word.slice(1)];
+      const translated = inner ?? (capital ? capital[column].charAt(0).toLowerCase() + capital[column].slice(1) : value);
+      result = result.replace(`{${name.slice(1)}}`, translated);
     });
     return text.replace(text.trim(), result);
   }
   return null;
 }
 
-const skipped = (node: Node) => Boolean((node instanceof Element ? node : node.parentElement)?.closest("[data-i18n-skip], textarea, script, style"));
+// Interface parts inside an answer (a code block's copy button) opt back in with data-i18n.
+// A text field's own placeholder and title are translated, only the text typed into it is not.
+const skipped = (node: Node) => {
+  const element = node instanceof Element ? (node.matches("textarea") ? node.parentElement : node) : node.parentElement;
+  const owner = element?.closest("[data-i18n-skip], [data-i18n], textarea, script, style");
+  return Boolean(owner && !owner.hasAttribute("data-i18n"));
+};
 
 function applyText(node: Text) {
   if (skipped(node)) return;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { EngineState, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
-import { Logo } from "./ui";
+import { Decor } from "./ui";
 
 type Phase = "connecting" | "listening" | "hearing" | "thinking" | "speaking" | "muted";
 const PHASE_TEXT: Record<Phase, string> = {
@@ -58,7 +58,7 @@ export function CallPanel({ api, state, onError }: { api: WebApi; state: EngineS
       <div className="call-stage">
         <div className="call-avatar">
           <i className="ring r1" /><i className="ring r2" /><i className="ring r3" />
-          <Logo size={96} />
+          <Decor />
         </div>
         <div className="call-name">PIVEN</div>
         <div className="call-phase">{PHASE_TEXT[phase]}{phase === "thinking" && <span className="call-dots"><i /><i /><i /></span>}</div>

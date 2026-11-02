@@ -97,10 +97,14 @@ def _normalize(slides):
             raise ValueError(f"Слайд {index} должен быть объектом с заголовком и тезисами.")
         layout = str(slide.get("layout", "bullets")).lower()
         layout = layout if layout in LAYOUTS else "bullets"
-        bullets = slide.get("bullets", [])
+        # Models often name the list differently or write it as one text; a slide left without points becomes a
+        # section slide (quote or number when the slide has one) instead of failing the whole presentation.
+        bullets = next((slide[key] for key in ("bullets", "points", "items", "content", "text") if slide.get(key)), [])
+        if isinstance(bullets, str):
+            bullets = [line.strip(" -•*\t") for line in bullets.splitlines()]
         bullets = [_clean_text(item, 260) for item in bullets if _clean_text(item)] if isinstance(bullets, list) else []
-        if layout in ("bullets", "two_columns", "steps", "cards") and not 1 <= len(bullets) <= 8:
-            raise ValueError(f"На слайде {index} нужно от 1 до 8 тезисов.")
+        if layout in ("bullets", "two_columns", "steps", "cards") and not bullets:
+            layout = "quote" if slide.get("quote") else "big_number" if slide.get("number") else "section"
         normalized.append({"title": _clean_text(slide.get("title"), 100), "bullets": bullets[:8], "layout": layout,
                            "number": _clean_text(slide.get("number"), 12), "caption": _clean_text(slide.get("caption"), 160),
                            "quote": _clean_text(slide.get("quote"), 300), "author": _clean_text(slide.get("author"), 80)})

@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DiskUsage, EngineState, ModelMemory, SettingsDetails, ThinkingOptions, ThinkingValue, VoiceKind, VoiceModel, VoiceStatus, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
-import { ConfirmDialog } from "./dialogs";
+import { ConfirmDialog, ListenSettings } from "./dialogs";
 import { LANGUAGES, type Language } from "./i18n";
 import { ModelParamsPane } from "./params";
-import { ProvidersPane } from "./providers";
+import { IntegrationsPane } from "./providers";
 import { ToolsPane } from "./tools";
 import { MemoryPane } from "./memory";
-import { Button, Field, gigabytes, IconButton, MemoryBar, ModelLogo, Switch, TextSetting, thinkingFixed, thinkingName, Toggle, useOutsideClose } from "./ui";
-
-export type ThemeChoice = "system" | "light" | "dark";
+import { Button, Decor, Field, gigabytes, IconButton, MemoryBar, ModelLogo, Switch, TextSetting, thinkingFixed, thinkingName, Toggle, useOutsideClose } from "./ui";
+import { THEMES, type ThemeId } from "./themes";
 type SectionId = "look" | "model" | "tools" | "memory" | "voice" | "images" | "code" | "integrations" | "data";
 const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
-  { id: "look", title: "Оформление", icon: "sun" },
+  { id: "look", title: "Оформление", icon: "palette" },
   { id: "model", title: "Модель", icon: "box" },
   { id: "tools", title: "Инструменты и навыки", icon: "code" },
   { id: "memory", title: "Память", icon: "chat" },
@@ -25,15 +24,11 @@ const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
 
 let lastSection: SectionId = "look";  // reopening settings (after a hub dialog) returns to the same section
 
-export type FontChoice = "mono" | "sans" | "huninn" | "martian" | "playfair" | "roboto";
-export const FONT_CHOICES: readonly (readonly [FontChoice, string, string])[] = [
-  ["mono", "IBM Plex Mono", "var(--mono)"], ["sans", "LINE Seed JP", "\"LINE Seed JP\", sans-serif"],
-  ["huninn", "Huninn", "Huninn, sans-serif"], ["martian", "Martian Mono", "\"Martian Mono\", monospace"],
-  ["playfair", "Playfair Display", "\"Playfair Display\", serif"], ["roboto", "Roboto Condensed", "\"Roboto Condensed\", sans-serif"],
-];
+export type FontChoice = "lack";
+export const FONT_CHOICES: readonly (readonly [FontChoice, string, string])[] = [["lack", "Lack", "Lack, sans-serif"]];
 
 export function SettingsDialog({ state, api, theme, setTheme, language, setLanguage, fontChoice, setFontChoice, onClose, onOpenHub, onOpenVoiceHub, onOpenTwitch }:
-  { state: EngineState; api: WebApi; theme: ThemeChoice; setTheme: (value: ThemeChoice) => void; language: Language; setLanguage: (value: Language) => void;
+  { state: EngineState; api: WebApi; theme: ThemeId; setTheme: (value: ThemeId) => void; language: Language; setLanguage: (value: Language) => void;
     fontChoice: FontChoice; setFontChoice: (value: FontChoice) => void;
     onClose: () => void; onOpenHub: () => void; onOpenVoiceHub: (kind: VoiceKind) => void; onOpenTwitch: () => void }) {
   const ref = useOutsideClose(true, onClose);
@@ -72,7 +67,6 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
 
   const d = details;
   const promptDirty = d !== null && prompt.trim() !== d.systemPrompt.trim();
-  const current = SECTIONS.find((item) => item.id === section)!;
   return (
     <div className="modal-backdrop">
       <div className="modal settings" role="dialog" aria-modal="true" aria-label="Настройки" ref={ref}>
@@ -83,31 +77,34 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
               <Icon name={item.icon} size={17} />{item.title}
             </button>
           ))}
-          <span className="settings-nav-spacer" />
+          <Decor corner="bl" className="settings-decor" />
           <span className={`saved-note ${showSaved ? "visible" : ""}`}><Icon name="check" size={14} /> Сохранено</span>
         </nav>
         <div className="settings-pane">
-          <header className="settings-pane-head"><h4>{current.title}</h4><IconButton icon="close" label="Закрыть (Esc)" onClick={onClose} /></header>
+          <IconButton icon="close" label="Закрыть (Esc)" className="settings-close" onClick={onClose} />
           {!d ? <p className="pane-note">Загрузка…</p> : <div className="settings-fields">
             {section === "look" && <>
-              <Field label="Язык / Language" hint="Язык интерфейса. Модель тоже будет отвечать на нём.">
+              <Field label="Язык / Language" hint="Модель тоже будет отвечать на нём.">
                 <div className="segmented wrap">
                   {LANGUAGES.map(([value, label]) => (
                     <button key={value} type="button" className={language === value ? "on" : ""} onClick={() => setLanguage(value)} data-i18n-skip>{label}</button>
                   ))}
                 </div>
               </Field>
-              <Field label="Шрифт" hint="Код, названия моделей и цифры всегда остаются моноширинными.">
+              {FONT_CHOICES.length > 1 && <Field label="Шрифт">
                 <div className="segmented wrap">
                   {FONT_CHOICES.map(([value, label, family]) => (
                     <button key={value} type="button" className={fontChoice === value ? "on" : ""} style={{ fontFamily: family }} onClick={() => setFontChoice(value)}>{label}</button>
                   ))}
                 </div>
-              </Field>
-              <Field label="Тема" hint="Только для этого окна, обычное окно Компаньона не меняется.">
-                <div className="segmented">
-                  {([["system", "Как в Windows", "monitor"], ["light", "Светлая", "sun"], ["dark", "Тёмная", "moon"]] as const).map(([value, label, icon]) => (
-                    <button key={value} type="button" className={theme === value ? "on" : ""} onClick={() => setTheme(value)}><Icon name={icon} size={15} />{label}</button>
+              </Field>}
+              <Field label="Тема">
+                <div className="theme-grid">
+                  {THEMES.map(([value, label, , swatches]) => (
+                    <button key={value} type="button" className={theme === value ? "on" : ""} onClick={() => setTheme(value)}>
+                      <span className="theme-swatches" style={{ background: swatches[0] }}>{swatches.slice(1).map((color) => <i key={color} style={{ background: color }} />)}</span>
+                      <span>{label}</span>
+                    </button>
                   ))}
                 </div>
               </Field>
@@ -124,15 +121,9 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
             </>}
             {section === "memory" && <MemoryPane api={api} />}
             {section === "model" && <>
-              <Field label="Модель" hint={state.status || "GGUF-файлы из папки моделей."}>
-                <div className="row">
-                  <ModelLogo api={api} name={model} size={28} />
-                  <select className="select" value={model} disabled={!state.models.length}
-                    onChange={(event) => { void api.set_model(event.target.value).then(() => setSavedAt(Date.now())); }}>
-                    {state.models.map((name) => <option key={name} value={name}>{name}</option>)}
-                  </select>
-                  <Button icon="download" onClick={onOpenHub}>Скачать с Hugging Face…</Button>
-                </div>
+              <Field label="Модель" hint={state.status}>
+                <ModelList api={api} models={state.models} current={model} onOpenHub={onOpenHub}
+                  onPick={(name) => { void api.set_model(name).then(() => setSavedAt(Date.now())); }} />
                 {modelEstimate && memory && <MemoryBar gpu={memory.gpu} speed={modelEstimate} label={`При запуске (контекст ${Math.round(memory.context / 1024)}K)`}
                   parts={[{ label: "Веса", bytes: modelEstimate.weights }, { label: "Контекст", bytes: modelEstimate.kv }, { label: "Прочее", bytes: modelEstimate.other }, { label: "Голос", bytes: memory.voiceReserved ?? 0 }].filter((part) => part.bytes > 0)} />}
               </Field>
@@ -143,7 +134,6 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
                   ))}
                 </div>
               </Field>
-              <LocalModels api={api} current={model} count={state.models.length} />
               <Field label="Размышление" hint={thinking?.error ? `Не удалось узнать у модели: ${thinking.error}` : thinking && !thinking.values.length ? thinkingFixed(thinking) : `По умолчанию у модели: ${thinkingName(thinking?.default ?? null) || "не указано"}.`}>
                 {thinking && thinking.values.length > 0 && (
                   <div className="segmented wrap">
@@ -172,6 +162,9 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
             </>}
 
             {section === "voice" && <>
+              <Field label="Во время звонка" hint="Что компаньон слышит и видит, когда ты нажимаешь кнопку звонка у поля ввода.">
+                <ListenSettings state={state} />
+              </Field>
               <VoiceModels api={api} onOpenHub={onOpenVoiceHub} chatModel={model} chatMemory={modelEstimate?.total ?? 0} onChanged={() => { setSavedAt(Date.now()); void reload(); }} />
               <Field label="Озвучивать ответы" hint="Компаньон читает ответ вслух по предложениям, пока модель ещё его пишет.">
                 <Switch label="Озвучивать ответы" checked={d.speechEnabled} onChange={(value) => { void save({ speechEnabled: value }); }} />
@@ -233,22 +226,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
               </Field>
             </>}
 
-            {section === "integrations" && <>
-              {([["ollama", "Модели (llama.cpp и подключённые сервисы)", "Ответы, код и презентации. Если выключить, текущий ответ остановится."],
-                 ["comfyui", "ComfyUI", "Рисование картинок."],
-                 ["twitch", "Twitch", "Отправка сообщений в чат канала."]] as const).map(([key, label, hint]) => (
-                <Field key={key} label={label} hint={hint}>
-                  <Switch label={label} checked={d.integrations[key] !== false} onChange={(value) => { void save({ integrations: { [key]: value } }); }} />
-                </Field>
-              ))}
-              <Field label="Twitch-канал" error={errors.twitchChannel} hint="Без решётки, например twitchdev.">
-                <div className="row grow">
-                  <TextSetting mono value={d.twitchChannel} placeholder="канал" onCommit={(value) => { void save({ twitchChannel: value }); }} />
-                  <Button icon="twitch" onClick={onOpenTwitch}>Написать в чат…</Button>
-                </div>
-              </Field>
-              <ProvidersPane api={api} onChanged={() => setSavedAt(Date.now())} />
-            </>}
+            {section === "integrations" && <IntegrationsPane api={api} d={d} save={save} errors={errors} onOpenTwitch={onOpenTwitch} onChanged={() => setSavedAt(Date.now())} />}
 
             {section === "data" && <>
               <Field label="Сброс настроек" hint="Вернёт рекомендуемые настройки: промпт, голос, микрофон, параметры модели, интеграции, оформление. Чаты, скачанные модели и выбранные модели останутся.">
@@ -290,7 +268,7 @@ function ResetButton({ api, onReset }: { api: WebApi; onReset: () => void }) {
 }
 
 /** A delete button that asks once more before acting. */
-function DeleteButton({ onDelete, disabled = false }: { onDelete: () => Promise<void>; disabled?: boolean }) {
+function DeleteButton({ onDelete, disabled = false, compact = false }: { onDelete: () => Promise<void>; disabled?: boolean; compact?: boolean }) {
   const [armed, setArmed] = useState(false);
   const [working, setWorking] = useState(false);
   useEffect(() => {
@@ -298,6 +276,11 @@ function DeleteButton({ onDelete, disabled = false }: { onDelete: () => Promise<
     const timer = window.setTimeout(() => setArmed(false), 4000);
     return () => window.clearTimeout(timer);
   }, [armed]);
+  const remove = () => { setWorking(true); void onDelete().finally(() => { setWorking(false); setArmed(false); }); };
+  if (compact) {
+    return <IconButton icon="trash" size={15} className={armed ? "delete-armed" : ""} disabled={disabled || working}
+      label={armed ? "Нажми ещё раз, чтобы удалить" : "Удалить с диска"} onClick={() => { if (armed) remove(); else setArmed(true); }} />;
+  }
   return armed
     ? <Button kind="danger" icon="trash" disabled={working} onClick={() => { setWorking(true); void onDelete().finally(() => { setWorking(false); setArmed(false); }); }}>Точно удалить?</Button>
     : <Button kind="ghost" icon="trash" disabled={disabled} title="Удалить с диска" onClick={() => setArmed(true)}>Удалить</Button>;
@@ -314,26 +297,42 @@ function useDiskUsage(api: WebApi, revision: unknown) {
 }
 
 /** Chat models on disk, each with its size and a delete button. */
-function LocalModels({ api, current, count }: { api: WebApi; current: string; count: number }) {
+/** The model picker: a drop-down with every model; models on disk show their size and a delete button, the download sits at the end. */
+function ModelList({ api, models, current, onPick, onOpenHub }: { api: WebApi; models: string[]; current: string; onPick: (name: string) => void; onOpenHub: () => void }) {
+  const [open, setOpen] = useState(false);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
-  const usage = useDiskUsage(api, `${revision}-${count}`);
-  if (!usage || !usage.models.length) return null;
-  const total = usage.models.reduce((sum, item) => sum + item.bytes, 0);
+  const ref = useOutsideClose(open, () => setOpen(false));
+  const usage = useDiskUsage(api, `${revision}-${models.length}`);
+  const sizes = new Map((usage?.models ?? []).map((item) => [item.name, item.bytes]));
   return (
-    <Field label="Модели на диске" hint={`Всего ${gigabytes(total)}. Удалённую модель можно скачать снова.`}>
-      <div className="disk-list">
-        {usage.models.map((item) => (
-          <div key={item.name} className="disk-row">
-            <ModelLogo api={api} name={item.name} size={20} />
-            <span className="disk-name">{item.name}{item.name === current && <small className="hub-tag">выбрана</small>}</span>
-            <span className="disk-size">{gigabytes(item.bytes)}</span>
-            <DeleteButton onDelete={() => api.delete_model(item.name).then((reply) => { setError(reply.ok ? "" : reply.error ?? "Не удалось удалить."); setRevision((value) => value + 1); })} />
+    <div className="menu-anchor model-picker" ref={ref}>
+      <button type="button" className="model-picker-btn" onClick={() => setOpen((value) => !value)}>
+        <ModelLogo api={api} name={current} size={20} />
+        <span className="disk-name">{current || "Модель не выбрана"}</span>
+        {sizes.has(current) && <small className="model-size">{gigabytes(sizes.get(current)!)}</small>}
+        <Icon name="chevronDown" size={14} />
+      </button>
+      {open && (
+        <div className="menu menu-left model-picker-menu">
+          <div className="menu-list">
+            {models.map((name) => (
+              <div key={name} className={`model-option ${name === current ? "on" : ""}`}>
+                <button type="button" className="model-pick" title={name} onClick={() => { onPick(name); setOpen(false); }}>
+                  <ModelLogo api={api} name={name} size={18} />
+                  <span className="disk-name">{name}</span>
+                  {sizes.has(name) && <small className="model-size">{gigabytes(sizes.get(name)!)}</small>}
+                </button>
+                {sizes.has(name) && <DeleteButton compact onDelete={() => api.delete_model(name).then((reply) => { setError(reply.ok ? "" : reply.error ?? "Не удалось удалить."); setRevision((value) => value + 1); })} />}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+          <div className="menu-divider" />
+          <button type="button" onClick={() => { setOpen(false); onOpenHub(); }}><Icon name="download" size={16} /><span>Скачать с Hugging Face…</span></button>
+        </div>
+      )}
       {error && <p className="pane-note">{error}</p>}
-    </Field>
+    </div>
   );
 }
 

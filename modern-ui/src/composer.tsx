@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
-import type { EngineState, ModelMemory, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
+import type { EngineState, ModelFeatures, ModelMemory, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
 import { useImage } from "./cards";
 import { CallControl } from "./dialogs";
 import { Icon } from "./icons";
@@ -22,6 +22,18 @@ function AttachmentChip({ api, path, onRemove }: { api: WebApi; path: string; on
   );
 }
 
+/** What a model can do, as small marks in the model menu: sees pictures, thinks, its context size. */
+function ModelMarks({ features }: { features?: ModelFeatures }) {
+  if (!features) return null;
+  return (
+    <span className="model-marks">
+      {features.vision && <span title="Видит картинки и экран"><Icon name="image" size={13} /></span>}
+      {features.thinking && <span title="Умеет размышлять"><Icon name="spark" size={13} /></span>}
+      <span className="model-context" title="Контекст: сколько текста модель помнит за раз">{Math.round(features.context / 1024)}K</span>
+    </span>
+  );
+}
+
 function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: EngineState; api: WebApi; onDone: (error?: string) => void; onOpenHub: () => void; onOpenVoiceHub: () => void }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -33,9 +45,10 @@ function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: E
   const models = state.models.filter((name) => name.toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <div className="menu-anchor" ref={ref}>
-      <button type="button" className="chip-btn" disabled={state.busy} onClick={() => setOpen((value) => !value)} title="Модель">
+      <button type="button" className="chip-btn" disabled={state.busy} onClick={() => setOpen((value) => !value)} title={model || "Модель"}>
         {model && state.models.includes(model) ? <ModelLogo api={api} name={model} size={16} /> : <span className={`status-dot ${state.models.length ? "ok" : "warn"}`} />}
-        <span className="chip-text">{model || (state.modelsError ? "Нет моделей" : "Выбрать модель")}</span>
+        {/* only the start of the file name; the whole name is in the tooltip and the menu */}
+        <span className="chip-text">{model ? (model.length > 10 ? `${model.slice(0, 10)}…` : model) : (state.modelsError ? "Нет моделей" : "Выбрать модель")}</span>
         <Icon name="chevronDown" size={14} />
       </button>
       {open && (
@@ -45,7 +58,8 @@ function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: E
             {models.map((name) => (
               <button key={name} type="button" className={name === model ? "selected" : ""}
                 onClick={() => { close(); if (name !== model) void api.set_model(name).then((result) => onDone(result.ok ? undefined : result.error)); }}>
-                <ModelLogo api={api} name={name} size={18} /><span className="mono-ish grow">{name}</span><MemoryBadge estimate={memory?.models[name]} gpu={Math.max(0, (memory?.gpu ?? 0) - (memory?.voiceReserved ?? 0))} context={memory?.context} />{name === model && <Icon name="check" size={15} />}
+                <ModelLogo api={api} name={name} size={18} /><span className="mono-ish grow">{name}</span>
+                <ModelMarks features={memory?.features?.[name]} /><MemoryBadge estimate={memory?.models[name]} gpu={Math.max(0, (memory?.gpu ?? 0) - (memory?.voiceReserved ?? 0))} context={memory?.context} />{name === model && <Icon name="check" size={15} />}
               </button>
             ))}
             {!models.length && <div className="menu-empty">{state.models.length ? "Ничего не найдено" : state.modelsError || "Нет моделей"}</div>}
@@ -188,7 +202,7 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
         </div>
       )}
       <textarea ref={inputRef} rows={1} aria-label="Сообщение" value={draft} spellCheck
-        placeholder={state.busy ? "Можно писать дальше: сообщение отправится после текущего ответа" : "Напиши сообщение, попроси нарисовать картинку или сделать презентацию"}
+        placeholder={state.busy ? "Отправится после текущего ответа" : "Сообщение"}
         onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
       <div className="composer-bar">
         <IconButton icon="paperclip" label="Прикрепить картинку (можно вставить Ctrl+V или перетащить)"

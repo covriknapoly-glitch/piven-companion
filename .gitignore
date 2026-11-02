@@ -16,6 +16,7 @@
 /assets/piven_logo.png
 /assets/piven_logo_2026.png
 !/skills/
+!/tests/
 
 !/modern-ui/
 /modern-ui/node_modules/

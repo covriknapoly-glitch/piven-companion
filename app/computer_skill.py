@@ -118,7 +118,10 @@ def _safe_path(raw: str) -> Path:
     return path.resolve()
 
 
-def _file_action(name: str, action: dict) -> str:
+def _file_action(name: str, action: dict, created=None) -> str:
+    """One file command. `created` (a list, when given) collects the files and folders this request made; only
+    those may be rewritten by write_file."""
+    created = created if created is not None else []
     if name == "open_path":
         path = _safe_path(str(action.get("path", "")))
         if not path.exists():
@@ -186,10 +189,26 @@ def _file_action(name: str, action: dict) -> str:
             raise ValueError("Папка для нового файла не найдена.")
         with path.open("x", encoding="utf-8", newline="") as file:
             file.write(content)
+        created.append(str(path))
         return f"Файл «{path.name}» создан."
+    if name == "write_file":
+        path = _safe_path(str(action.get("path", "")))
+        content = str(action.get("content", ""))
+        if len(content.encode("utf-8")) > 100_000:
+            raise ValueError("Файл ограничен размером 100 КБ: раздели код на несколько файлов.")
+        if not path.parent.is_dir():
+            raise ValueError("Папка для файла не найдена.")
+        if path.exists() and str(path) not in created:
+            raise ValueError("Этот файл создан не в этой просьбе, его нельзя перезаписать: выбери новое имя.")
+        new = not path.exists()
+        path.write_text(content, encoding="utf-8", newline="")
+        if new:
+            created.append(str(path))
+        return f"Файл «{path.name}» {'создан' if new else 'перезаписан'} ({len(content)} символов)."
     if name == "create_folder":
         path = _safe_path(str(action.get("path", "")))
         path.mkdir(parents=False, exist_ok=False)
+        created.append(str(path))
         return f"Папка «{path.name}» создана."
     if name in ("rename_file", "move_file"):
         source = _safe_path(str(action.get("source", "")))
@@ -404,16 +423,28 @@ def execute_project_action(project_root: str | os.PathLike, action: dict) -> str
     raise ValueError("Неизвестное действие проекта.")
 
 
-def execute_computer_action(action: dict, screenshot_size=None, display_size=None) -> str:
+COMPUTER_ACTIONS = ("list_files", "read_file", "create_file", "write_file", "create_folder", "rename_file", "move_file", "copy_file",
+                    "open_path", "search_files", "download_file", "web_search", "open_url", "open_app", "activate_window",
+                    "get_active_window", "minimize_window", "maximize_window", "restore_window", "wait", "click",
+                    "type_text", "press_key", "scroll")
+# Names models tend to invent for the commands above.
+_ACTION_ALIASES = {"save_file": "write_file", "update_file": "write_file", "make_file": "create_file",
+                   "create_text_file": "create_file", "new_file": "create_file", "mkdir": "create_folder",
+                   "make_folder": "create_folder", "create_directory": "create_folder", "open_file": "open_path",
+                   "open_folder": "open_path", "list_folder": "list_files", "list_directory": "list_files"}
+
+
+def execute_computer_action(action: dict, screenshot_size=None, display_size=None, created=None) -> str:
     """Execute one explicitly requested action; never runs a shell command from model text."""
     if _user32 is None:
         raise RuntimeError("Управление компьютером доступно только в Windows.")
     if not isinstance(action, dict):
         raise ValueError("Команда компьютера должна быть объектом.")
     name = str(action.get("computer_action", "")).strip().lower()
-    if name in ("list_files", "read_file", "create_file", "create_folder", "rename_file", "move_file",
+    name = _ACTION_ALIASES.get(name, name)
+    if name in ("list_files", "read_file", "create_file", "write_file", "create_folder", "rename_file", "move_file",
                 "copy_file", "open_path", "search_files"):
-        return _file_action(name, action)
+        return _file_action(name, action, created)
     if name == "download_file":
         if action.get("approved") is not True:
             raise PermissionError("Загрузка не началась: требуется отдельное подтверждение пользователя.")
@@ -422,9 +453,9 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         query = " ".join(str(action.get("query", "")).split())
         if not query or len(query) > 300:
             raise ValueError("Поисковый запрос должен содержать от 1 до 300 символов.")
-        url = "https://www.google.com/search?" + urllib.parse.urlencode({"q": query})
+        url = "https://search.brave.com/search?" + urllib.parse.urlencode({"q": query})
         webbrowser.open(url)
-        return f"Открыты результаты Google по запросу «{query}»."
+        return f"Открыты результаты Brave Search по запросу «{query}»."
     if name == "open_url":
         url = str(action.get("url", "")).strip()
         if "://" not in url:
@@ -518,4 +549,4 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         amount = max(-1200, min(1200, int(action.get("amount", -480))))
         _user32.mouse_event(_MOUSEEVENTF_WHEEL, 0, 0, ctypes.c_ulong(amount).value, 0)
         return "Страница прокручена."
-    raise ValueError("Эта команда компьютера не поддерживается.")
+    raise ValueError(f"Команды «{name}» нет. Доступны: " + ", ".join(COMPUTER_ACTIONS) + ".")

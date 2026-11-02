@@ -1,79 +1,197 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+  <img src="docs/images/logo-light.svg" alt="PIVEN logo" width="120">
+</picture>
+
 # PIVEN Companion
 
-Локальный компаньон для Windows: разговаривает с локальными моделями через llama.cpp, рисует через ComfyUI, собирает презентации, работает с кодом в выбранной папке, слушает микрофон и озвучивает ответы. Всё работает на этом компьютере.
+**A personal AI companion that runs on your own computer.**<br>
+Chat, talk, draw, search the web and get things done — with local models, no subscription and no data leaving your PC.
 
-Два интерфейса над одним движком:
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
+![llama.cpp](https://img.shields.io/badge/runs%20on-llama.cpp-8A2BE2)
+![Free forever](https://img.shields.io/badge/price-free%20forever-2ea44f)
 
-- **Веб-интерфейс** — React-страница `modern-ui/dist` в окне pywebview (`app/web_companion.pyw`).
-- **Обычное окно** на PySide6 (`app/desktop_companion.pyw`).
+[Features](#-features) · [Install](#-install) · [First steps](#-first-steps) · [Privacy](#-privacy) · [For developers](#-for-developers)
 
-Одновременно открывается только одно окно, чтобы они не перезаписали чаты друг друга.
+<img src="docs/images/main-window.svg" alt="PIVEN Companion main window" width="900">
 
-## Структура
+</div>
 
-```
-Запустить веб-интерфейс.cmd   запуск веб-интерфейса
-Запустить компаньон.cmd       запуск обычного окна
-requirements.txt              библиотеки Python
-app/                          код программы
-  companion_core.py           движок без интерфейса: настройки, чаты, модели, голос, навыки
-  web_companion.pyw           веб-интерфейс (pywebview)
-  desktop_companion.pyw       обычное окно (PySide6)
-  llama_backend.py            запуск llama-server и разговор с моделью
-  hf_models.py                поиск и скачивание моделей с Hugging Face
-  voice_install.py            голосовые модели: поиск, скачивание, удаление
-  voice_engines.py            установка голосовых движков
-  audiocpp_catalog.py         каталог моделей audio.cpp
-  memory_estimate.py          оценка видеопамяти
-  computer_skill.py           управление компьютером
-  presentation_skill.py       презентации PowerPoint
-  twitch_chat.py, twitch_core.py   Twitch
-  native_browser.py, model_logos.py, process_job.py   вспомогательное
-modern-ui/                    веб-интерфейс: исходники (src/) и готовая сборка (dist/)
-voice-servers/                голосовые серверы (hf_voice_server.py, server.py)
-voice/                        скрипты распознавания речи; здесь же ставятся движки и модели
-skills/computer-control/      инструкция для модели и справка по устройству программы
-assets/                       иконки и шрифты
-docs/                         подробное описание и список вложенных зависимостей
-```
+---
 
-Нейросети в репозиторий не входят: модели, голосовые движки и их окружения, llama.cpp, ComfyUI. Не входят и вложенный Python с библиотеками — их ставит инструкция ниже.
+## ✨ Features
 
-## Установка
+<table>
+<tr>
+<td width="50%" valign="top">
 
-1. **Python 3.11 x64** в `runtime\Python311` (его возьмут ярлыки) или установленный.
-2. **Библиотеки** рядом с программой:
+### 🧠 Local models, made easy
+Search Hugging Face right inside the app and download any GGUF model in one click. Before downloading you see **how much video memory and RAM it needs and how fast it will run** on your hardware. Models run through llama.cpp on your GPU, with automatic speed-ups where the model supports them.
+
+</td>
+<td width="50%" valign="top">
+
+### 🎙️ Voice and calls
+Talk to the companion out loud and hear it answer. Start a **call** for a hands-free conversation, sentence by sentence. 14 voice engines to choose from — Qwen3-TTS, Whisper, Kokoro, Chatterbox, XTTS, Piper and more — installed from the settings with one button.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🛠️ It can actually do things
+The model uses tools on its own: searches and reads web pages in the built-in browser, runs Python / PowerShell / JavaScript to check its answers, works with files in your project folder, makes **PowerPoint presentations** with a matching design, and opens apps, folders and sites on your PC.
+
+</td>
+<td valign="top">
+
+### 🎨 Pictures and video
+Ask for a picture or a short video and it is drawn through **ComfyUI** with the workflow you choose. Attach an image to turn it into a video.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 💾 Long-term memory
+The companion remembers important facts and finds earlier conversations when they matter. An optional small embedding model lets it search **by meaning**, not just by words. You can see, add and delete everything it remembers.
+
+</td>
+<td valign="top">
+
+### 🔌 Plug in anything
+Use models from **Ollama, LM Studio, OpenAI, Gemini, OpenRouter, Anthropic** or any OpenAI-compatible server next to your local ones. Connect **MCP servers** and write your own **skills**. Stream on Twitch? The companion can read the chat and run viewer polls.
+
+</td>
+</tr>
+</table>
+
+**And also:** several chats working at the same time, each with its own model · real thinking modes for models that support them · images in chat for vision models · notifications from the system tray · light and dark themes · interface in English, Русский, 中文 and Español.
+
+## 📸 Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/models.svg" alt="Downloading a model with memory and speed estimate"><br><sub><b>Pick a model</b> — with a memory and speed estimate for your PC</sub></td>
+<td width="50%"><img src="docs/images/tools.svg" alt="The model searching the web and using tools"><br><sub><b>Tools</b> — the model searches, reads and runs code by itself</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/voice.svg" alt="Voice engines and call mode"><br><sub><b>Voice</b> — speech recognition and text-to-speech</sub></td>
+<td><img src="docs/images/settings.svg" alt="Settings"><br><sub><b>Settings</b> — context size, thinking modes and more</sub></td>
+</tr>
+</table>
+
+## 📦 Install
+
+### The easy way — installer
+
+1. Download **`PIVEN-Companion-<version>-Setup.exe`** from the [Releases](https://github.com/covriknapoly-glitch/piven-companion/releases) page.
+2. Run it. No administrator rights needed — it installs for your user only.
+3. Open **PIVEN Companion** from the Start menu.
+
+The installer already contains everything the program needs (Python, llama.cpp and libraries). Models are **not** included — you choose and download them inside the app.
+
+### What you need
+
+| | |
+|---|---|
+| **System** | Windows 10 or 11, 64-bit |
+| **Graphics card** | NVIDIA with a recent driver recommended. Without one, models run on the processor — slower, but they work. |
+| **Memory** | Depends on the model. The app shows what each model needs before you download it, and recommends one that fits. |
+| **Disk** | About 1.2 GB for the program, plus your models (usually 2–20 GB each). |
+| **WebView2** | Built into Windows 11. On Windows 10 the installer offers to get it if it is missing. |
+
+## 🚀 First steps
+
+1. **Get a model.** On first launch the app recommends a model that fits your graphics card. Click download, or search Hugging Face for any other.
+2. **Say hello.** Type in the chat box, or press the microphone button and speak.
+3. **Turn on what you like** in **Settings**:
+   - **Voice and microphone** — install a voice and a speech recognizer.
+   - **Pictures and video** — point the app at ComfyUI and your workflows.
+   - **Memory** — let the companion remember things between chats.
+   - **Integrations** — add cloud models, Ollama or LM Studio, and Twitch.
+   - **Tools and skills** — choose a project folder, connect MCP servers, add skills.
+
+## 🔒 Privacy
+
+- **Everything runs on your computer.** Chats, settings and memory are stored in `%LOCALAPPDATA%\OllamaCompanion` and never leave it.
+- **Nothing is downloaded without asking.** Every model shows its size and license before you click download.
+- **Cloud is opt-in.** Messages go to OpenAI, Gemini or another service only if you add that provider yourself. API keys are encrypted with Windows (DPAPI).
+- **You stay in control.** Downloading files and sending messages to Twitch always wait for your confirmation.
+
+## 👩‍💻 For developers
+
+<details>
+<summary><b>Run from source</b></summary>
+
+1. Put **Python 3.11 x64** in `runtime\Python311` (the launch scripts use it), or use an installed one.
+2. Install the libraries next to the program:
    ```
    runtime\Python311\python.exe -m pip install --target .packages -r requirements.txt
    ```
-   Программа читает пакеты из `.packages` и `.qt_runtime` и не смотрит в пользовательские site-packages.
-3. **llama.cpp**: `llama.cpp\bin\llama-server.exe`. Модели GGUF скачиваются в программе («Скачать модель с Hugging Face»).
-4. **Голос (по желанию)**: движки и модели озвучки и распознавания ставятся в настройках программы.
-5. **ComfyUI** (по желанию) — для картинок. Адрес и workflow указываются в настройках.
+   The app reads packages from `.packages` and `.qt_runtime` and ignores the user's site-packages.
+3. Put **llama.cpp** in `llama.cpp\bin` (the app starts `llama-server.exe` from there).
+4. Start `Запустить веб-интерфейс.cmd` (web interface) or `Запустить компаньон.cmd` (classic PySide6 window).
 
-## Запуск
+</details>
 
-- `Запустить веб-интерфейс.cmd` — веб-интерфейс.
-- `Запустить компаньон.cmd` — обычное окно.
+<details>
+<summary><b>Build the interface</b></summary>
 
-Настройки, чаты, журналы и картинки хранятся в `%LOCALAPPDATA%\OllamaCompanion`, а не в папке программы.
+After editing `modern-ui/src`, rebuild `modern-ui/dist`:
 
-## Сборка веб-интерфейса
+```
+modern-ui\scripts\build.cmd
+```
 
-После правок в `modern-ui/src` пересобери `dist`: `modern-ui\scripts\build.cmd`. Скрипт берёт `esbuild` из `modern-ui/node_modules` (в git не входит; `npm install` в папке `modern-ui`). Если есть портативный Node.js в `runtime\node`, перед сборкой идёт проверка типов TypeScript.
+The script uses `esbuild` from `modern-ui/node_modules` (run `npm install` in `modern-ui` first). With a portable Node.js in `runtime\node` it also type-checks the TypeScript.
 
-## Установщик
+</details>
 
-`installer/piven.iss` собирает `PIVEN-Companion-<версия>-Setup.exe` (Inno Setup 6.3+):
+<details>
+<summary><b>Build the installer</b></summary>
+
+With [Inno Setup](https://jrsoftware.org/isinfo.php) 6.3 or newer:
 
 ```
 "%LOCALAPPDATA%\Programs\Inno Setup 7\ISCC.exe" installer\piven.iss
 ```
 
-В установщик входят программа, вложенный Python с библиотеками, Qt и llama.cpp из этой папки; модели и голосовые движки — нет. Программа ставится для текущего пользователя в `%LOCALAPPDATA%\Programs\PIVEN Companion`, потому что пишет голосовые движки рядом с собой. Готовый файл появляется в `installer/Output` (в git не входит).
+The result is `installer\Output\PIVEN-Companion-<version>-Setup.exe`. It packs the program, the bundled Python with its libraries, Qt and llama.cpp from this folder — never models or voice engines.
 
-## Лицензия
+</details>
 
-PIVEN Companion — свободная программа под [GNU GPL версии 3](LICENSE) или более поздней. Её можно бесплатно использовать, изменять и распространять, но любая изменённая версия тоже должна выходить под GPL с открытым исходным кодом. Сторонние компоненты и их лицензии — в [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
+<details>
+<summary><b>Project layout</b></summary>
 
-Подробнее о возможностях — в [docs/README_Компаньон.md](docs/README_Компаньон.md).
+```
+app/                     the program's code
+  companion_core.py      the engine: settings, chats, models, voice, skills
+  web_companion.pyw      the web interface window (pywebview)
+  desktop_companion.pyw  the classic window (PySide6)
+  llama_backend.py       runs llama-server and talks to the model
+  providers.py           Ollama, LM Studio and cloud providers
+  tools.py, mcp_client.py   tools, skills and MCP servers
+  memory.py              long-term memory
+  hf_models.py           Hugging Face search and downloads
+  voice_install.py, voice_engines.py   voice models and engines
+modern-ui/               the web interface: sources (src/) and build (dist/)
+voice/, voice-servers/   speech recognition and text-to-speech servers
+skills/                  instructions for the model
+installer/               the Inno Setup script
+assets/, docs/           icons, fonts, licenses
+```
+
+Models, voice engines and the bundled runtimes are not in the repository.
+
+</details>
+
+## 📄 License
+
+PIVEN Companion is **free software** under the [GNU GPL v3](LICENSE) or later.
+You can use, change and share it for free — and any changed version must stay free and open source too.
+Third-party components and their licenses are listed in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).

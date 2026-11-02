@@ -3,12 +3,13 @@
  * `window.pywebview.api` (web_companion.pyw → WebApi), which works on the same
  * chats and settings as the Qt window through companion_core.
  */
-export type ChatRole = "user" | "assistant" | "system" | "computer" | "poll";
+export type ChatRole = "user" | "assistant" | "system" | "computer" | "poll" | "error";
 
 export interface DialogueItem {
   role: ChatRole;
   text: string;
   images: string[];
+  undo?: number;   // files and folders the request behind this answer made, which its undo button deletes
 }
 
 export interface ChatSummary {
@@ -20,6 +21,7 @@ export interface ChatSummary {
   busy?: boolean;      // an answer is being written in this chat (it may be in the background)
   unread?: boolean;    // an answer arrived while another chat was open
   model?: string;
+  updated?: number;    // last change, seconds since the epoch; 0 for chats saved before it was tracked
 }
 
 export interface EngineSettings {
@@ -129,7 +131,13 @@ export interface VoiceModel { id: string; title: string; note: string; license: 
 export interface VoiceSearchHit { id: string; title?: string; note?: string; downloads: number; gated: boolean; engine: string; engineLabel: string; reason: string; license?: string; nonCommercial?: boolean }
 export interface VoiceDetails { ok: boolean; error?: string; supported?: boolean; reason?: string; engine?: string; mode?: "custom" | "design"; voices?: string[]; files?: (HfFile & { label?: string })[]; bytes?: number; note?: string; license?: string }
 export interface MemoryEstimate { total: number; weights: number; kv: number; other: number; speed?: number; measured?: boolean }
-export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number }
+export interface ModelFeatures { vision: boolean; thinking: boolean; context: number }
+export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number; features?: Record<string, ModelFeatures> }
+export interface ContextUsage {
+  ok: boolean; error?: string; model: string; cloud: boolean; used: number; limit: number; turns: number; images: number; toolCount: number; serversWaiting: string[];
+  parts: { system: number; summary: number; skills: number; tools: number; history: number; images: number };
+  historyShare: number; compress: boolean;   // the part of the window the conversation may take, and whether older turns are summarised
+}
 export interface VoiceStatus {
   asr: { models: VoiceModel[]; engine: boolean; engineNote: string; selected: string };
   tts: { models: VoiceModel[]; engine: boolean; engineNote: string; selected: string };
@@ -152,6 +160,8 @@ interface WebApi {
   export_chat(chatId: string, markdown: boolean): Promise<CommandResult>;
   search_messages(query: string): Promise<SearchHit[]>;
   retry_last(): Promise<CommandResult>;
+  edit_message(index: number, text: string): Promise<CommandResult>;
+  undo_files(index: number): Promise<CommandResult>;
   speak(text: string): Promise<CommandResult>;
   set_model(name: string): Promise<CommandResult>;
   set_speech(enabled: boolean): Promise<CommandResult>;
@@ -223,6 +233,7 @@ interface WebApi {
   model_description(repoId: string, token: string): Promise<{ text: string; source: string }>;
   model_logos(names: string[], authors?: Record<string, string>, archs?: Record<string, string>): Promise<Record<string, string>>;
   model_memory(names?: string[]): Promise<ModelMemory>;
+  context_usage(): Promise<ContextUsage>;
   hf_memory(repoId: string, filePath: string, size: number, token: string): Promise<{ gpu: number; context: number; estimate: MemoryEstimate | null; known: boolean }>;
   voice_cancel(): Promise<CommandResult>;
   voice_delete(kind: VoiceKind, modelId: string): Promise<{ ok: boolean; error?: string; freed?: number }>;

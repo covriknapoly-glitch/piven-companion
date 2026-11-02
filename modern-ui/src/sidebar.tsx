@@ -1,7 +1,7 @@
 import { useMemo, useState, type RefObject } from "react";
 import type { ChatSummary, EngineState, WebApi } from "./bridge";
 import { Icon } from "./icons";
-import { IconButton, Logo, MenuButton } from "./ui";
+import { Decor, IconButton, Logo, MenuButton } from "./ui";
 
 export interface ChatActions {
   select: (chat: ChatSummary) => void;
@@ -48,6 +48,21 @@ function ChatRow({ chat, active, disabled, actions }: { chat: ChatSummary; activ
   );
 }
 
+/** Chats by their last change, newest first: today, yesterday, this week, earlier. */
+function dateGroups(chats: ChatSummary[]): [string, ChatSummary[]][] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const day = 86_400_000;
+  const bounds: [string, number][] = [["Сегодня", today.getTime()], ["Вчера", today.getTime() - day], ["За неделю", today.getTime() - 6 * day], ["Раньше", -Infinity]];
+  const groups = new Map<string, ChatSummary[]>();
+  for (const chat of [...chats].sort((a, b) => (b.updated || 0) - (a.updated || 0))) {
+    const time = (chat.updated || 0) * 1000;
+    const caption = bounds.find(([, from]) => time >= from)![0];
+    groups.set(caption, [...(groups.get(caption) ?? []), chat]);
+  }
+  return bounds.map(([caption]) => [caption, groups.get(caption) ?? []] as [string, ChatSummary[]]).filter(([, list]) => list.length > 0);
+}
+
 export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMessages, onSettings, onHide }:
   { api: WebApi; state: EngineState; actions: ChatActions; searchRef: RefObject<HTMLInputElement | null>; onNewChat: () => void;
     onSearchMessages: () => void; onSettings: () => void; onHide: () => void }) {
@@ -57,17 +72,16 @@ export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMes
     return needle ? state.chats.filter((chat) => chat.title.toLowerCase().includes(needle) || chat.preview.toLowerCase().includes(needle)) : state.chats;
   }, [state.chats, query]);
   const pinned = filtered.filter((chat) => chat.pinned);
-  const recent = filtered.filter((chat) => !chat.pinned);
+  const groups = useMemo(() => dateGroups(filtered.filter((chat) => !chat.pinned)), [filtered]);
   const rows = (chats: ChatSummary[]) => chats.map((chat) => (
     <ChatRow key={`${chat.id}-${chat.title}-${chat.pinned}`} chat={chat} active={chat.id === state.activeChatId}
       disabled={false} actions={actions} />
   ));
-  const connected = state.models.length > 0;
   return (
     <aside className="sidebar" aria-label="Чаты">
       <div className="brand">
-        <Logo size={44} />
-        <div className="brand-copy"><strong>PIVEN</strong><small>Companion</small></div>
+        <Logo size={29} />
+        <div className="brand-copy"><strong>PIVEN</strong></div>
         <IconButton icon="sidebar" label="Скрыть панель (Ctrl+B)" onClick={onHide} />
       </div>
 
@@ -85,8 +99,9 @@ export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMes
 
       <nav className="chat-nav">
         {pinned.length > 0 && <><div className="nav-caption">Закреплённые</div>{rows(pinned)}</>}
-        {recent.length > 0 && <><div className="nav-caption">{pinned.length ? "Остальные" : "Чаты"}</div>{rows(recent)}</>}
+        {groups.map(([caption, chats]) => <div key={caption} className="nav-group"><div className="nav-caption">{caption}</div>{rows(chats)}</div>)}
         {!filtered.length && <div className="nav-empty">Ничего не найдено</div>}
+        <div className="nav-decor"><Decor corner="bl" /></div>
       </nav>
 
       {state.downloads.length > 0 && (
@@ -108,11 +123,6 @@ export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMes
       )}
 
       <div className="side-foot">
-        <div className="conn">
-          <span className={`status-dot ${connected ? "ok" : "warn"}`} />
-          <div className="conn-copy"><strong>{connected ? "llama.cpp готов" : "Нет моделей"}</strong>
-            <small>{state.listening.running ? "Слушает и смотрит" : connected ? `Моделей: ${state.models.length}` : "Скачай модель"}</small></div>
-        </div>
         <IconButton icon="settings" label="Настройки (Ctrl+,)" onClick={onSettings} />
       </div>
     </aside>

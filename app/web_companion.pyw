@@ -70,6 +70,12 @@ def style_title_bar(window, dark=True):
         return False
 
 
+# What the model is asked when a picture is sent without a message (keyed by "more than one picture").
+# The chat itself shows just the pictures, not this text.
+IMAGE_ONLY_PROMPTS = {False: "Посмотри на это изображение и коротко расскажи, что на нём.",
+                      True: "Посмотри на эти изображения и коротко расскажи, что на них."}
+
+
 class WebCompanion(CompanionCore):
     """Plays the role of the Qt window's `_drain_events` for the web interface."""
 
@@ -106,6 +112,15 @@ class WebCompanion(CompanionCore):
     def _changed(self):
         self._version += 1
 
+    def _show_error(self, chat_id, text):
+        """Write a failed answer into its chat as an "error" line, so the chat does not later look unanswered.
+        The model never sees these lines (its history is kept apart). Under the state lock."""
+        if chat_id == self.active_chat_id:
+            self._record("error", str(text))
+        else:
+            self.append_to_chat(chat_id, "error", str(text))
+            self._changed()
+
     def known_files(self):
         with self._state_lock:
             files = {str(path) for chat in self.chats for item in chat.get("items", []) for path in item.get("images") or []}
@@ -122,13 +137,14 @@ class WebCompanion(CompanionCore):
                 "chats": [{"id": chat.get("id"), "title": chat.get("title") or "Новый чат",
                            "pinned": bool(chat.get("pinned")), "count": len(chat.get("items", [])),
                            "busy": chat.get("id") in self._busy_chats, "unread": bool(chat.get("unread")),
-                           "model": chat.get("model", ""),
+                           "model": chat.get("model", ""), "updated": chat.get("updated", 0),
                            "preview": next((" ".join(str(item.get("text", "")).split())[:90]
                                             for item in reversed(chat.get("items", []))
                                             if item.get("role") in ("assistant", "user") and item.get("text")), "")}
                           for chat in chats],
                 "items": [{"role": item.get("role", "system"), "text": str(item.get("text", "")),
-                           "images": [str(path) for path in item.get("images") or []]}
+                           "images": [str(path) for path in item.get("images") or []],
+                           "undo": len(item.get("undo") or [])}
                           for item in self.dialogue_items if isinstance(item, dict)],
                 "chatTitle": active.get("title") or "Новый чат",
                 "busy": bool(self.busy),
@@ -158,6 +174,13 @@ class WebCompanion(CompanionCore):
                 },
             }
 
+    @staticmethod
+    def _attach_undo(items, record):
+        """Give the latest answer of a chat the files and folders its request made (for its undo button)."""
+        answer = next((item for item in reversed(items) if isinstance(item, dict) and item.get("role") == "assistant"), None)
+        if answer is not None:
+            answer["undo"] = record
+
     def _background_event(self, chat_id, kind, value):
         """An event of an answer whose chat is not on screen: its cards go to that chat. Under the state lock."""
         chat = next((item for item in self.chats if item.get("id") == chat_id), None)
@@ -168,7 +191,10 @@ class WebCompanion(CompanionCore):
             if role == "assistant":
                 self._notify(f"Ответ в чате «{title}»", content)
         elif kind == "error":
-            self.append_to_chat(chat_id, "system", value)
+            self._show_error(chat_id, value)
+        elif kind == "undo_ready" and chat:
+            self._attach_undo(chat.get("items", []), value)
+            self._save_conversation()
         elif kind == "generated_image":
             self.append_to_chat(chat_id, "assistant", "Изображение создано через ComfyUI.", [str(value)])
         elif kind == "presentation_created":
@@ -291,8 +317,11 @@ class WebCompanion(CompanionCore):
                     self._activity = "Презентация создана"
                     self._notify("Презентация готова", Path(value).name)
                 elif kind == "error":
-                    self._record("system", value); self._activity = "Ошибка"; self._reasoning = ""
+                    self._show_error(self.active_chat_id, value); self._activity = "Ошибка"; self._reasoning = ""
                     self._notify("Ошибка", str(value))
+                elif kind == "undo_ready":
+                    self._attach_undo(self.dialogue_items, value)
+                    self._save_conversation()
                 elif kind == "chats_changed":
                     self._changed()
                 elif kind == "action_interrupted":
@@ -308,7 +337,7 @@ class WebCompanion(CompanionCore):
                     if self.pending_text_prompts:
                         text, model, images, image_paths = self.pending_text_prompts.pop(0)
                         self.busy = True; self.selected_model = model
-                        self._record("user", text, image_paths)
+                        self._record("user", "" if text in IMAGE_ONLY_PROMPTS.values() else text, image_paths)
                         self._activity = "Думает · отвечает на сообщение из очереди"
                         threading.Thread(target=self.ask_model, args=(text, images or None, self.speech_enabled),
                                          daemon=True).start()
@@ -403,8 +432,8 @@ class WebCompanion(CompanionCore):
         if not model:
             return {"ok": False, "error": "Сначала выбери модель."}
         if not text:
-            text = ("Посмотри на эти изображения и коротко расскажи, что на них." if len(image_paths) > 1
-                    else "Посмотри на это изображение и коротко расскажи, что на нём.")
+            # The model needs something to answer; the chat shows only the picture.
+            text = IMAGE_ONLY_PROMPTS[len(image_paths) > 1]
         try:
             image_data = [encode_chat_image(path) for path in image_paths]
         except Exception as error:
@@ -414,7 +443,7 @@ class WebCompanion(CompanionCore):
                 self.pending_text_prompts.append((text, model, image_data, image_paths))
                 self._activity = "Сообщение добавлено в очередь"; self._changed()
                 return {"ok": True, "queued": True}
-            self._record("user", text, image_paths)
+            self._record("user", "" if text in IMAGE_ONLY_PROMPTS.values() else text, image_paths)
             self.action_cancel.clear()
             self._active_ollama_response = None
             self.busy = True; self.selected_model = model; self._activity = "Думает"
@@ -757,16 +786,18 @@ class WebApi:
         app = self._app
         model = str(model or "")
         cached = app.settings.get("thinking_capabilities", {}).get(model)
-        if cached is None:
+        if cached is None or cached.get("version") != 2:   # version 1 knew only on/off for most models
             try:
                 values, default = model_thinking(model)
             except Exception as error:
                 return {"values": [], "default": None, "current": "__auto__", "error": str(error)}
-            cached = {"values": values, "default": default}
+            cached = {"values": values, "default": default, "version": 2}
             with app._state_lock:
                 app.settings.setdefault("thinking_capabilities", {})[model] = cached
                 app._save_settings()
         current = app.settings.get("thinking_levels", {}).get(model, "__auto__")
+        if current != "__auto__" and current not in cached.get("values", []):
+            current = False if current is False and False in cached.get("values", []) else "__auto__"  # "on" from before levels
         return {"values": cached.get("values", []), "default": cached.get("default"), "current": current, "error": ""}
 
     def set_thinking(self, model, value):
@@ -1197,6 +1228,39 @@ class WebApi:
             app._changed()
         return {"ok": ok, "error": "" if ok else "Нечего повторять или идёт другое действие."}
 
+    def undo_files(self, index):
+        """Delete the files and folders the request behind one answer made (only ones unchanged since)."""
+        app = self._app
+        with app._state_lock:
+            items = app.dialogue_items
+            item = items[int(index)] if 0 <= int(index) < len(items) else None
+            record = (item or {}).get("undo") or []
+            if not record:
+                return {"ok": False, "error": "Здесь нечего отменять."}
+            try:
+                removed, kept = app.undo_files(record)
+            except OSError as error:
+                return {"ok": False, "error": f"Не удалось удалить: {error}"}
+            item.pop("undo", None)
+            note = f"Отменено: удалено файлов и папок — {len(removed)}."
+            if kept:
+                note += f" Оставлено {len(kept)}: они изменены после этого или в папке есть другие файлы."
+            app._record("system", note)
+        return {"ok": True}
+
+    def edit_message(self, index, text):
+        """Replace one of the user's messages: it and everything after it leave the chat, the new text is sent."""
+        app = self._app
+        with app._state_lock:
+            cut = app.cut_history_at(int(index))
+            if cut is None:
+                return {"ok": False, "error": "Это сообщение нельзя изменить: идёт ответ или оно уже в кратком содержании."}
+            _old_text, images = cut
+            images = [path for path in images if Path(path).is_file()]
+            app._allowed_files |= set(images)   # they left the chat's items with the old message; they go with the new one
+            app._changed()
+        return app.send(text, images)
+
     def speak(self, text):
         threading.Thread(target=self._app._speak, args=(str(text or ""),), daemon=True).start()
         return {"ok": True}
@@ -1510,6 +1574,21 @@ class WebApi:
             log(f"disk usage error: {error}")
             return {"ok": False, "error": str(error), "models": [], "voiceModels": 0, "engines": []}
 
+    @staticmethod
+    def _model_features(wanted=None):
+        """{model: {"vision", "thinking", "context"}} of local models for the marks in the model menu."""
+        features = {}
+        for name in llama_backend.model_files():
+            if wanted is not None and name not in wanted:
+                continue
+            try:
+                values, default = llama_backend.thinking_modes(name)
+            except Exception:
+                values, default = [], None
+            features[name] = {"vision": llama_backend.has_vision(name), "thinking": bool(values) or default is True,
+                              "context": llama_backend.context_size(name)}
+        return features
+
     def model_memory(self, names=None):
         """Estimated video memory of local models once loaded, and the GPU's total."""
         try:
@@ -1517,10 +1596,54 @@ class WebApi:
             reserved = self._app.voice_vram()
             llama_backend.reserved_vram[0] = reserved
             return {"gpu": memory_estimate.gpu_memory(), "context": llama_backend.context_size(self._app.settings.get("model", "")),
-                    "models": llama_backend.memory_estimates(wanted), "voiceReserved": reserved}
+                    "models": llama_backend.memory_estimates(wanted), "voiceReserved": reserved,
+                    "features": self._model_features(wanted)}
         except Exception as error:
             log(f"model memory error: {error}")
             return {"gpu": 0, "context": 0, "models": {}}
+
+    def context_usage(self):
+        """How much of the model's context the current chat fills, by the same estimate the app uses to decide
+        what to fold into the summary (about CHARS_PER_TOKEN characters per token, a fixed cost per picture)."""
+        try:
+            app = self._app
+            model = str(app.settings.get("model", ""))
+            with app._state_lock:
+                messages = list(app.messages)
+                summary = str(app._chat_summary() or "")
+            turns = messages[1:]
+            per_token = companion_core.CHARS_PER_TOKEN
+
+            def tokens(characters):
+                return int(round(characters / per_token))
+            images = sum(len(item.get("images") or []) for item in turns)
+            # What an ordinary answer adds: the skill list in the instructions and the tool definitions sent along.
+            skills_chars = tools_chars = 0
+            tools_names, waiting = 0, []
+            if app.settings.get("tools_enabled", True):
+                try:
+                    toolbox = tools.ToolBox(APP_DIR, DATA_DIR, app.tool_browser(),
+                                            memory=app.memory if app.settings.get("memory_enabled", True) else None)
+                    specs = toolbox.specs(start_servers=False)  # servers that are not running are not started just to count
+                    skills_chars = len(toolbox.skills_prompt())
+                    tools_chars = len(json.dumps(specs, ensure_ascii=False))
+                    tools_names, waiting = len(specs), list(toolbox.unstarted)
+                except Exception as error:
+                    log(f"context tools count error: {error}")
+            parts = {"system": tokens(len(str(messages[0].get("content", ""))) if messages else 0),
+                     "summary": tokens(len(summary)),
+                     "skills": tokens(skills_chars),
+                     "tools": tokens(tools_chars),
+                     "history": tokens(sum(len(str(item.get("content", ""))) for item in turns)),
+                     "images": tokens(1500 * images)}
+            cloud = providers.is_provider_model(model)
+            return {"ok": True, "model": model, "cloud": cloud, "parts": parts, "used": sum(parts.values()),
+                    "turns": len(turns), "images": images, "toolCount": tools_names, "serversWaiting": waiting,
+                    "limit": 0 if cloud or not model else llama_backend.context_size(model),
+                    "historyShare": companion_core.HISTORY_SHARE, "compress": bool(llama_backend.params_for(model)["compress_context"]) if model and not cloud else False}
+        except Exception as error:
+            log(f"context usage error: {error}")
+            return {"ok": False, "error": str(error)}
 
     def hf_memory(self, repo_id, file_path, size, token=""):
         """The same estimate for a file on Hugging Face, from the first megabytes of its header."""
@@ -1585,6 +1708,9 @@ def main():
                                              "Закрой его, чтобы не перезаписать чаты.</h3>", width=620, height=200)
         webview.start()
         return
+    # The page is served from the same address on every start without cache headers, so WebView2 may keep an
+    # older build of app.js and app.css. Its HTTP cache is dropped before the window opens (storage stays).
+    shutil.rmtree(companion_core.DATA_DIR / "webview" / "EBWebView" / "Default" / "Cache", ignore_errors=True)
     app = WebCompanion()
     threading.Thread(target=app.refresh_models, daemon=True).start()
     window = webview.create_window(WINDOW_TITLE, url=str(UI_INDEX), js_api=WebApi(app),

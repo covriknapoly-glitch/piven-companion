@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { ChatSummary, DialogueItem, EngineState, HfFile, WebApi } from "./bridge";
+import type { DialogueItem, EngineState, HfFile, WebApi } from "./bridge";
 import { Attachment } from "./cards";
 import { Icon } from "./icons";
 import { Markdown } from "./markdown";
-import { IconButton, Logo, formatElapsed } from "./ui";
+import { Decor, IconButton, Logo, formatElapsed } from "./ui";
 
 const SUGGESTIONS: { label: string; text: string }[] = [
   { label: "объяснить", text: "Объясни простыми словами, как работает видеокарта" },
@@ -17,11 +17,49 @@ interface MessageProps {
   api: WebApi;
   item: DialogueItem;
   index: number;
-  model: string;
   canRetry: boolean;
+  canEdit: boolean;
   onCopy: (text: string) => void;
   onView: (path: string) => void;
   onRetry: () => void;
+  onEdit: (index: number, text: string) => void;
+}
+
+/** Under an answer that made files: delete them again, after a second click to confirm. */
+function UndoFiles({ api, index, count }: { api: WebApi; index: number; count: number }) {
+  const [armed, setArmed] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <div className="undo-files">
+      <Icon name="file" size={13} />
+      <span>{`Создано файлов и папок: ${count}`}</span>
+      {armed
+        ? <button type="button" className="link-btn danger" onClick={() => { void api.undo_files(index).then((reply) => setError(reply.ok ? "" : reply.error ?? "")); }}>Точно удалить?</button>
+        : <button type="button" className="link-btn" onClick={() => setArmed(true)}><Icon name="trash" size={13} /> Отменить и удалить</button>}
+      {error && <span className="error-text">{error}</span>}
+    </div>
+  );
+}
+
+/** The user's own message turned into a text field: Enter sends the new text in its place, Esc leaves it. */
+function EditBox({ text, onSend, onCancel }: { text: string; onSend: (text: string) => void; onCancel: () => void }) {
+  const [value, setValue] = useState(text);
+  const send = () => { if (value.trim()) onSend(value.trim()); };
+  return (
+    <div className="msg-edit">
+      <textarea autoFocus value={value} rows={Math.min(10, Math.max(2, value.split("\n").length))}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); }
+          if (event.key === "Escape") onCancel();
+        }} />
+      <div className="msg-edit-foot">
+        <span>Ответ на это сообщение и всё после него будет заменено.</span>
+        <button type="button" className="btn" onClick={onCancel}>Отмена</button>
+        <button type="button" className="btn btn-primary" disabled={!value.trim()} onClick={send}>Отправить</button>
+      </div>
+    </div>
+  );
 }
 
 /** First launch without models: three steps and one button that downloads a model chosen for this computer. */
@@ -32,8 +70,8 @@ function Welcome({ api, state }: { api: WebApi; state: EngineState }) {
   const downloading = state.downloads.some((row) => row.kind === "model" && row.state === "running");
   return (
     <div className="intro welcome">
-      <div className="intro-brand"><Logo size={72} /><div><strong>PIVEN</strong><span>Добро пожаловать</span></div></div>
-      <p>PIVEN — помощник, который работает прямо на твоём компьютере: отвечает на вопросы, рисует, делает презентации, говорит голосом. Для начала нужна модель — «мозг» помощника.</p>
+      <Decor corner="tr" />
+      <p>Для начала нужна модель — «мозг» помощника.</p>
       <ol className="welcome-steps">
         <li className={downloading || started ? "done" : "current"}>
           <strong>Скачай модель</strong>
@@ -78,29 +116,32 @@ function PollCard({ api, text, index }: { api: WebApi; text: string; index: numb
 /** Opens the Twitch dialog with a poll from the chat filled in (set by App). */
 export const TwitchPollContext = createContext<(poll: { question: string; options: string[] }) => void>(() => undefined);
 
-function Message({ api, item, index, model, canRetry, onCopy, onView, onRetry }: MessageProps) {
+function Message({ api, item, index, canRetry, canEdit, onCopy, onView, onRetry, onEdit }: MessageProps) {
+  const [editing, setEditing] = useState(false);
   const attachments = item.images.length > 0 && (
     <div className="attachments">{item.images.map((path) => <Attachment key={path} api={api} path={path} onView={onView} />)}</div>
   );
   if (item.role === "poll") return <PollCard api={api} text={item.text} index={index} />;
-  if (item.role === "system") {
-    return <div className="msg msg-system" id={`msg-${index}`}><span className="msg-mark">#</span><p className="plain">{item.text}</p>{attachments}</div>;
+  if (item.role === "system" || item.role === "error") {
+    return <div className={`msg msg-system ${item.role === "error" ? "msg-error" : ""}`} id={`msg-${index}`}><span className="msg-mark">#</span><p className="plain">{item.text}</p>{attachments}</div>;
   }
   if (item.role === "user" || item.role === "computer") {
     return (
       <div className="msg msg-user" id={`msg-${index}`}>
         {item.role === "computer" && <div className="msg-label"><Icon name="volume" size={13} /> звук компьютера</div>}
         {attachments}
-        {item.text && <p className="plain" data-i18n-skip>{item.text}</p>}
-        <div className="msg-actions">
+        {editing
+          ? <EditBox text={item.text} onCancel={() => setEditing(false)} onSend={(text) => { setEditing(false); onEdit(index, text); }} />
+          : item.text && <p className="plain" data-i18n-skip>{item.text}</p>}
+        {!editing && <div className="msg-actions">
+          {item.role === "user" && canEdit && <IconButton icon="edit" label="Изменить" size={14} className="msg-action" onClick={() => setEditing(true)} />}
           <IconButton icon="copy" label="Копировать" size={14} className="msg-action" onClick={() => onCopy(item.text)} />
-        </div>
+        </div>}
       </div>
     );
   }
   return (
     <div className="msg msg-assistant" id={`msg-${index}`}>
-      <div className="msg-head"><Logo size={24} /><strong>piven</strong><span>{model}</span></div>
       {item.text && <Markdown text={item.text} onCopy={onCopy} />}
       {attachments}
       <div className="msg-actions">
@@ -108,6 +149,7 @@ function Message({ api, item, index, model, canRetry, onCopy, onView, onRetry }:
         <IconButton icon="volume" label="Озвучить" size={14} className="msg-action" onClick={() => { void api.speak(item.text); }} />
         {canRetry && <IconButton icon="retry" label="Ответить заново" size={14} className="msg-action" onClick={onRetry} />}
       </div>
+      {Boolean(item.undo) && <UndoFiles api={api} index={index} count={item.undo ?? 0} />}
     </div>
   );
 }
@@ -120,8 +162,7 @@ function Working({ state, onStop }: { state: EngineState; onStop: () => void }) 
   return (
     <div className="msg msg-working">
       <div className="working-line">
-        <span className="spinner" aria-hidden="true" />
-        <span className="activity">{state.activity || "Думает"}</span>
+        <span className="activity"><span className="shimmer">{state.activity || "Думает"}</span></span>
         <span className="elapsed">{formatElapsed(elapsed)}</span>
         <button type="button" className="text-btn" onClick={onStop}>стоп <kbd>esc</kbd></button>
       </div>
@@ -137,10 +178,10 @@ function Working({ state, onStop }: { state: EngineState; onStop: () => void }) 
   );
 }
 
-export function Transcript({ api, state, focusIndex, recent, onCopy, onView, onRetry, onStop, onPrefill, onSelectChat }:
-  { api: WebApi; state: EngineState; focusIndex: { index: number; nonce: number } | null; recent: ChatSummary[];
+export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, onEdit, onStop, onPrefill }:
+  { api: WebApi; state: EngineState; focusIndex: { index: number; nonce: number } | null;
     onCopy: (text: string) => void; onView: (path: string) => void; onRetry: () => void; onStop: () => void;
-    onPrefill: (text: string) => void; onSelectChat: (chat: ChatSummary) => void }) {
+    onEdit: (index: number, text: string) => void; onPrefill: (text: string) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const lastAssistant = state.items.map((item) => item.role).lastIndexOf("assistant");
@@ -171,27 +212,22 @@ export function Transcript({ api, state, focusIndex, recent, onCopy, onView, onR
   } else if (!state.items.length && !state.busy) {
     body = (
       <div className="intro">
-        <div className="intro-brand"><Logo size={72} /><div><strong>PIVEN</strong><span>{state.settings.model || "модель не выбрана"}</span></div></div>
-        <p>Пиши обычным языком. Компаньон отвечает, рисует, собирает презентации, правит код и делает действия на компьютере.</p>
+        <Decor corner="tr" />
+        <div className="intro-brand"><Logo size={64} /><div><strong>PIVEN</strong></div></div>
         <div className="intro-list">
           {SUGGESTIONS.map((item) => (
             <button key={item.label} type="button" onClick={() => onPrefill(item.text)}><span>{item.label}</span>{item.text}</button>
           ))}
         </div>
-        {recent.length > 0 && (
-          <div className="intro-list">
-            <h3>Недавние</h3>
-            {recent.map((chat) => <button key={chat.id} type="button" onClick={() => onSelectChat(chat)}><span>{chat.title}</span>{chat.preview}</button>)}
-          </div>
-        )}
       </div>
     );
   } else {
     body = (
       <>
         {state.items.map((item, index) => (
-          <Message key={index} api={api} item={item} index={index} model={state.settings.model}
-            canRetry={index === lastAssistant && !state.busy} onCopy={onCopy} onView={onView} onRetry={onRetry} />
+          <Message key={index} api={api} item={item} index={index}
+            canRetry={index === lastAssistant && !state.busy} canEdit={!state.busy}
+            onCopy={onCopy} onView={onView} onRetry={onRetry} onEdit={onEdit} />
         ))}
         {state.busy && <Working state={state} onStop={onStop} />}
       </>

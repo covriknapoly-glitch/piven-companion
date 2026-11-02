@@ -92,12 +92,13 @@ import process_job
 import voice_engines
 import voice_install
 from voice_install import ASR_DIR, ASR_EXE, TTS_DIR, TTS_PYTHON
+import computer_skill
 from computer_skill import execute_computer_action, execute_project_action
 from presentation_skill import create_presentation
 
 COMPUTER_SKILL_DIR = APP_DIR / "skills" / "computer-control"
 COMPUTER_SKILL_PROMPT = (COMPUTER_SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
-COMPUTER_ACTIONS = {"open_app", "open_url", "open_path", "web_search", "activate_window", "minimize_window", "maximize_window",
+COMPUTER_ACTIONS = {"write_file", "open_app", "open_url", "open_path", "web_search", "activate_window", "minimize_window", "maximize_window",
                     "restore_window", "get_active_window", "click", "type_text", "press_key", "scroll", "wait", "list_files",
                     "search_files", "read_file", "create_file", "create_folder", "rename_file", "move_file", "copy_file",
                     "download_file"}
@@ -429,6 +430,14 @@ def model_chat(model, messages, timeout=600, on_status=None, on_thinking=None,
 
 
 LANGUAGE_NAMES = {"en": "English", "zh": "简体中文 (Simplified Chinese)", "es": "Español"}  # interface languages besides Russian
+# The program's own lines inside an answer after computer actions (answers are not translated by the interface).
+# File commands that build a program; they do not count toward the eight actions on the computer per request.
+WRITING_ACTIONS = {"create_file", "write_file", "create_folder", "read_file", "list_files"}
+REPORT_WORDS = {
+    "done": {"ru": "Что сделано:", "en": "What was done:", "zh": "已完成的操作：", "es": "Lo que se hizo:"},
+    "nothing": {"ru": "Модель не выполнила ни одного действия.", "en": "The model did not perform any action.",
+                "zh": "模型没有执行任何操作。", "es": "El modelo no realizó ninguna acción."},
+}
 CHARS_PER_TOKEN = 3.0      # a cautious average for Russian and English text
 HISTORY_SHARE = 0.5        # the part of the context the earlier conversation may take; the rest is for the answer
 
@@ -678,6 +687,7 @@ class CompanionCore:
             return
         chat.setdefault("items", []).append({"role": role, "text": str(text), "images": [str(path) for path in images or [] if path]})
         chat["items"] = chat["items"][-500:]
+        chat["updated"] = time.time()
         if role != "user":
             chat["unread"] = True
         self._conversation_save_generation += 1
@@ -743,7 +753,7 @@ class CompanionCore:
                 self.active_chat_id = self.chats[0]["id"]
             active_chat = next(chat for chat in self.chats if chat.get("id") == self.active_chat_id)
             self.dialogue_items = [item for item in active_chat.get("items", [])
-                                   if isinstance(item, dict) and item.get("role") in ("user", "assistant", "system", "computer")]
+                                   if isinstance(item, dict) and item.get("role") in ("user", "assistant", "system", "computer", "poll", "error")]
             restored_messages = [item for item in active_chat.get("messages", [])
                                  if isinstance(item, dict) and item.get("role") in ("user", "assistant")]
             self.messages.extend({"role": item["role"], "content": str(item.get("content", ""))}
@@ -890,7 +900,7 @@ class CompanionCore:
 
     def create_chat(self):
         chat = {"id": uuid.uuid4().hex, "title": "Новый чат", "items": [], "messages": [],
-                "model": self.settings.get("model", "")}
+                "model": self.settings.get("model", ""), "updated": time.time()}
         self._save_conversation()
         self.chats.append(chat)
         self.select_chat(chat["id"])
@@ -915,7 +925,7 @@ class CompanionCore:
         chat = next((item for item in self.chats if item.get("id") == chat_id), None)
         if chat is None:
             raise ValueError("Чат не найден.")
-        role_names = {"user": "Вы", "assistant": "Компаньон", "system": "Система", "computer": "Звук компьютера"}
+        role_names = {"user": "Вы", "assistant": "Компаньон", "system": "Система", "computer": "Звук компьютера", "error": "Ошибка"}
         title = str(chat.get("title") or "Чат")
         lines = [f"# {title}", ""] if markdown else [title, "=" * len(title), ""]
         for entry in chat.get("items", []):
@@ -944,6 +954,25 @@ class CompanionCore:
                 if len(results) >= limit:
                     return results
         return results
+
+    def cut_history_at(self, item_index):
+        """Remove a user's message (by its place among the shown items) and everything after it, from the shown chat
+        and from the model's history. Returns its (text, images), or None when it cannot be cut (busy, not a user
+        message, or already folded into the chat's summary)."""
+        if self.busy or not 0 <= item_index < len(self.dialogue_items):
+            return None
+        item = self.dialogue_items[item_index]
+        if item.get("role") != "user":
+            return None
+        # the model's history may have lost its start to the summary: match user messages from the end
+        later = sum(1 for entry in self.dialogue_items[item_index:] if entry.get("role") == "user")
+        users = [index for index, message in enumerate(self.messages) if index and message.get("role") == "user"]
+        if len(users) < later:
+            return None
+        self.messages = self.messages[:users[-later]]
+        self.dialogue_items = self.dialogue_items[:item_index]
+        self._save_conversation()
+        return str(item.get("text", "")), [str(path) for path in item.get("images") or []]
 
     def retry_last_answer(self, model):
         """Ask the model again for the last user message, dropping the answer after it."""
@@ -1196,6 +1225,8 @@ class CompanionCore:
                 # list until the final batch arrives, even if the app closes or
                 # another chat is opened halfway through rendering.
                 if not self._loading_chat:
+                    if len(self.dialogue_items[-500:]) != len(active_chat.get("items") or []):
+                        active_chat["updated"] = time.time()  # for the date groups in the chat list
                     active_chat["items"] = self.dialogue_items[-500:]
                 active_chat["messages"] = [{"role": item.get("role"), "content": str(item.get("content", ""))}
                                            for item in self._messages[1:] if item.get("role") in ("user", "assistant")][-40:]
@@ -1237,17 +1268,18 @@ class CompanionCore:
         chat = self._active_chat()
         return str(chat.get("summary", "")) if chat else ""
 
-    def _fit_history(self, model, system_message, message):
-        """The recent turns that fit into the history share of the model's context. Older ones are folded into
-        the chat's summary (when compression is on) and leave the working history; without compression they
-        are just not sent."""
+    def _fit_history(self, model, system_message, message, extra=0):
+        """The recent turns that fit into the history share of the model's context next to the instruction, the
+        new message and `extra` characters (tool descriptions). Older ones are folded into the chat's summary
+        (when compression is on) and leave the working history; without compression they are just not sent."""
         params = llama_backend.params_for(model)
-        budget = params["ctx_size"] * HISTORY_SHARE * CHARS_PER_TOKEN - _message_chars(system_message) - _message_chars(message)
+        budget = (params["ctx_size"] * HISTORY_SHARE * CHARS_PER_TOKEN - _message_chars(system_message)
+                  - _message_chars(message) - extra)
         turns = self.messages[1:]
         kept, used = [], len(self._chat_summary())
         for item in reversed(turns):
             used += _message_chars(item)
-            if used > budget and kept:
+            if used > budget:
                 break
             kept.insert(0, item)
         dropped = turns[:len(turns) - len(kept)]
@@ -1372,6 +1404,11 @@ class CompanionCore:
             return {"model":"qwen3-tts-12hz-1.7b","input":text,"voice":voice,"response_format":"wav","speed":1.1}
         body={"model":"m","input":text}
         sample=self.settings.get("voice_sample","")
+        if voice_install.clone_only(info):  # a Base model speaks only in the sample's voice, whatever speaker was picked
+            if not (sample and Path(sample).is_file()):
+                raise RuntimeError("Эта модель озвучки говорит только голосом из образца. Выбери образец голоса в "
+                                   "Настройки → Голос и микрофон или поставь модель CustomVoice.")
+            voice="sample"
         if voice=="sample" and sample and Path(sample).is_file():
             body["voice_ref"]=sample; body["reference_text"]=self.settings.get("voice_sample_text","").strip()
             if not body["reference_text"]:  # without the sample's words clone the timbre only (Qwen3-TTS needs one or the other)
@@ -1835,6 +1872,85 @@ class CompanionCore:
         return bool(re.search(r"\b(?:кликни|щелкни|прокрути|посмотри на экран|что на экране|на экране нажми)\b", normalized))
 
     @staticmethod
+    def _undo_record(paths):
+        """[{path, folder, size, mtime}] of what a request made, as it is now (undo leaves anything changed later)."""
+        record = []
+        for path in dict.fromkeys(paths):
+            try:
+                info = Path(path).stat()
+            except OSError:
+                continue
+            folder = Path(path).is_dir()
+            record.append({"path": path, "folder": folder, "size": 0 if folder else info.st_size,
+                           "mtime": 0 if folder else info.st_mtime_ns})
+        return record
+
+    @staticmethod
+    def undo_files(record):
+        """Delete what one request made: files unchanged since then, then its folders if they are empty.
+        Returns (removed, kept) lists of paths."""
+        removed, kept = [], []
+        for entry in [item for item in record if not item.get("folder")]:
+            path = Path(entry["path"])
+            try:
+                info = path.stat()
+            except OSError:
+                continue   # already gone
+            if info.st_size != entry.get("size") or info.st_mtime_ns != entry.get("mtime"):
+                kept.append(str(path))   # changed after the request: the user's work now, left alone
+                continue
+            path.unlink()
+            removed.append(str(path))
+        for entry in sorted((item for item in record if item.get("folder")), key=lambda item: -len(item["path"])):
+            path = Path(entry["path"])
+            try:
+                path.rmdir()   # only an empty folder; one with other files stays
+                removed.append(str(path))
+            except OSError:
+                if path.exists():
+                    kept.append(str(path))
+        return removed, kept
+
+    @staticmethod
+    def _describe_computer_action(item):
+        """"create_file C:/…/index.html" — a command and its main target, for the closing report."""
+        name = str(item.get("computer_action") or item.get("project_action") or "действие")
+        target = next((str(item[key]) for key in ("path", "destination", "app", "url", "query", "title", "keys", "text")
+                       if item.get(key)), "")
+        return f"{name} {target[:120]}".strip()
+
+    def _computer_report(self, model, context, steps, final_answer, stop_reason):
+        """The closing message after computer actions: what was done, where the result is, what failed. A missing
+        or too short explanation from the model is asked for once more; the list of steps is the fallback."""
+        # The stop reason is the program's own text: it goes out as an error line, which the interface translates
+        # (the answer itself is never translated); the model writes its report in the interface language.
+        if stop_reason:
+            self.events.put(("error", stop_reason))
+        language = self.settings.get("ui_language", "ru")
+        if final_answer and len(final_answer) >= 80 and not stop_reason:
+            return final_answer
+        if not steps:
+            return final_answer or REPORT_WORDS["nothing"].get(language, REPORT_WORDS["nothing"]["ru"])
+        done = "\n".join(f"{number}. {step}" for number, step in enumerate(steps, 1))
+        request = ("Работа с компьютером закончена." + (f" {stop_reason}" if stop_reason else "")
+                   + f"\nВыполненные шаги и их результаты:\n{done}\n\nОбъясни пользователю обычным текстом, без JSON и без "
+                   "новых команд: что ты сделал по шагам, где лежит результат (полные пути), как им пользоваться и что не "
+                   "получилось. Коротко, до 120 слов.")
+        self.events.put(("activity", "Пишет отчёт о сделанном"))
+        try:
+            report = self._without_commands(model_chat(model, context + [{"role": "user", "content": request}], think=False,
+                                                       cancel_event=self.action_cancel, overrides={"max_tokens": 600}))
+        except InterruptedError:
+            raise
+        except Exception as error:
+            log(f"computer report error: {error}")
+            report = ""
+        if report:
+            return report
+        return ((final_answer + "\n\n" if final_answer else "") + REPORT_WORDS["done"].get(language, REPORT_WORDS["done"]["ru"])
+                + "\n" + "\n".join(f"- {step}" for step in steps))
+
+    @staticmethod
     def _extract_computer_action(text):
         """The computer command in a model answer, also in the shapes models tend to invent:
         {"action": ...}, {"name": ..., "arguments": {...}}, a list of commands, inside a code block."""
@@ -1847,6 +1963,7 @@ class CompanionCore:
                 return item
             for key in ("action", "tool", "command", "name", "type"):
                 name = str(item.get(key) or "").strip().lower()
+                name = computer_skill._ACTION_ALIASES.get(name, name)
                 if name in COMPUTER_ACTIONS:
                     arguments = item.get("arguments") or item.get("parameters") or item.get("args") or {}
                     if isinstance(arguments, str):
@@ -1939,7 +2056,7 @@ class CompanionCore:
                 mentioned = mentioned or known_aliases.get(site_name, "\0") in request_normalized
                 explicit_web_search = (bool(re.search(r"\b(?:поищи|найди|загугли|ищи)\b", request_normalized))
                                        and bool(re.search(r"\b(?:интернет|онлайн|в сети|в интернете)\b", request_normalized)))
-                if explicit_web_search and site_name in ("google", "bing", "duckduckgo"):
+                if explicit_web_search and (site_name in ("google", "bing", "duckduckgo") or host == "search.brave.com"):
                     mentioned = True
                 if not host or not mentioned:
                     raise ValueError("Сайт не открыт: пользователь не указывал этот адрес.")
@@ -1967,8 +2084,9 @@ class CompanionCore:
                 }[action_name]
                 if not any(term in request_normalized for term in requested_terms):
                     raise ValueError("Размер окна не изменён: пользователь этого не просил.")
-            elif action_name in ("create_file", "create_folder", "rename_file", "move_file", "copy_file"):
-                explicit_change = re.search(r"\b(?:создай|создать|напиши|переименуй|перемести|скопируй|сделай копию)\b", request_normalized)
+            elif action_name in ("create_file", "write_file", "create_folder", "rename_file", "move_file", "copy_file"):
+                explicit_change = re.search(r"\b(?:создай|создать|напиши|написать|сделай|сделать|запиши|сохрани|"
+                                            r"переименуй|перемести|скопируй|сделай копию)\b", request_normalized)
                 if not explicit_change:
                     raise ValueError("Файлы не изменены: пользователь явно не просил об этом.")
         return "\n".join(self._run_computer_action(item, screenshot_size, display_size) for item in actions)
@@ -1982,10 +2100,20 @@ class CompanionCore:
                 url = str(item.get("url", "")).strip()
                 url = url if url.startswith(("http://", "https://")) else "https://" + url
             else:
-                url = "https://duckduckgo.com/html/?q=" + urllib.parse.quote(str(item.get("query", "")))
+                url = "https://search.brave.com/search?q=" + urllib.parse.quote(str(item.get("query", "")))
             title, text = browser.open(url)
             return f"Открыто во встроенном браузере: «{title}». {tools.DATA_NOTE}\n" + text[:4000]
-        return execute_computer_action(item, screenshot_size, display_size)
+        created = getattr(self, "_run_created", None)
+        if name == "open_path" and created is not None:
+            # a page this request made opens in the built-in browser next to the chat
+            target = str(Path(str(item.get("path", ""))).expanduser().resolve())
+            made_here = target in created or any(target.startswith(folder + os.sep) for folder in created)
+            browser = self.tool_browser() if made_here and target.lower().endswith((".html", ".htm")) else None
+            if browser is not None:
+                import preview_server
+                title, _text = browser.open(preview_server.url_for(target))
+                return f"Страница «{Path(target).name}» открыта во встроенном браузере справа от чата."
+        return execute_computer_action(item, screenshot_size, display_size, created)
 
     @staticmethod
     def _extract_project_actions(text):
@@ -2160,6 +2288,31 @@ class CompanionCore:
             log(f"computer skill screenshot error: {error}")
             return None
 
+    def _describe_images(self, prompt, images):
+        """For a model that cannot see: the lightest local model with vision describes the pictures, and the
+        description is added to the request as text. "" when there is no such model or it failed."""
+        helpers = [name for name in llama_backend.model_files() if llama_backend.has_vision(name)]
+        if not helpers:
+            return ""
+        sizes = llama_backend.model_sizes()
+        helper = min(helpers, key=lambda name: sizes.get(name, 1 << 62))
+        images = images if isinstance(images, list) else [images]
+        self.events.put(("activity", f"Смотрит на картинку через {helper}"))
+        try:
+            description = model_chat(helper, [{"role": "user", "images": images, "content": (
+                "Опиши подробно и точно, что на " + ("этих изображениях" if len(images) > 1 else "этом изображении")
+                + ": предметы, людей, текст (дословно), цвета, расположение. Только описание, без вступлений. "
+                "Что пользователь хочет узнать о картинке: " + prompt[:1500])}],
+                think=False, cancel_event=self.action_cancel, overrides={"max_tokens": 800})
+        except InterruptedError:
+            raise
+        except Exception as error:
+            log(f"image description error: {error}")
+            return ""
+        description = " ".join(str(description).split())
+        return (f"\n\n[Выбранная модель не видит картинки. Модель {helper} посмотрела "
+                + ("их" if len(images) > 1 else "её") + f" и описала так: {description}]") if description else ""
+
     @staticmethod
     def _extract_image_tool_prompt(text):
         if "dalle.text2im" not in str(text).lower() and "text2im" not in str(text).lower():
@@ -2214,6 +2367,11 @@ class CompanionCore:
             computer_screenshot_size = computer_display_size = None
             system_message = self.messages[0]
             sees_screen = llama_backend.has_vision(model)
+            if screenshot and not sees_screen and not proactive:
+                described = self._describe_images(content, screenshot)
+                if described:   # the chosen model gets the picture as words from a model that can see
+                    content += described
+                    screenshot = None
             if computer_request:
                 home = Path.home()
                 known_folders = [home / name for name in ("Desktop", "Documents", "Downloads", "Pictures", "Videos",
@@ -2246,13 +2404,6 @@ class CompanionCore:
             message={"role":"user","content":content}
             if screenshot:
                 message["images"] = screenshot if isinstance(screenshot, list) else [screenshot]
-            history=self._fit_history(model, system_message, message)
-            if self._chat_summary():
-                system_message={**system_message,"content":system_message["content"]
-                                +"\n\nКраткое содержание более ранней части этого разговора:\n"+self._chat_summary()}
-            if not sees_screen:  # images from earlier turns (another model, screen glances) would make the request fail
-                history=[{**item,"images":[],"content":item.get("content","")+"\n[Здесь было изображение, текущая модель его не видит.]"}
-                         if item.get("images") else item for item in history]
             # Tools (built-in browser, skills, MCP servers) for an ordinary answer; the computer skill has its own commands.
             toolbox=specs=None
             if not computer_request and not proactive and self.settings.get("tools_enabled", True):
@@ -2281,6 +2432,20 @@ class CompanionCore:
                             +"\n".join("- "+hit["text"] for hit in found)}
                 except Exception as error:
                     log(f"memory search error: {error}")
+            # The earlier turns get what is left after the whole instruction, the tool descriptions and the new
+            # message. When the tools alone leave no room in a small context, the answer goes without them.
+            spec_chars=len(json.dumps(specs,ensure_ascii=False)) if specs else 0
+            if specs and not providers.is_provider_model(model) and (_message_chars(system_message)+_message_chars(message)+spec_chars
+                    > llama_backend.params_for(model)["ctx_size"]*HISTORY_SHARE*CHARS_PER_TOKEN):
+                log("tools skipped: the model's context is too small for their descriptions")
+                toolbox=specs=None; spec_chars=0
+            history=self._fit_history(model, system_message, message, extra=spec_chars)
+            if self._chat_summary():
+                system_message={**system_message,"content":system_message["content"]
+                                +"\n\nКраткое содержание более ранней части этого разговора:\n"+self._chat_summary()}
+            if not sees_screen:  # images from earlier turns (another model, screen glances) would make the request fail
+                history=[{**item,"images":[],"content":item.get("content","")+"\n[Здесь было изображение, текущая модель его не видит.]"}
+                         if item.get("images") else item for item in history]
             context=[system_message]+history+[message]
             self.events.put(("activity","Ждёт ответа модели"))
             reasoning_received=threading.Event()
@@ -2326,6 +2491,16 @@ class CompanionCore:
                                    on_text=on_text, tools=specs if rounds<8 else None, tool_calls=calls)
             # tool calls and their results stay out of the saved conversation; the final answer stays in
             context=[item for item in context if item.get("role")!="tool" and not item.get("tool_calls")]
+            # A thinking model sometimes spends the whole answer on reasoning and writes nothing. A request that
+            # expects a reply is asked once more without thinking instead of ending in silence.
+            may_stay_silent=proactive or "[МОЛЧУ]" in prompt
+            if not answer.strip() and not may_stay_silent and not self.action_cancel.is_set():
+                log("empty answer: asking again without thinking")
+                self.events.put(("activity","Модель промолчала, спрашивает ещё раз"))
+                answer=model_chat(model,context,on_status=lambda value:self.events.put(("activity",value)),
+                                   on_thinking=on_thinking, cancel_event=self.action_cancel,
+                                   on_response=lambda response:setattr(self,"_active_ollama_response",response),
+                                   on_text=on_text, think=False)
             if speech is not None:
                 if self._extract_image_tool_prompt(answer):
                     speech.abort()
@@ -2360,16 +2535,28 @@ class CompanionCore:
                 self.events.put(("reasoning_remove",None))
                 original_request = prompt
                 action_count = 0
-                final_answer = ""
-                while computer_action and action_count < 8:
+                final_answer = ""    # the model's own closing text
+                stop_reason = ""     # why the program stopped the run before the model finished
+                last_failure = ""
+                steps = []           # "command target → result" for the closing report
+                rounds = 0
+                self._run_created = []   # files and folders this request makes: rewritable, previewable, undoable
+                while computer_action:
                     if self.action_cancel.is_set():
                         raise InterruptedError("Действие на компьютере остановлено пользователем")
                     actions = computer_action if isinstance(computer_action, list) else [computer_action]
                     if not actions or any(not isinstance(item, dict) for item in actions):
-                        final_answer = "Модель вернула пустую или некорректную команду; управление компьютером остановлено."
+                        stop_reason = "Модель вернула пустую или некорректную команду, управление компьютером остановлено."
                         break
-                    if action_count + len(actions) > 8:
-                        final_answer = "Выполнение остановлено после восьми действий, чтобы можно было проверить результат."
+                    # Writing and reading files of a bigger program does not use up the eight actions on the
+                    # computer itself (clicks, keys, apps); the whole run still ends after 30 rounds.
+                    counted = [item for item in actions if str(item.get("computer_action", "")).lower() not in WRITING_ACTIONS]
+                    if action_count + len(counted) > 8:
+                        stop_reason = "Выполнение остановлено после восьми действий, чтобы можно было проверить результат."
+                        break
+                    rounds += 1
+                    if rounds > 30:
+                        stop_reason = "Выполнение остановлено после 30 шагов, чтобы можно было проверить результат."
                         break
                     action_label = str(actions[0].get("computer_action", "действие")) if actions else "действие"
                     context.append({"role": "assistant", "content": answer})
@@ -2380,10 +2567,17 @@ class CompanionCore:
                     except Exception as error:
                         result = f"Действие не выполнено: {error}"
                         log(f"computer skill action error: {error}")
-                    action_count += len(actions)
+                        if result == last_failure:  # the model repeats a refused command instead of changing it
+                            stop_reason = f"Выполнение остановлено: модель дважды подряд дала команду, которую нельзя выполнить. {error}"
+                            break
+                        last_failure = result
+                    else:
+                        last_failure = ""
+                    steps.append("; ".join(self._describe_computer_action(item) for item in actions)
+                                 + " → " + " ".join(str(result).split())[:300])
+                    action_count += len(counted)
                     if "Скачивание отменено пользователем" in result:
-                        final_answer = result
-                        computer_action = None
+                        stop_reason = result
                         break
                     needs_screen = any(str(item.get("computer_action", "")).lower() in
                                        ("open_app", "open_url", "open_path", "activate_window", "click",
@@ -2430,12 +2624,14 @@ class CompanionCore:
                                              on_response=lambda response: setattr(self, "_active_ollama_response", response))
                     computer_action = self._extract_computer_action(answer)
                     if computer_action is None:
-                        final_answer = self._without_commands(answer) or "Готово."
-                if computer_action and not final_answer:
-                    final_answer = "Выполнение остановлено после восьми действий. Проверь текущее состояние компьютера."
+                        final_answer = self._without_commands(answer)
+                final_answer = self._computer_report(model, context, steps, final_answer, stop_reason)
                 self.messages.extend([{"role": "user", "content": prompt},
                                       {"role": "assistant", "content": final_answer}])
                 self.events.put(("message", ("assistant", final_answer, voice)))
+                made, self._run_created = self._run_created, None
+                if made:   # the answer gets an "undo" button for exactly these files and folders
+                    self.events.put(("undo_ready", self._undo_record(made)))
                 return
             if not reasoning_received.is_set():
                 self.events.put(("reasoning","Эта модель не передала отдельный текст рассуждения."))
@@ -2445,6 +2641,10 @@ class CompanionCore:
             if answer.strip() and not shown:
                 shown="Модель ответила командой, которую программа не смогла разобрать. Попробуй переформулировать просьбу."
             answer=shown
+            if not answer and not may_stay_silent:
+                self.events.put(("reasoning_remove",None))
+                self.events.put(("error","Модель вернула пустой ответ. Попробуй ещё раз, выбери другую модель или увеличь «Контекст» в её параметрах."))
+                self.events.put(("activity","Слушает" if self.running else "Готов к работе")); return
             if "[МОЛЧУ]" in answer or not answer:
                 self.events.put(("reasoning_remove",None)); self.events.put(("activity","Слушает" if self.running else "Готов к работе")); return
             self.events.put(("message",("assistant",answer,voice)))
@@ -2463,6 +2663,9 @@ class CompanionCore:
             if "does not support images" in detail.lower() or "image input is not supported" in detail.lower():
                 detail=("Выбранная модель не умеет смотреть на картинки и экран: рядом с её файлом GGUF нет файла mmproj. "
                         "Скачай vision-модель вместе с mmproj (например, Qwen2.5-VL или Gemma 3) через «Скачать модель с Hugging Face».")
+            elif "exceeds the available context size" in detail:
+                detail=(f"запрос не поместился в контекст модели ({llama_backend.context_size(model)} токенов). "
+                        "Увеличь «Контекст» в параметрах модели (хватит 8192) или начни новый чат.")
             self.events.put(("error",f"Не удалось получить ответ модели: {detail}")); self.events.put(("activity","Слушает" if self.running else "Готов к работе"))
         finally:
             if speech is not None:

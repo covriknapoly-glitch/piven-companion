@@ -3,7 +3,8 @@ import type { MemoryEstimate, ThinkingOptions, ThinkingValue, WebApi } from "./b
 import { Icon, type IconName } from "./icons";
 import logoSvg from "./assets/piven_logo.svg";
 
-export const THINKING_NAMES: Record<string, string> = { low: "Низкий", medium: "Средний", high: "Высокий", true: "Включено", false: "Выключено" };
+export const THINKING_NAMES: Record<string, string> = { none: "Без размышления", minimal: "Минимальный", low: "Низкий", medium: "Средний",
+  high: "Высокий", xhigh: "Очень высокий", max: "Максимальный", true: "Включено", false: "Выключено" };
 export const thinkingName = (value: ThinkingValue | null) => (value === null ? "" : THINKING_NAMES[String(value)] ?? String(value));
 /** What the thinking switch can tell about a model that cannot be switched. */
 export const thinkingFixed = (options: ThinkingOptions) =>
@@ -29,6 +30,73 @@ export function ModelDescription({ api, repo, token = "" }: { api: WebApi; repo:
   );
 }
 
+/** A faint grid of dots pressed into a corner of an empty place, fading out towards the middle. */
+export function Decor({ corner = "", className = "" }: { corner?: "tl" | "tr" | "bl" | "br" | ""; className?: string }) {
+  return <RandomDots className={`${corner ? `decor-corner decor-${corner}` : ""} ${className}`} />;
+}
+
+/** A cell's own random number in [0, 1): the same cell always gets the same dot, so resizing only adds or removes dots at the edges. */
+function cellRandom(x: number, y: number, salt: number) {
+  let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(salt, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1103515245);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Dots on an even grid, each cell randomly empty or holding a dot of random size, with no repeating tile.
+ *  Every dot slowly fades in and out on its own rhythm (a 3 to 9 second cycle). Colour from --decor (via the canvas's CSS color). */
+export function RandomDots({ step = 20, className = "decor-fill" }: { step?: number; className?: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let frame = 0;
+    let last = 0;
+    const draw = (now: number) => {
+      const scale = window.devicePixelRatio || 1;
+      const { width, height } = canvas.getBoundingClientRect();
+      const pixelWidth = Math.round(width * scale);
+      const pixelHeight = Math.round(height * scale);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) { canvas.width = pixelWidth; canvas.height = pixelHeight; }
+      const context = canvas.getContext("2d");
+      if (!context) return;
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      context.clearRect(0, 0, width, height);
+      context.fillStyle = getComputedStyle(canvas).color;
+      const seconds = now / 1000;
+      for (let row = 0; row * step < height + step; row++) {
+        for (let column = 0; column * step < width + step; column++) {
+          if (cellRandom(column, row, 1) < 0.45) continue;  // leave about half the cells empty
+          const size = cellRandom(column, row, 2);
+          // the same radii as the corner patterns (1 to 2.2), most dots the smallest
+          const radius = size < 0.6 ? 1 : size < 0.72 ? 1.1 : size < 0.82 ? 1.3 : size < 0.9 ? 1.5 : size < 0.96 ? 1.7 : 2.2;
+          const period = 3 + cellRandom(column, row, 5) * 6;
+          const wave = 0.5 + 0.5 * Math.sin((still ? 0 : seconds) * (Math.PI * 2) / period + cellRandom(column, row, 6) * Math.PI * 2);
+          context.globalAlpha = still ? 1 : 0.04 + 0.96 * wave * wave;  // squared: dim most of the time, a clear glow at the peak
+          context.beginPath();
+          context.arc((column + 0.5) * step, (row + 0.5) * step, radius, 0, Math.PI * 2);
+          context.fill();
+        }
+      }
+    };
+    // About 20 frames a second is plenty for a slow fade, and nothing is drawn while the window is hidden.
+    const tick = (now: number) => {
+      frame = requestAnimationFrame(tick);
+      if (document.hidden || now - last < 50) return;
+      last = now;
+      draw(now);
+    };
+    draw(performance.now());
+    if (!still) frame = requestAnimationFrame(tick);
+    const redraw = () => draw(performance.now());
+    const resize = new ResizeObserver(redraw);
+    resize.observe(canvas);
+    const theme = new MutationObserver(redraw);  // the dot colour follows the theme
+    theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => { cancelAnimationFrame(frame); resize.disconnect(); theme.disconnect(); };
+  }, [step]);
+  return <canvas ref={ref} className={`decor random-dots ${className}`} aria-hidden="true" />;
+}
 export function Logo({ size = 22, pulse = false }: { size?: number; pulse?: boolean }) {
   // Inline SVG drawn in currentColor, so the logo follows the light and dark theme.
   return <span className={`logo ${pulse ? "pulse" : ""}`} style={{ width: size, height: size }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: logoSvg }} />;
@@ -210,7 +278,7 @@ export function MemoryBadge({ estimate, gpu, context = 0 }: { estimate?: MemoryE
   if (!estimate) return null;
   const tooBig = gpu > 0 && estimate.total > gpu * 0.95;
   return (
-    <span className={`mem-badge ${tooBig ? "warn" : ""}`} title={`При запуске ≈ ${gigabytes(estimate.total)} видеопамяти: ${memoryDetail(estimate, context)}${tooBig ? ". Не влезет в видеокарту целиком, часть уйдёт в ОЗУ и будет медленнее." : ""}
+    <span className={`mem-badge ${tooBig ? "warn" : ""}`} title={`При запуске ≈ ${gigabytes(estimate.total)} видеопамяти: ${memoryDetail(estimate, context)}
 ${speedHint(estimate)}`}>
       ≈ {gigabytes(estimate.total)}{estimate.speed ? <span className={`speed-badge ${estimate.measured ? "measured" : ""}`}>{speedText(estimate)}</span> : null}
     </span>
@@ -227,7 +295,6 @@ export function MemoryBar({ parts, gpu, label, speed }: { parts: { label: string
       <div className="mem-bar-head"><span>{label}</span><strong>≈ {gigabytes(total)}{gpu ? ` из ${gigabytes(gpu)}` : ""}{speed?.speed ? <span className={`speed-badge ${speed.measured ? "measured" : ""}`} title={speedHint(speed)}>{speedText(speed)}</span> : null}</strong></div>
       <div className="mem-bar-track">{parts.map((part, index) => <i key={part.label} className={`seg${index % 4}`} style={{ width: `${(100 * part.bytes) / scale}%` }} title={`${part.label}: ${gigabytes(part.bytes)}`} />)}</div>
       <div className="mem-bar-legend">{parts.map((part, index) => <span key={part.label}><b className={`seg${index % 4}`} />{part.label} {gigabytes(part.bytes)}</span>)}</div>
-      {tooBig && <small>Не влезет в видеопамять целиком: часть уйдёт в ОЗУ, и всё будет работать медленнее.</small>}
     </div>
   );
 }

@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { highlight } from "./highlight";
 import { Icon } from "./icons";
 
 /**
@@ -113,15 +114,16 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
 
 function CodeBlock({ lang, text, onCopy }: { lang: string; text: string; onCopy: (text: string) => void }) {
   const [copied, setCopied] = useState(false);
+  const tokens = useMemo(() => highlight(text, lang), [text, lang]);
   return (
     <div className="md-code">
-      <div className="md-code-head">
+      <div className="md-code-head" data-i18n>
         <span>{lang || "код"}</span>
         <button type="button" onClick={() => { onCopy(text); setCopied(true); window.setTimeout(() => setCopied(false), 1400); }}>
           <Icon name={copied ? "check" : "copy"} size={13} /> {copied ? "Скопировано" : "Копировать"}
         </button>
       </div>
-      <pre><code>{text}</code></pre>
+      <pre><code>{tokens}</code></pre>
     </div>
   );
 }

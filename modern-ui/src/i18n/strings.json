@@ -94,10 +94,75 @@
 "API 密钥",
 "Clave de API"
 ],
+"ComfyUI генерирует изображение": [
+"ComfyUI is generating the image",
+"ComfyUI 正在生成图片",
+"ComfyUI está generando la imagen"
+],
+"ComfyUI готовит изображение": [
+"ComfyUI is preparing the image",
+"ComfyUI 正在准备图片",
+"ComfyUI está preparando la imagen"
+],
+"ComfyUI делает видео": [
+"ComfyUI is making the video",
+"ComfyUI 正在生成视频",
+"ComfyUI está creando el vídeo"
+],
+"ComfyUI делает видео · {0} мин": [
+"ComfyUI is making the video · {0} min",
+"ComfyUI 正在生成视频 · {0} 分钟",
+"ComfyUI está creando el vídeo · {0} min"
+],
+"ComfyUI завершила workflow без выходного изображения.": [
+"ComfyUI finished the workflow without an output image.",
+"ComfyUI 完成了 workflow，但没有输出图片。",
+"ComfyUI terminó el workflow sin imagen de salida."
+],
+"ComfyUI завершила workflow без выходного изображения. {0}": [
+"ComfyUI finished the workflow without an output image. {0}",
+"ComfyUI 完成了 workflow，但没有输出图片。{0}",
+"ComfyUI terminó el workflow sin imagen de salida. {0}"
+],
+"ComfyUI не завершила генерацию за 60 минут.": [
+"ComfyUI didn't finish within 60 minutes.",
+"ComfyUI 未在 60 分钟内完成生成。",
+"ComfyUI no terminó en 60 minutos."
+],
+"ComfyUI не отвечает по адресу {0}. Запусти Comfy Desktop или проверь адрес в Настройки → Интеграции → ComfyUI.": [
+"ComfyUI isn't answering at {0}. Start Comfy Desktop or check the address in Settings → Integrations → ComfyUI.",
+"ComfyUI 在 {0} 没有响应。请启动 Comfy Desktop，或在“设置 → 集成 → ComfyUI”中检查地址。",
+"ComfyUI no responde en {0}. Abre Comfy Desktop o revisa la dirección en Ajustes → Integraciones → ComfyUI."
+],
+"ComfyUI не приняла workflow: {0}": [
+"ComfyUI rejected the workflow: {0}",
+"ComfyUI 拒绝了 workflow：{0}",
+"ComfyUI rechazó el workflow: {0}"
+],
+"ComfyUI не приняла задание: {0}": [
+"ComfyUI rejected the job: {0}",
+"ComfyUI 拒绝了任务：{0}",
+"ComfyUI rechazó el trabajo: {0}"
+],
+"ComfyUI не сохранила видео.": [
+"ComfyUI didn't save the video.",
+"ComfyUI 未保存视频。",
+"ComfyUI no guardó el vídeo."
+],
+"ComfyUI не сохранила видео. {0}": [
+"ComfyUI didn't save the video. {0}",
+"ComfyUI 未保存视频。{0}",
+"ComfyUI no guardó el vídeo. {0}"
+],
 "Ctrl+Enter — запустить. Код выполняется во временной папке, не дольше 30 секунд.": [
 "Ctrl+Enter — run. Code runs in a temporary folder for at most 30 seconds.",
 "Ctrl+Enter — 运行。代码在临时文件夹中运行，最长 30 秒。",
 "Ctrl+Enter — ejecutar. El código se ejecuta en una carpeta temporal durante 30 segundos como máximo."
+],
+"DPAPI не смог обработать ключ": [
+"DPAPI couldn't process the key",
+"DPAPI 无法处理密钥",
+"DPAPI no pudo procesar la clave"
 ],
 "DRY: допустимая длина": [
 "DRY: allowed length",
@@ -109,6 +174,11 @@
 "DRY：基数",
 "DRY: base"
 ],
+"F5-TTS и E2-TTS, клонируют голос по образцу.": [
+"F5-TTS and E2-TTS clone a voice from a sample.",
+"F5-TTS 和 E2-TTS，根据样本克隆语音。",
+"F5-TTS y E2-TTS clonan una voz a partir de una muestra."
+],
 "GGUF-моделей не нашлось, попробуй другое название.": [
 "No GGUF models found, try another name.",
 "未找到 GGUF 模型，请换个名称试试。",
@@ -118,6 +188,16 @@
 "GGUF files from the models folder.",
 "模型文件夹中的 GGUF 文件。",
 "Archivos GGUF de la carpeta de modelos."
+],
+"Hugging Face вернул неожиданный список файлов.": [
+"Hugging Face returned an unexpected file list.",
+"Hugging Face 返回了意外的文件列表。",
+"Hugging Face devolvió una lista de archivos inesperada."
+],
+"Hugging Face вернул неожиданный формат результатов.": [
+"Hugging Face returned results in an unexpected format.",
+"Hugging Face 返回了意外的结果格式。",
+"Hugging Face devolvió los resultados en un formato inesperado."
 ],
 "JSON-файл ComfyUI для видео (экспорт API или обычный). Текст запроса подставится в него; приложенная картинка — в узел LoadImage.": [
 "A ComfyUI JSON workflow for video (API or regular export). The request text is put into it; an attached picture goes into the LoadImage node.",
@@ -159,20 +239,95 @@
 "OAuth 令牌",
 "Token OAuth"
 ],
+"OmniVoice от k2-fsa.": [
+"OmniVoice by k2-fsa.",
+"k2-fsa 的 OmniVoice。",
+"OmniVoice de k2-fsa."
+],
+"PIVEN работает в фоне": [
+"PIVEN is running in the background",
+"PIVEN 正在后台运行",
+"PIVEN sigue funcionando en segundo plano"
+],
 "PIVEN — помощник, который работает прямо на твоём компьютере: отвечает на вопросы, рисует, делает презентации, говорит голосом. Для начала нужна модель — «мозг» помощника.": [
 "PIVEN is an assistant that runs right on your computer: it answers questions, draws, makes presentations and talks. To begin, it needs a model — the assistant's “brain”.",
 "PIVEN 是直接在你电脑上运行的助手：它能回答问题、画图、制作演示文稿，还能用语音交流。开始前需要一个模型——助手的“大脑”。",
 "PIVEN es un asistente que funciona directamente en tu ordenador: responde preguntas, dibuja, crea presentaciones y habla. Para empezar necesita un modelo, el «cerebro» del asistente."
+],
+"Parakeet · ошибка {0}: {1}": [
+"Parakeet · error {0}: {1}",
+"Parakeet · 错误 {0}：{1}",
+"Parakeet · error {0}: {1}"
+],
+"Parakeet и Nemotron от NVIDIA в формате GGUF.": [
+"NVIDIA's Parakeet and Nemotron in GGUF format.",
+"NVIDIA 的 Parakeet 和 Nemotron，GGUF 格式。",
+"Parakeet y Nemotron de NVIDIA en formato GGUF."
+],
+"Parakeet не запустился. Посмотрите журнал: {0}": [
+"Parakeet didn't start. See the log: {0}",
+"Parakeet 未能启动。请查看日志：{0}",
+"Parakeet no se inició. Consulta el registro: {0}"
+],
+"Parakeet сразу закрылся (возможно, порт {0} занят другой программой). Журнал: {1}": [
+"Parakeet closed right away (port {0} may be taken by another program). Log: {1}",
+"Parakeet 立即关闭了（端口 {0} 可能被其他程序占用）。日志：{1}",
+"Parakeet se cerró enseguida (quizá otro programa usa el puerto {0}). Registro: {1}"
+],
+"Parler-TTS: голос задаётся описанием.": [
+"Parler-TTS: the voice is set by a description.",
+"Parler-TTS：通过描述设定语音。",
+"Parler-TTS: la voz se define con una descripción."
+],
+"Qwen3-TTS не запустился. Журнал: {0}": [
+"Qwen3-TTS didn't start. Log: {0}",
+"Qwen3-TTS 未能启动。日志：{0}",
+"Qwen3-TTS no se inició. Registro: {0}"
 ],
 "Streamable HTTP, например http://127.0.0.1:8000/mcp": [
 "Streamable HTTP, e.g. http://127.0.0.1:8000/mcp",
 "Streamable HTTP，例如 http://127.0.0.1:8000/mcp",
 "Streamable HTTP, por ejemplo http://127.0.0.1:8000/mcp"
 ],
+"Twitch вернул ошибку {0}: {1}": [
+"Twitch returned error {0}: {1}",
+"Twitch 返回错误 {0}：{1}",
+"Twitch devolvió el error {0}: {1}"
+],
+"Twitch не вернул данные учётной записи для этого токена.": [
+"Twitch returned no account data for this token.",
+"Twitch 没有返回此令牌的帐户数据。",
+"Twitch no devolvió datos de cuenta para este token."
+],
+"Twitch не отправил это сообщение.": [
+"Twitch didn't send this message.",
+"Twitch 没有发送这条消息。",
+"Twitch no envió este mensaje."
+],
+"Twitch не разрешил действие. Проверь токен, его разрешения и доступ к каналу (опросы доступны только каналам-партнёрам и компаньонам Twitch).": [
+"Twitch didn't allow the action. Check the token, its permissions and channel access (polls are only for Twitch Partners and Affiliates).",
+"Twitch 不允许此操作。请检查令牌、其权限和频道访问权限（投票仅限 Twitch 合作伙伴和联盟主播）。",
+"Twitch no permitió la acción. Revisa el token, sus permisos y el acceso al canal (las encuestas son solo para socios y afiliados de Twitch)."
+],
+"Twitch не создал опрос.": [
+"Twitch didn't create the poll.",
+"Twitch 没有创建投票。",
+"Twitch no creó la encuesta."
+],
+"Twitch отклонил запрос по лимиту. Отправка остановлена; повторных попыток не будет.": [
+"Twitch rejected the request due to a rate limit. Sending stopped; there will be no retries.",
+"Twitch 因频率限制拒绝了请求。发送已停止，不会重试。",
+"Twitch rechazó la solicitud por límite de frecuencia. Envío detenido; no habrá reintentos."
+],
 "Twitch-канал": [
 "Twitch channel",
 "Twitch 频道",
 "Canal de Twitch"
+],
+"VoxCPM от OpenBMB.": [
+"VoxCPM by OpenBMB.",
+"OpenBMB 的 VoxCPM。",
+"VoxCPM de OpenBMB."
 ],
 "Windows не будет выгружать модель на диск. Нужна свободная память.": [
 "Windows won't page the model out to disk. Requires free RAM.",
@@ -199,15 +354,45 @@
 "XTC：阈值",
 "XTC: umbral"
 ],
+"XTTS-v2 (17 языков с русским) и другие модели Coqui.": [
+"XTTS-v2 (17 languages including Russian) and other Coqui models.",
+"XTTS-v2（17 种语言，含俄语）及其他 Coqui 模型。",
+"XTTS-v2 (17 idiomas, incluido el ruso) y otros modelos de Coqui."
+],
+"audio.cpp запускается слишком долго. Журнал: {0}": [
+"audio.cpp is taking too long to start. Log: {0}",
+"audio.cpp 启动时间过长。日志：{0}",
+"audio.cpp tarda demasiado en iniciarse. Registro: {0}"
+],
+"audio.cpp не запустил модель {0}. Журнал: {1}": [
+"audio.cpp didn't start model {0}. Log: {1}",
+"audio.cpp 未能启动模型 {0}。日志：{1}",
+"audio.cpp no inició el modelo {0}. Registro: {1}"
+],
+"audio.cpp не знает такую модель.": [
+"audio.cpp doesn't know this model.",
+"audio.cpp 不认识这个模型。",
+"audio.cpp no conoce este modelo."
+],
 "channel:manage:polls (токен твоего канала; опросы есть у партнёров и компаньонов Twitch)": [
 "channel:manage:polls (a token of your own channel; polls are available to Twitch Partners and Affiliates)",
 "channel:manage:polls（你自己频道的令牌；投票功能仅限 Twitch 合作伙伴和联盟主播）",
 "channel:manage:polls (un token de tu propio canal; las encuestas están disponibles para Partners y Afiliados de Twitch)"
 ],
+"llama-server закрылся при загрузке модели. Подробности в журнале: {0}": [
+"llama-server closed while loading the model. Details in the log: {0}",
+"llama-server 在加载模型时关闭。详情见日志：{0}",
+"llama-server se cerró al cargar el modelo. Detalles en el registro: {0}"
+],
 "llama.cpp готов": [
 "llama.cpp ready",
 "llama.cpp 已就绪",
 "llama.cpp listo"
+],
+"model does not support images: у этой модели нет файла mmproj рядом с GGUF, поэтому она не видит картинки и экран.": [
+"model does not support images: this model has no mmproj file next to its GGUF, so it can't see pictures or the screen.",
+"model does not support images：此模型的 GGUF 旁没有 mmproj 文件，因此看不到图片和屏幕。",
+"model does not support images: este modelo no tiene un archivo mmproj junto a su GGUF, así que no ve imágenes ni la pantalla."
 ],
 "npx -y @modelcontextprotocol/server-filesystem C:\\Users\\Я\\Documents": [
 "npx -y @modelcontextprotocol/server-filesystem C:\\Users\\Me\\Documents",
@@ -228,6 +413,11 @@
 "{0} GB",
 "{0} GB",
 "{0} GB"
+],
+"{0} готова": [
+"{0} is ready",
+"{0} 已就绪",
+"{0} está lista"
 ],
 "{0} из 60 символов": [
 "{0} of 60 characters",
@@ -254,6 +444,16 @@
 "{0}：{1} 个，其中可运行 {2} 个。请选择模型。",
 "{0}: {1}, de los cuales funcionarán {2}. Elige un modelo."
 ],
+"{0}: нет связи ({1})": [
+"{0}: no connection ({1})",
+"{0}：无法连接（{1}）",
+"{0}: sin conexión ({1})"
+],
+"{0}: связь оборвалась ({1})": [
+"{0}: connection lost ({1})",
+"{0}：连接中断（{1}）",
+"{0}: se perdió la conexión ({1})"
+],
 "{0}{1} ток/с": [
 "{0}{1} tok/s",
 "{0}{1} 词元/秒",
@@ -273,6 +473,11 @@
 "“{0}” and its whole history will be deleted. This can't be undone.",
 "“{0}”及其全部历史将被删除，且无法撤销。",
 "«{0}» y todo su historial se eliminarán. No se puede deshacer."
+],
+"«{0}» не открыто: пользователь не просил запускать это приложение.": [
+"“{0}” not opened: the user didn't ask to launch this app.",
+"未打开“{0}”：用户没有要求启动此应用。",
+"«{0}» no se abrió: el usuario no pidió iniciar esta aplicación."
 ],
 "· {0} с": [
 "· {0} s",
@@ -304,6 +509,26 @@
 "自动：内置 MTP 头的模型（Qwen3.5/3.6 MTP、GLM）回答速度约快 1.4 倍，内容不变。n-gram 还能加速重复性文本，例如代码修改。",
 "Auto: los modelos con cabezas MTP integradas (Qwen3.5/3.6 MTP, GLM) responden unas 1,4 veces más rápido con el mismo texto. Los n-gramas aceleran además el texto repetitivo, como las ediciones de código."
 ],
+"Агент вернул некорректный список действий проекта.": [
+"The agent returned an invalid list of project actions.",
+"代理返回了无效的项目操作列表。",
+"El agente devolvió una lista de acciones no válida."
+],
+"Агент изучает проект · шаг {0}": [
+"The agent is studying the project · step {0}",
+"代理正在研究项目 · 第 {0} 步",
+"El agente está estudiando el proyecto · paso {0}"
+],
+"Агент проекта · {0}": [
+"Project agent · {0}",
+"项目代理 · {0}",
+"Agente del proyecto · {0}"
+],
+"Агент разработки не смог завершить задачу: {0}": [
+"The development agent couldn't finish the task: {0}",
+"开发代理未能完成任务：{0}",
+"El agente de desarrollo no pudo terminar la tarea: {0}"
+],
 "Адрес": [
 "Address",
 "地址",
@@ -314,10 +539,30 @@
 "ComfyUI 地址",
 "Dirección de ComfyUI"
 ],
+"Адрес до /v1.": [
+"The address up to /v1.",
+"到 /v1 为止的地址。",
+"La dirección hasta /v1."
+],
+"Адрес должен начинаться с http:// или https://": [
+"The address must start with http:// or https://",
+"地址必须以 http:// 或 https:// 开头",
+"La dirección debe empezar por http:// o https://"
+],
 "Адрес сервера": [
 "Server address",
 "服务器地址",
 "Dirección del servidor"
+],
+"Аудиозахват на паузе · нейросеть отвечает": [
+"Audio capture paused · the model is answering",
+"音频采集已暂停 · 模型正在回答",
+"Captura de audio en pausa · el modelo responde"
+],
+"Аудиокомпонент установлен — нажмите «Старт»": [
+"Audio component installed — press Start",
+"音频组件已安装——请按“开始”",
+"Componente de audio instalado: pulsa Iniciar"
 ],
 "Без голоса": [
 "No voice",
@@ -343,6 +588,11 @@
 "Browser",
 "浏览器",
 "Navegador"
+],
+"Браузер и файлы (Ctrl+D)": [
+"Browser and files (Ctrl+D)",
+"浏览器和文件（Ctrl+D）",
+"Navegador y archivos (Ctrl+D)"
 ],
 "Браузер скрыт, пока открыто окно поверх.": [
 "The browser is hidden while a window is open on top.",
@@ -374,6 +624,31 @@
 "快速 — 640×352，2 秒。标准 — 832×480，3 秒。高 — 1280×704，5 秒：耗时最长，占用显存最多。",
 "Rápido: 640×352, 2 segundos. Normal: 832×480, 3 segundos. Alta: 1280×704, 5 segundos; la más lenta y la que más memoria de vídeo usa."
 ],
+"В workflow ComfyUI нет активных узлов для запуска.": [
+"The ComfyUI workflow has no active nodes to run.",
+"ComfyUI workflow 中没有可运行的活动节点。",
+"El workflow de ComfyUI no tiene nodos activos para ejecutar."
+],
+"В workflow для видео нет узла LoadImage, а картинка приложена.": [
+"The video workflow has no LoadImage node, but an image is attached.",
+"视频 workflow 中没有 LoadImage 节点，但附加了图片。",
+"El workflow de vídeo no tiene nodo LoadImage, pero hay una imagen adjunta."
+],
+"В workflow не найдено поле prompt или user_prompt.": [
+"The workflow has no prompt or user_prompt field.",
+"workflow 中没有 prompt 或 user_prompt 字段。",
+"El workflow no tiene el campo prompt ni user_prompt."
+],
+"В архиве NeMo-Speech нет nemo-speech.exe.": [
+"The NeMo-Speech archive has no nemo-speech.exe.",
+"NeMo-Speech 压缩包中没有 nemo-speech.exe。",
+"El archivo de NeMo-Speech no contiene nemo-speech.exe."
+],
+"В архиве audio.cpp нет audiocpp_server.exe.": [
+"The audio.cpp archive has no audiocpp_server.exe.",
+"audio.cpp 压缩包中没有 audiocpp_server.exe。",
+"El archivo de audio.cpp no contiene audiocpp_server.exe."
+],
 "В памяти: фактов": [
 "In memory: facts",
 "记忆中：事实",
@@ -384,6 +659,21 @@
 "在编辑器中打开",
 "Al editor"
 ],
+"В репозитории нет GGUF-файлов.": [
+"The repository has no GGUF files.",
+"该仓库中没有 GGUF 文件。",
+"El repositorio no tiene archivos GGUF."
+],
+"В репозитории нет весов safetensors или PyTorch, которые нужны движку {0}": [
+"The repository has no safetensors or PyTorch weights that the {0} engine needs",
+"该仓库中没有 {0} 引擎所需的 safetensors 或 PyTorch 权重",
+"El repositorio no tiene pesos safetensors o PyTorch que necesita el motor {0}"
+],
+"В репозитории нет голоса Piper (файла .onnx с настройками .json).": [
+"The repository has no Piper voice (an .onnx file with .json settings).",
+"该仓库中没有 Piper 语音（.onnx 文件及 .json 配置）。",
+"El repositorio no tiene voz de Piper (archivo .onnx con ajustes .json)."
+],
 "В списке моделей она будет называться «": [
 "In the model list it will be called “",
 "在模型列表中它将显示为“",
@@ -393,6 +683,11 @@
 "This repository has no GGUF files.",
 "该仓库中没有 GGUF 文件。",
 "Este repositorio no tiene archivos GGUF."
+],
+"В этом чате ещё идёт ответ. Дождись его или останови.": [
+"An answer is still being written in this chat. Wait for it or stop it.",
+"这个对话中的回答还在进行。请等待或停止它。",
+"En este chat aún se está escribiendo una respuesta. Espera o detenla."
 ],
 "В этом чате пока нет файлов. Здесь появятся картинки, презентации и другие файлы из ответов.": [
 "No files in this chat yet. Pictures, presentations and other files from answers will appear here.",
@@ -409,10 +704,20 @@
 "选项",
 "Opciones"
 ],
+"Введи ID репозитория в формате автор/модель.": [
+"Enter the repository ID as author/model.",
+"请以 作者/模型 格式输入仓库 ID。",
+"Escribe el ID del repositorio como autor/modelo."
+],
 "Введи адрес или запрос сверху. Ссылки из ответов компаньона тоже открываются здесь.": [
 "Enter an address or a search above. Links from the companion's answers open here too.",
 "在上方输入地址或搜索内容。伙伴回答中的链接也会在这里打开。",
 "Escribe una dirección o una búsqueda arriba. Los enlaces de las respuestas del compañero también se abren aquí."
+],
+"Введи хотя бы два символа для поиска.": [
+"Type at least two characters to search.",
+"请至少输入两个字符进行搜索。",
+"Escribe al menos dos caracteres para buscar."
 ],
 "Введи хотя бы два символа.": [
 "Enter at least two characters.",
@@ -443,6 +748,21 @@
 "Video",
 "视频",
 "Vídeo"
+],
+"Видео готово": [
+"Video ready",
+"视频已完成",
+"Vídeo listo"
+],
+"Видео по картинке · запуск ComfyUI": [
+"Video from an image · starting ComfyUI",
+"根据图片生成视频 · 启动 ComfyUI",
+"Vídeo a partir de imagen · iniciando ComfyUI"
+],
+"Видит картинки и экран": [
+"Sees pictures and the screen",
+"能看图片和屏幕",
+"Ve imágenes y la pantalla"
 ],
 "Видит экран в паузах": [
 "Looks at the screen in pauses",
@@ -484,6 +804,11 @@
 "在窗口底部，用平常的话——就像和朋友聊天。",
 "Abajo en la ventana, con palabras sencillas, como a un amigo."
 ],
+"Во время звонка": [
+"During a call",
+"通话期间",
+"Durante una llamada"
+],
 "Во время звонка с озвучкой": [
 "During a call with voice",
 "语音通话期间",
@@ -524,6 +849,26 @@
 "共 {0}。删除的模型可以重新下载。",
 "{0} en total. Un modelo eliminado se puede volver a descargar."
 ],
+"Вставь OAuth-токен с разрешением channel:manage:polls.": [
+"Paste an OAuth token with the channel:manage:polls permission.",
+"请粘贴具有 channel:manage:polls 权限的 OAuth 令牌。",
+"Pega un token OAuth con el permiso channel:manage:polls."
+],
+"Вставь OAuth-токен с разрешением user:write:chat.": [
+"Paste an OAuth token with the user:write:chat permission.",
+"请粘贴具有 user:write:chat 权限的 OAuth 令牌。",
+"Pega un token OAuth con el permiso user:write:chat."
+],
+"Встроенные": [
+"Built-in",
+"内置",
+"Integradas"
+],
+"Вчера": [
+"Yesterday",
+"昨天",
+"Ayer"
+],
 "Вы": [
 "You",
 "你",
@@ -554,6 +899,21 @@
 "关闭",
 "Desactivado"
 ],
+"Выполнение остановлено после 30 шагов, чтобы можно было проверить результат.": [
+"Stopped after 30 steps so you can check the result.",
+"已在 30 步后停止，以便检查结果。",
+"Se detuvo tras 30 pasos para que puedas comprobar el resultado."
+],
+"Выполнение остановлено после восьми действий, чтобы можно было проверить результат.": [
+"Stopped after eight actions so you can check the result.",
+"已在执行八个操作后停止，以便检查结果。",
+"Se detuvo tras ocho acciones para que puedas comprobar el resultado."
+],
+"Выполнение остановлено: модель дважды подряд дала команду, которую нельзя выполнить. {0}": [
+"Stopped: the model twice in a row gave a command that can't be run. {0}",
+"已停止：模型连续两次给出无法执行的命令。{0}",
+"Detenido: el modelo dio dos veces seguidas un comando que no se puede ejecutar. {0}"
+],
 "Выполняется…": [
 "Running…",
 "运行中…",
@@ -583,6 +943,16 @@
 "GB) —",
 "GB）——",
 "GB) —"
+],
+"Генерация музыки и звуков пока не поддерживается.": [
+"Music and sound generation isn't supported yet.",
+"暂不支持生成音乐和音效。",
+"La generación de música y sonidos aún no está disponible."
+],
+"Глубина": [
+"Deep Ocean",
+"深海",
+"Océano profundo"
 ],
 "Говорит": [
 "Speaking",
@@ -624,15 +994,40 @@
 "语音模型",
 "Modelos de voz"
 ],
+"Готов к работе": [
+"Ready",
+"已就绪",
+"Listo"
+],
+"Готовит инструменты": [
+"Preparing tools",
+"正在准备工具",
+"Preparando herramientas"
+],
+"Готовит речь": [
+"Preparing speech",
+"正在准备语音",
+"Preparando la voz"
+],
 "Готово": [
 "Done",
 "完成",
 "Listo"
 ],
+"Готово: память ищет по смыслу": [
+"Done: memory searches by meaning",
+"完成：记忆可按含义搜索",
+"Listo: la memoria busca por significado"
+],
 "Готовые голоса: {0}.": [
 "Built-in voices: {0}.",
 "预设声音：{0}。",
 "Voces incluidas: {0}."
+],
+"Графит": [
+"Graphite",
+"石墨",
+"Grafito"
 ],
 "Да, запустить на #{0}": [
 "Yes, start on #{0}",
@@ -659,6 +1054,11 @@
 "引擎",
 "Motor"
 ],
+"Движок audio.cpp не установлен. Скачай модель в Настройки → Голос и микрофон.": [
+"The audio.cpp engine isn't installed. Download a model in Settings → Voice and microphone.",
+"audio.cpp 引擎未安装。请在“设置 → 语音和麦克风”中下载模型。",
+"El motor audio.cpp no está instalado. Descarga un modelo en Ajustes → Voz y micrófono."
+],
 "Движок ·": [
 "Engine ·",
 "引擎 ·",
@@ -668,6 +1068,11 @@
 "Engine:",
 "引擎：",
 "Motor:"
+],
+"Действие на компьютере остановлено пользователем": [
+"Computer action stopped by the user",
+"电脑操作已被用户停止",
+"Acción en el equipo detenida por el usuario"
 ],
 "Действия с чатом": [
 "Chat actions",
@@ -689,6 +1094,11 @@
 "适用于 MoE 模型（A3B、A4B…）：前 N 层的专家权重保存在内存中。几乎不降速即可释放显存。",
 "Para modelos MoE (A3B, A4B…): los pesos de los expertos de las primeras N capas se quedan en la RAM. Libera memoria de vídeo casi sin perder velocidad."
 ],
+"Для {0} нужно установить его (https://nodejs.org).": [
+"{0} needs to be installed (https://nodejs.org).",
+"需要安装 {0}（https://nodejs.org）。",
+"Hay que instalar {0} (https://nodejs.org)."
+],
 "Для видео нужна ComfyUI Desktop: установи её, затем скачай модель здесь.": [
 "Video needs ComfyUI Desktop: install it, then download the model here.",
 "视频需要 ComfyUI Desktop：请先安装它，然后在这里下载模型。",
@@ -698,6 +1108,11 @@
 "Video needs the Wan 2.2 TI2V-5B model ({0}, Apache 2.0 license): it will be downloaded into ComfyUI's model folder. It runs on the GPU; a 3-second clip takes a few minutes.",
 "视频需要 Wan 2.2 TI2V-5B 模型（{0}，Apache 2.0 许可证）：它将下载到 ComfyUI 的模型文件夹中。在显卡上运行；生成 3 秒视频需要几分钟。",
 "El vídeo necesita el modelo Wan 2.2 TI2V-5B ({0}, licencia Apache 2.0): se descargará en la carpeta de modelos de ComfyUI. Funciona en la tarjeta gráfica; un clip de 3 segundos tarda unos minutos."
+],
+"Для задачи по проекту выберите модель и папку проекта": [
+"Choose a model and a project folder for the project task",
+"请为项目任务选择模型和项目文件夹",
+"Elige un modelo y una carpeta de proyecto para la tarea"
 ],
 "Для историй и идей": [
 "For stories and ideas",
@@ -709,10 +1124,35 @@
 "适用模型",
 "Para qué modelos"
 ],
+"Для начала нужна модель — «мозг» помощника.": [
+"First you need a model — the assistant's “brain”.",
+"首先需要一个模型——助手的“大脑”。",
+"Primero necesitas un modelo: el «cerebro» del asistente."
+],
+"Для обработки изображений нужен Pillow. Установите Pillow в окружение приложения.": [
+"Image processing needs Pillow. Install Pillow into the app's environment.",
+"处理图片需要 Pillow。请在应用环境中安装 Pillow。",
+"Para procesar imágenes hace falta Pillow. Instálalo en el entorno de la aplicación."
+],
+"Для создания PPTX нужен пакет python-pptx в окружении приложения.": [
+"Creating a PPTX needs the python-pptx package in the app's environment.",
+"创建 PPTX 需要应用环境中的 python-pptx 包。",
+"Para crear un PPTX hace falta el paquete python-pptx en el entorno de la aplicación."
+],
+"Для создания презентации выберите модель": [
+"Choose a model to create a presentation",
+"请选择用于创建演示文稿的模型",
+"Elige un modelo para crear la presentación"
+],
 "Для фактов, кода и инструкций": [
 "For facts, code and instructions",
 "适合事实、代码和说明",
 "Para hechos, código e instrucciones"
+],
+"Для этой модели нет движка.": [
+"There's no engine for this model.",
+"没有适用于这个模型的引擎。",
+"No hay motor para este modelo."
 ],
 "Добавить MCP-сервер": [
 "Add MCP server",
@@ -728,6 +1168,16 @@
 "Welcome",
 "欢迎",
 "Bienvenido"
+],
+"Дождись завершения текущего действия.": [
+"Wait for the current action to finish.",
+"请等待当前操作完成。",
+"Espera a que termine la acción actual."
+],
+"Дождись ответа Twitch: запрос уже отправляется, повторять его нельзя.": [
+"Wait for Twitch: the request is already being sent and can't be repeated.",
+"请等待 Twitch 回复：请求正在发送，不能重复。",
+"Espera a Twitch: la solicitud ya se está enviando y no se puede repetir."
 ],
 "Долговременная память": [
 "Long-term memory",
@@ -759,10 +1209,20 @@
 "如果模型超出限制，将不会加载，程序会说明原因。",
 "Si un modelo no cabe en el límite, no se cargará y el programa explicará por qué."
 ],
+"Ждёт ответа модели": [
+"Waiting for the model",
+"正在等待模型回答",
+"Esperando al modelo"
+],
 "Желаемая удивительность.": [
 "Desired surprise.",
 "期望的意外度。",
 "Sorpresa deseada."
+],
+"За неделю": [
+"This week",
+"本周",
+"Esta semana"
 ],
 "Забыть": [
 "Forget",
@@ -789,6 +1249,21 @@
 "结束通话",
 "Terminar llamada"
 ],
+"Загружает workflow в ComfyUI": [
+"Loading the workflow into ComfyUI",
+"正在将 workflow 加载到 ComfyUI",
+"Cargando el workflow en ComfyUI"
+],
+"Загружает голос": [
+"Loading the voice",
+"正在加载语音",
+"Cargando la voz"
+],
+"Загружает голос {0}": [
+"Loading voice {0}",
+"正在加载语音 {0}",
+"Cargando la voz {0}"
+],
 "Загрузка идёт — прогресс виден в панели слева. Окно можно не закрывать.": [
 "Downloading — progress is shown in the left panel. No need to keep this window open.",
 "正在下载——进度显示在左侧面板中。不必保持此窗口打开。",
@@ -799,10 +1274,25 @@
 "正在加载模型",
 "Cargando el modelo"
 ],
+"Загрузка модели {0}": [
+"Loading model {0}",
+"正在加载模型 {0}",
+"Cargando el modelo {0}"
+],
+"Загрузка модели {0} · {1}%": [
+"Loading model {0} · {1}%",
+"正在加载模型 {0} · {1}%",
+"Cargando modelo {0} · {1}%"
+],
 "Загрузка описания…": [
 "Loading description…",
 "正在加载描述…",
 "Cargando descripción…"
+],
+"Загрузка отменена.": [
+"Download cancelled.",
+"下载已取消。",
+"Descarga cancelada."
 ],
 "Загрузка популярных моделей…": [
 "Loading popular models…",
@@ -828,6 +1318,16 @@
 "Downloads",
 "下载",
 "Descargas"
+],
+"Задача по проекту · запуск агента": [
+"Project task · starting the agent",
+"项目任务 · 启动代理",
+"Tarea del proyecto · iniciando el agente"
+],
+"Задача разработки прервана пользователем": [
+"Development task stopped by the user",
+"开发任务已被用户中断",
+"Tarea de desarrollo detenida por el usuario"
 ],
 "Закрепить": [
 "Pin",
@@ -859,10 +1359,50 @@
 "5–15 秒的 WAV 录音。若在“语音”中选择“我的声音样本”，具有声音克隆功能的模型（XTTS、Chatterbox、F5-TTS、VoxCPM、OmniVoice、IndexTTS2 等）将用这个声音说话。",
 "Una grabación WAV de 5–15 segundos. Los modelos que clonan voces (XTTS, Chatterbox, F5-TTS, VoxCPM, OmniVoice, IndexTTS2 y otros) hablarán con esta voz si eliges «Mi muestra de voz» en el campo «Voz»."
 ],
+"Заполненность контекста": [
+"Context usage",
+"上下文占用",
+"Uso del contexto"
+],
 "Запомнить": [
 "Remember",
 "记住",
 "Recordar"
+],
+"Запрос к {0}": [
+"Request to {0}",
+"正在请求 {0}",
+"Solicitud a {0}"
+],
+"Запрос на видео · запуск ComfyUI": [
+"Video request · starting ComfyUI",
+"视频请求 · 启动 ComfyUI",
+"Solicitud de vídeo · iniciando ComfyUI"
+],
+"Запрос прерван пользователем": [
+"Request stopped by the user",
+"请求已被用户中断",
+"Solicitud detenida por el usuario"
+],
+"Запускает Parakeet · CUDA": [
+"Starting Parakeet · CUDA",
+"正在启动 Parakeet · CUDA",
+"Iniciando Parakeet · CUDA"
+],
+"Запускает локальный ComfyUI": [
+"Starting local ComfyUI",
+"正在启动本地 ComfyUI",
+"Iniciando ComfyUI local"
+],
+"Запускает озвучку": [
+"Starting the voice",
+"正在启动朗读",
+"Iniciando la voz"
+],
+"Запускается": [
+"Starting",
+"正在启动",
+"Iniciando"
 ],
 "Запустится через {0}": [
 "Will run with {0}",
@@ -889,6 +1429,11 @@
 "通话",
 "Llamada"
 ],
+"Звонок завершён": [
+"Call ended",
+"通话已结束",
+"Llamada finalizada"
+],
 "Звук ПК": [
 "PC sound",
 "电脑声音",
@@ -904,10 +1449,20 @@
 "当你让伙伴处理代码时，它会在这里读取和修改文件。",
 "Aquí el compañero lee y edita archivos cuando le pides algo con el código."
 ],
+"Здесь нечего отменять.": [
+"There is nothing to undo here.",
+"这里没有可撤销的内容。",
+"Aquí no hay nada que deshacer."
+],
 "Зерно (seed)": [
 "Seed",
 "随机种子（seed）",
 "Semilla (seed)"
+],
+"Значок в трее: щелчок открывает окно, правая кнопка — «Выйти».": [
+"Tray icon: click to open the window, right-click for Quit.",
+"托盘图标：单击打开窗口，右键选择“退出”。",
+"Icono de la bandeja: clic para abrir la ventana, clic derecho para Salir."
 ],
 "Изменения действуют на все модели, кроме тех, где заданы свои.": [
 "Changes apply to all models except those with their own.",
@@ -939,6 +1494,21 @@
 "说明",
 "Instrucciones"
 ],
+"Инструкция": [
+"Instructions",
+"指令",
+"Instrucciones"
+],
+"Инструмент · {0}": [
+"Tool · {0}",
+"工具 · {0}",
+"Herramienta · {0}"
+],
+"Инструменты": [
+"Tools",
+"工具",
+"Herramientas"
+],
 "Инструменты в ответах": [
 "Tools in answers",
 "回答中的工具",
@@ -953,6 +1523,11 @@
 "Integrations",
 "集成",
 "Integraciones"
+],
+"Интеграция ComfyUI выключена. Включи её в настройках Компаньона.": [
+"The ComfyUI integration is off. Turn it on in the settings.",
+"ComfyUI 集成已关闭。请在设置中开启。",
+"La integración con ComfyUI está desactivada. Actívala en los ajustes."
 ],
 "Интеграция Twitch выключена в настройках.": [
 "The Twitch integration is turned off in settings.",
@@ -1049,6 +1624,21 @@
 "频道",
 "Canal"
 ],
+"Канал «{0}» не найден.": [
+"Channel “{0}” not found.",
+"未找到频道“{0}”。",
+"No se encontró el canal «{0}»."
+],
+"Картинка пустая или больше 20 МБ.": [
+"The image is empty or larger than 20 MB.",
+"图片为空或大于 20 MB。",
+"La imagen está vacía o pesa más de 20 MB."
+],
+"Картинки": [
+"Images",
+"图片",
+"Imágenes"
+],
 "Картинки и видео": [
 "Images and video",
 "图片与视频",
@@ -1058,6 +1648,11 @@
 "Video quality",
 "视频质量",
 "Calidad del vídeo"
+],
+"Клик выполняется отдельной командой по свежему скриншоту.": [
+"A click is a separate command based on a fresh screenshot.",
+"点击需要根据最新截图单独执行。",
+"Un clic es un comando aparte basado en una captura reciente."
 ],
 "Ключ из личного кабинета сервиса.": [
 "A key from the service's account page.",
@@ -1089,6 +1684,16 @@
 "代码",
 "Código"
 ],
+"Код завершился с кодом {0} за {1} с.": [
+"The code exited with code {0} in {1} s.",
+"代码在 {1} 秒内以代码 {0} 结束。",
+"El código terminó con el código {0} en {1} s."
+],
+"Код работал дольше {0} с и был остановлен.": [
+"The code ran longer than {0} s and was stopped.",
+"代码运行超过 {0} 秒，已被停止。",
+"El código tardó más de {0} s y se detuvo."
+],
 "Код, названия моделей и цифры всегда остаются моноширинными.": [
 "Code, model names and numbers always stay monospaced.",
 "代码、模型名称和数字始终使用等宽字体。",
@@ -1098,6 +1703,11 @@
 "Command",
 "命令",
 "Comando"
+],
+"Команда завершилась с ошибкой: {0}": [
+"The command failed: {0}",
+"命令执行出错：{0}",
+"El comando falló: {0}"
 ],
 "Команда запуска": [
 "Start command",
@@ -1109,6 +1719,16 @@
 "命令提示符",
 "Símbolo del sistema"
 ],
+"Команды «{0}» нет. Доступны: {1}.": [
+"There is no “{0}” command. Available: {1}.",
+"没有“{0}”命令。可用命令：{1}。",
+"No existe el comando «{0}». Disponibles: {1}."
+],
+"Компаньон включён. Скажите что-нибудь или продолжайте заниматься своими делами.": [
+"The companion is on. Say something or carry on with what you're doing.",
+"助手已开启。说点什么，或者继续忙你的事。",
+"El compañero está activo. Di algo o sigue con lo tuyo."
+],
 "Компаньон просит разрешения на скачивание.": [
 "The companion asks permission to download.",
 "伙伴请求下载许可。",
@@ -1119,10 +1739,25 @@
 "在模型仍在书写时，伙伴会逐句朗读回答。",
 "El compañero lee la respuesta en voz alta frase a frase mientras el modelo aún la escribe."
 ],
+"Компьютер · {0} · шаг {1}": [
+"Computer · {0} · step {1}",
+"电脑 · {0} · 第 {1} 步",
+"Equipo · {0} · paso {1}"
+],
 "Контекст": [
 "Context",
 "上下文",
 "Contexto"
+],
+"Контекст: сколько текста модель помнит за раз": [
+"Context: how much text the model keeps in mind at once",
+"上下文：模型一次能记住多少文本",
+"Contexto: cuánto texto recuerda el modelo a la vez"
+],
+"Контрольная сумма {0} не совпала, файл повреждён.": [
+"The checksum of {0} didn't match, the file is damaged.",
+"{0} 的校验和不匹配，文件已损坏。",
+"La suma de comprobación de {0} no coincide; el archivo está dañado."
 ],
 "Копировать": [
 "Copy",
@@ -1133,6 +1768,16 @@
 "Copy answer",
 "复制回答",
 "Copiar respuesta"
+],
+"Кофе": [
+"Coffee",
+"咖啡",
+"Café"
+],
+"Краткое содержание": [
+"Summary",
+"摘要",
+"Resumen"
 ],
 "Крестик прячет окно в трей (значок у часов), ответы и вопросы модели приходят уведомлениями. Выйти совсем — правой кнопкой по значку → «Выйти».": [
 "The close button hides the window to the tray (the icon by the clock); the model's answers and questions arrive as notifications. To quit completely — right-click the icon → “Quit”.",
@@ -1164,10 +1809,35 @@
 "许可证：",
 "Licencia:"
 ],
+"Локальная модель выключена. Включи её в настройках Компаньона.": [
+"The local model is off. Turn it on in the settings.",
+"本地模型已关闭。请在设置中开启。",
+"El modelo local está desactivado. Actívalo en los ajustes."
+],
+"Локальный сервер ComfyUI не запустился. Проверьте установку Comfy Desktop.": [
+"The local ComfyUI server didn't start. Check the Comfy Desktop installation.",
+"本地 ComfyUI 服务器未能启动。请检查 Comfy Desktop 的安装。",
+"El servidor local de ComfyUI no se inició. Revisa la instalación de Comfy Desktop."
+],
+"Любой сервер с OpenAI API, например vLLM или text-generation-webui.": [
+"Any server with an OpenAI API, such as vLLM or text-generation-webui.",
+"任何带 OpenAI API 的服务器，例如 vLLM 或 text-generation-webui。",
+"Cualquier servidor con API de OpenAI, como vLLM o text-generation-webui."
+],
 "Любой сервер с OpenAI API, например vLLM или text-generation-webui: адрес до /v1.": [
 "Any server with an OpenAI API, e.g. vLLM or text-generation-webui: the address up to /v1.",
 "任何兼容 OpenAI API 的服务器，例如 vLLM 或 text-generation-webui：填写到 /v1 的地址。",
 "Cualquier servidor con API de OpenAI, como vLLM o text-generation-webui: la dirección hasta /v1."
+],
+"Лёгкие голоса Piper, работают на процессоре.": [
+"Light Piper voices that run on the CPU.",
+"轻量的 Piper 语音，在 CPU 上运行。",
+"Voces ligeras de Piper que funcionan en el procesador."
+],
+"Максимальный": [
+"Maximum",
+"最高",
+"Máximo"
 ],
 "Максимум видеопамяти": [
 "Maximum video memory",
@@ -1189,6 +1859,11 @@
 "更省显存：8K 上下文，压缩缓存",
 "Menos memoria de vídeo: contexto de 8K, caché comprimida"
 ],
+"Меняет модель озвучки": [
+"Switching the voice model",
+"正在切换朗读模型",
+"Cambiando el modelo de voz"
+],
 "Место на диске": [
 "Disk space",
 "磁盘空间",
@@ -1203,6 +1878,16 @@
 "Microphone off",
 "麦克风已关闭",
 "Micrófono desactivado"
+],
+"Минимальный": [
+"Minimal",
+"最低",
+"Mínimo"
+],
+"Много моделей разных компаний через один ключ.": [
+"Many companies' models through one key.",
+"通过一个密钥使用多家公司的模型。",
+"Modelos de muchas empresas con una sola clave."
 ],
 "Моделей в памяти одновременно": [
 "Models loaded at once",
@@ -1219,10 +1904,45 @@
 "模型（llama.cpp 及已连接的服务）",
 "Modelos (llama.cpp y servicios conectados)"
 ],
+"Модели Claude по твоему ключу.": [
+"Claude models with your key.",
+"使用你的密钥调用 Claude 模型。",
+"Modelos Claude con tu clave."
+],
+"Модели Google Gemini по твоему ключу.": [
+"Google Gemini models with your key.",
+"使用你的密钥调用 Google Gemini 模型。",
+"Modelos Google Gemini con tu clave."
+],
 "Модели Ollama": [
 "Ollama models",
 "Ollama 模型",
 "Modelos de Ollama"
+],
+"Модели OpenAI по твоему ключу.": [
+"OpenAI models with your key.",
+"使用你的密钥调用 OpenAI 模型。",
+"Modelos de OpenAI con tu clave."
+],
+"Модели Qwen3-TTS: готовые голоса, голос по описанию и клонирование.": [
+"Qwen3-TTS models: ready voices, voice from a description and cloning.",
+"Qwen3-TTS 模型：预设语音、按描述生成语音和克隆。",
+"Modelos Qwen3-TTS: voces listas, voz por descripción y clonación."
+],
+"Модели из LM Studio, которая запущена на этом компьютере.": [
+"Models from LM Studio running on this computer.",
+"来自本机运行的 LM Studio 的模型。",
+"Modelos de LM Studio en este equipo."
+],
+"Модели из Ollama, которая запущена на этом компьютере.": [
+"Models from Ollama running on this computer.",
+"来自本机运行的 Ollama 的模型。",
+"Modelos de Ollama en este equipo."
+],
+"Модели из программ и сервисов появятся в общем списке моделей, и их можно выбрать для любого чата. Ключи хранятся зашифрованными средствами Windows и отправляются только своему сервису.": [
+"Models from these programs and services join the common model list and can be chosen for any chat. Keys are stored encrypted by Windows and are sent only to their own service.",
+"这些程序和服务的模型会加入统一的模型列表，可用于任何对话。密钥由 Windows 加密保存，只会发送给对应的服务。",
+"Los modelos de estos programas y servicios se unen a la lista común y se pueden elegir en cualquier chat. Las claves se guardan cifradas por Windows y solo se envían a su propio servicio."
 ],
 "Модели из этих программ и сервисов появятся в общем списке моделей, и их можно выбрать для любого чата. Ключи хранятся зашифрованными средствами Windows и отправляются только своему сервису.": [
 "Models from these apps and services appear in the common model list and can be chosen for any chat. Keys are stored encrypted by Windows and are sent only to their own service.",
@@ -1254,10 +1974,35 @@
 "Wan 2.2 模型（Apache 2.0）已就绪。可以说“拍一段……的视频”，或附上图片让它生成视频。",
 "El modelo Wan 2.2 (Apache 2.0) está listo. Pide «haz un vídeo de…» o adjunta una imagen y pide convertirla en vídeo."
 ],
+"Модель {0} грузится слишком долго. Журнал: {1}": [
+"Model {0} is taking too long to load. Log: {1}",
+"模型 {0} 加载时间过长。日志：{1}",
+"El modelo {0} tarda demasiado en cargar. Registro: {1}"
+],
 "Модель {0} сменена. Чтобы она заработала, программу нужно перезапустить. Чаты и настройки сохранятся.": [
 "The {0} model has been changed. Restart the app for it to take effect. Chats and settings will be kept.",
 "已更换{0}模型。需要重启程序才能生效。聊天和设置会保留。",
 "Se cambió el modelo de {0}. Reinicia el programa para que funcione. Los chats y la configuración se conservarán."
+],
+"Модель «{0}» не найдена в папке моделей: {1}": [
+"Model “{0}” wasn't found in the models folder: {1}",
+"在模型文件夹中未找到模型“{0}”：{1}",
+"No se encontró el modelo «{0}» en la carpeta de modelos: {1}"
+],
+"Модель «{0}» не помещается в лимит оперативной памяти: ей нужно около {1} ГБ ОЗУ, лимит {2} ГБ. Уменьши контекст, подними лимит или выбери модель поменьше.": [
+"Model “{0}” doesn't fit the RAM limit: it needs about {1} GB, the limit is {2} GB. Lower the context, raise the limit or pick a smaller model.",
+"模型“{0}”超出内存限制：大约需要 {1} GB 内存，限制为 {2} GB。请减小上下文、提高限制或选择更小的模型。",
+"El modelo «{0}» no cabe en el límite de RAM: necesita unos {1} GB y el límite es {2} GB. Reduce el contexto, sube el límite o elige un modelo más pequeño."
+],
+"Модель вернула пустой ответ. Попробуй ещё раз, выбери другую модель или увеличь «Контекст» в её параметрах.": [
+"The model returned an empty answer. Try again, pick another model or raise Context in its parameters.",
+"模型返回了空回答。请重试、换一个模型，或在其参数中增大“上下文”。",
+"El modelo devolvió una respuesta vacía. Inténtalo de nuevo, elige otro modelo o aumenta «Contexto» en sus parámetros."
+],
+"Модель вернула пустую или некорректную команду, управление компьютером остановлено.": [
+"The model returned an empty or invalid command; computer control stopped.",
+"模型返回了空的或无效的命令，已停止控制电脑。",
+"El modelo devolvió un comando vacío o no válido; se detuvo el control del equipo."
 ],
 "Модель выбирает из самых вероятных слов, пока их сумма не наберёт эту долю.": [
 "The model picks from the most likely words until their total reaches this share.",
@@ -1279,15 +2024,70 @@
 "模型占用不会超过此值；其余层将放入内存。",
 "El modelo no usará más; las demás capas irán a la RAM."
 ],
+"Модель запросила генерацию изображения · ComfyUI": [
+"The model asked for an image · ComfyUI",
+"模型请求生成图片 · ComfyUI",
+"El modelo pidió una imagen · ComfyUI"
+],
+"Модель не выбрана": [
+"No model selected",
+"未选择模型",
+"Ningún modelo seleccionado"
+],
+"Модель не выполнила ни одного действия.": [
+"The model did not perform any action.",
+"模型没有执行任何操作。",
+"El modelo no realizó ninguna acción."
+],
+"Модель не загрузилась за 10 минут. Подробности в журнале: {0}": [
+"The model didn't load within 10 minutes. Details in the log: {0}",
+"模型未在 10 分钟内加载完成。详情见日志：{0}",
+"El modelo no cargó en 10 minutos. Detalles en el registro: {0}"
+],
+"Модель не поддерживает такой уровень.": [
+"The model doesn't support this level.",
+"模型不支持这个级别。",
+"El modelo no admite este nivel."
+],
+"Модель не смогла подготовить структуру презентации в формате JSON.": [
+"The model couldn't produce the presentation outline as JSON.",
+"模型未能以 JSON 格式生成演示文稿结构。",
+"El modelo no pudo preparar la estructura de la presentación en JSON."
+],
+"Модель обдумывает ответ": [
+"The model is thinking",
+"模型正在思考",
+"El modelo está pensando"
+],
+"Модель озвучки не скачана. Скачай её в Настройки → Голос и микрофон.": [
+"The voice model isn't downloaded. Download it in Settings → Voice and microphone.",
+"朗读模型尚未下载。请在“设置 → 语音和麦克风”中下载。",
+"El modelo de voz no está descargado. Descárgalo en Ajustes → Voz y micrófono."
+],
 "Модель перестанет находить прошлые разговоры. Сами чаты останутся.": [
 "The model will stop finding past conversations. The chats themselves stay.",
 "模型将无法再找到过去的对话。聊天本身会保留。",
 "El modelo dejará de encontrar conversaciones pasadas. Los chats se conservan."
 ],
+"Модель пишет ответ": [
+"The model is writing",
+"模型正在撰写回答",
+"El modelo está escribiendo"
+],
 "Модель помнит факты о тебе и находит нужное в прошлых разговорах из всех чатов. Всё хранится только на этом компьютере.": [
 "The model remembers facts about you and finds what it needs in past conversations from all chats. Everything stays on this computer.",
 "模型会记住关于你的事实，并从所有聊天的历史对话中查找所需内容。所有数据只保存在这台电脑上。",
 "El modelo recuerda datos sobre ti y encuentra lo necesario en conversaciones pasadas de todos los chats. Todo se guarda solo en este equipo."
+],
+"Модель промолчала, спрашивает ещё раз": [
+"The model stayed silent, asking again",
+"模型没有回答，正在重新询问",
+"El modelo no respondió, preguntando de nuevo"
+],
+"Модель распознавания речи не скачана. Скачай её в Настройки → Голос и микрофон.": [
+"The speech recognition model isn't downloaded. Download it in Settings → Voice and microphone.",
+"语音识别模型尚未下载。请在“设置 → 语音和麦克风”中下载。",
+"El modelo de reconocimiento de voz no está descargado. Descárgalo en Ajustes → Voz y micrófono."
 ],
 "Модель сама называет новые чаты": [
 "The model names new chats itself",
@@ -1299,10 +2099,25 @@
 "模型会自行决定何时在内置浏览器中打开网站、上网搜索、使用技能或调用 MCP 服务器工具。每次调用都会显示在聊天中。",
 "El modelo decide cuándo abrir un sitio en el navegador integrado, buscar en internet, usar una habilidad o llamar a una herramienta de un servidor MCP. Cada llamada se ve en el chat."
 ],
+"Модель сейчас используется. Заверши звонок и повтори.": [
+"The model is in use. End the call and try again.",
+"模型正在使用中。请结束通话后重试。",
+"El modelo está en uso. Finaliza la llamada y vuelve a intentarlo."
+],
 "Модель скачана": [
 "Model downloaded",
 "模型已下载",
 "Modelo descargado"
+],
+"Модель тоже будет отвечать на нём.": [
+"The model will answer in it too.",
+"模型也会用这种语言回答。",
+"El modelo también responderá en él."
+],
+"Модель уже скачивается.": [
+"The model is already downloading.",
+"模型已在下载。",
+"El modelo ya se está descargando."
 ],
 "Модель:": [
 "Model:",
@@ -1319,6 +2134,11 @@
 "温和地禁止逐字重复较长片段。0 — 关闭，0.8 — 常用值。",
 "Impide con suavidad repetir literalmente fragmentos largos. 0 — desactivado, 0.8 — valor habitual."
 ],
+"На диске": [
+"On disk",
+"磁盘占用",
+"En disco"
+],
 "Навык {0}": [
 "Skill {0}",
 "技能 {0}",
@@ -1334,6 +2154,11 @@
 "技能",
 "Habilidades"
 ],
+"Нажми ещё раз, чтобы удалить": [
+"Click again to delete",
+"再次点击以删除",
+"Haz clic otra vez para eliminar"
+],
 "Назад": [
 "Back",
 "后退",
@@ -1344,10 +2169,20 @@
 "名称",
 "Nombre"
 ],
+"Название канала: только латинские буквы, цифры и _.": [
+"Channel name: Latin letters, digits and _ only.",
+"频道名称：只能包含拉丁字母、数字和 _。",
+"Nombre del canal: solo letras latinas, cifras y _."
+],
 "Название модели": [
 "Model name",
 "模型名称",
 "Nombre del modelo"
+],
+"Название навыка: латинские буквы, цифры и дефис, от 2 символов.": [
+"Skill name: Latin letters, digits and hyphens, at least 2 characters.",
+"技能名称：拉丁字母、数字和连字符，至少 2 个字符。",
+"Nombre de la habilidad: letras latinas, cifras y guiones, al menos 2 caracteres."
 ],
 "Найди и исправь ошибку в проекте": [
 "Find and fix a bug in the project",
@@ -1358,6 +2193,11 @@
 "Find others on Hugging Face…",
 "在 Hugging Face 上查找更多…",
 "Buscar otros en Hugging Face…"
+],
+"Найти интеграцию": [
+"Find an integration",
+"查找集成",
+"Buscar integración"
 ],
 "Найти модель": [
 "Find a model",
@@ -1439,10 +2279,20 @@
 "找到 {0} 个仓库。请选择一个。",
 "Repositorios encontrados: {0}. Elige uno."
 ],
+"Не GGUF-файл: {0}": [
+"Not a GGUF file: {0}",
+"不是 GGUF 文件：{0}",
+"No es un archivo GGUF: {0}"
+],
 "Не влезет в видеопамять целиком: часть уйдёт в ОЗУ, и всё будет работать медленнее.": [
 "Won't fit entirely in video memory: part will go to RAM and everything will run slower.",
 "无法完全放入显存：部分将放入内存，整体会变慢。",
 "No cabe entera en la memoria de vídeo: una parte irá a la RAM y todo irá más lento."
+],
+"Не выбрана модель": [
+"No model selected",
+"未选择模型",
+"No hay modelo seleccionado"
 ],
 "Не выгружать из ОЗУ (mlock)": [
 "Keep in RAM (mlock)",
@@ -1454,10 +2304,25 @@
 "无法运行：{0}",
 "No funcionará: {0}"
 ],
+"Не найден llama-server.exe: {0}": [
+"llama-server.exe not found: {0}",
+"未找到 llama-server.exe：{0}",
+"No se encontró llama-server.exe: {0}"
+],
 "Не отправлено.": [
 "Not sent.",
 "未发送。",
 "No enviado."
+],
+"Не отправлено: {0}": [
+"Not sent: {0}",
+"未发送：{0}",
+"No enviado: {0}"
+],
+"Не получилось открыть микрофон: {0}": [
+"Couldn't open the microphone: {0}",
+"无法打开麦克风：{0}",
+"No se pudo abrir el micrófono: {0}"
 ],
 "Не получилось.": [
 "Didn't work.",
@@ -1474,10 +2339,50 @@
 "不下载",
 "No descargar"
 ],
+"Не удалось запустить аудиозахват: {0}": [
+"Couldn't start audio capture: {0}",
+"无法启动音频采集：{0}",
+"No se pudo iniciar la captura de audio: {0}"
+],
+"Не удалось запустить модель {0}. Журнал: {1}": [
+"Couldn't start model {0}. Log: {1}",
+"无法启动模型 {0}。日志：{1}",
+"No se pudo iniciar el modelo {0}. Registro: {1}"
+],
+"Не удалось запустить распознавание Parakeet: {0}": [
+"Couldn't start Parakeet speech recognition: {0}",
+"无法启动 Parakeet 语音识别：{0}",
+"No se pudo iniciar el reconocimiento Parakeet: {0}"
+],
 "Не удалось начать загрузку.": [
 "Couldn't start the download.",
 "无法开始下载。",
 "No se pudo iniciar la descarga."
+],
+"Не удалось озвучить ответ: {0}": [
+"Couldn't voice the answer: {0}",
+"无法朗读回答：{0}",
+"No se pudo leer la respuesta en voz alta: {0}"
+],
+"Не удалось открыть звук компьютера: {0}": [
+"Couldn't open the computer's sound: {0}",
+"无法打开电脑声音：{0}",
+"No se pudo abrir el sonido del equipo: {0}"
+],
+"Не удалось переименовать чат.": [
+"Couldn't rename the chat.",
+"无法重命名对话。",
+"No se pudo renombrar el chat."
+],
+"Не удалось подготовить изображение: {0}": [
+"Couldn't prepare the image: {0}",
+"无法准备图片：{0}",
+"No se pudo preparar la imagen: {0}"
+],
+"Не удалось получить ответ модели: {0}": [
+"Couldn't get the model's answer: {0}",
+"无法获取模型的回答：{0}",
+"No se pudo obtener la respuesta del modelo: {0}"
 ],
 "Не удалось получить файлы.": [
 "Couldn't get the files.",
@@ -1489,35 +2394,115 @@
 "无法读取演示文稿。",
 "No se pudo leer la presentación."
 ],
+"Не удалось прочитать презентацию: {0}": [
+"Couldn't read the presentation: {0}",
+"无法读取演示文稿：{0}",
+"No se pudo leer la presentación: {0}"
+],
+"Не удалось прочитать файл.": [
+"Couldn't read the file.",
+"无法读取文件。",
+"No se pudo leer el archivo."
+],
+"Не удалось распознать адрес сайта.": [
+"Couldn't recognize the website address.",
+"无法识别网址。",
+"No se pudo reconocer la dirección web."
+],
 "Не удалось связаться с Hugging Face. Проверь интернет или скачай модель вручную через меню выбора модели.": [
 "Couldn't reach Hugging Face. Check your internet connection or download a model manually from the model menu.",
 "无法连接 Hugging Face。请检查网络，或通过模型选择菜单手动下载模型。",
 "No se pudo conectar con Hugging Face. Comprueba internet o descarga un modelo manualmente desde el menú de modelos."
+],
+"Не удалось создать видео: {0}": [
+"Couldn't create the video: {0}",
+"无法生成视频：{0}",
+"No se pudo crear el vídeo: {0}"
+],
+"Не удалось создать изображение через ComfyUI: {0}": [
+"Couldn't create the image with ComfyUI: {0}",
+"无法通过 ComfyUI 生成图片：{0}",
+"No se pudo crear la imagen con ComfyUI: {0}"
+],
+"Не удалось создать презентацию: {0}": [
+"Couldn't create the presentation: {0}",
+"无法创建演示文稿：{0}",
+"No se pudo crear la presentación: {0}"
+],
+"Не удалось сохранить файл: {0}": [
+"Couldn't save the file: {0}",
+"无法保存文件：{0}",
+"No se pudo guardar el archivo: {0}"
+],
+"Не удалось сохранить: {0}": [
+"Couldn't save: {0}",
+"无法保存：{0}",
+"No se pudo guardar: {0}"
 ],
 "Не удалось удалить.": [
 "Couldn't delete.",
 "无法删除。",
 "No se pudo eliminar."
 ],
+"Не удалось удалить: {0}": [
+"Couldn't delete: {0}",
+"无法删除：{0}",
+"No se pudo eliminar: {0}"
+],
 "Не удалось узнать у модели: {0}": [
 "Couldn't ask the model: {0}",
 "无法从模型获取：{0}",
 "No se pudo consultar al modelo: {0}"
+],
+"Не удалось установить soundcard. Подробности: {0}": [
+"Couldn't install soundcard. Details: {0}",
+"无法安装 soundcard。详情：{0}",
+"No se pudo instalar soundcard. Detalles: {0}"
 ],
 "Недавние": [
 "Recent",
 "最近",
 "Recientes"
 ],
+"Неизвестная модель.": [
+"Unknown model.",
+"未知模型。",
+"Modelo desconocido."
+],
+"Неизвестная модель: {0}/{1}": [
+"Unknown model: {0}/{1}",
+"未知模型：{0}/{1}",
+"Modelo desconocido: {0}/{1}"
+],
+"Неизвестный вид модели.": [
+"Unknown model kind.",
+"未知的模型类型。",
+"Tipo de modelo desconocido."
+],
+"Неизвестный сервис.": [
+"Unknown service.",
+"未知服务。",
+"Servicio desconocido."
+],
 "Нет моделей": [
 "No models",
 "没有模型",
 "No hay modelos"
 ],
+"Нет связи с Hugging Face.": [
+"No connection to Hugging Face.",
+"无法连接 Hugging Face。",
+"Sin conexión con Hugging Face."
+],
 "Нет связи с движком": [
 "No connection to the engine",
 "无法连接到引擎",
 "Sin conexión con el motor"
+],
+"Нечего повторять или идёт другое действие.": [
+"Nothing to repeat, or another action is running.",
+"没有可重复的内容，或其他操作正在进行。",
+"No hay nada que repetir o hay otra acción en curso."
 ],
 "Ниже — точнее и однообразнее, выше — творческее и случайнее.": [
 "Lower — more precise and uniform, higher — more creative and random.",
@@ -1574,15 +2559,30 @@
 "新聊天（Ctrl+N）",
 "Chat nuevo (Ctrl+N)"
 ],
+"Нужен вопрос до 60 символов и от 2 до 5 вариантов до 25 символов.": [
+"Needs a question up to 60 characters and 2 to 5 options up to 25 characters.",
+"需要不超过 60 个字符的问题，以及 2 到 5 个不超过 25 个字符的选项。",
+"Hace falta una pregunta de hasta 60 caracteres y de 2 a 5 opciones de hasta 25."
+],
 "Нужен перезапуск": [
 "Restart needed",
 "需要重启",
 "Hace falta reiniciar"
 ],
+"Нужно описание: когда модели применять этот навык.": [
+"A description is needed: when the model should use this skill.",
+"需要描述：模型何时使用这个技能。",
+"Hace falta una descripción: cuándo debe usar el modelo esta habilidad."
+],
 "Нужно разрешение": [
 "Requires the scope",
 "需要权限",
 "Se necesita el permiso"
+],
+"Нужны название и команда запуска (или адрес сервера).": [
+"A name and a start command (or a server address) are needed.",
+"需要名称和启动命令（或服务器地址）。",
+"Hacen falta un nombre y un comando de inicio (o la dirección del servidor)."
 ],
 "Нужны установленные Node.js (npx) или uv (uvx) — смотри README сервера.": [
 "Requires Node.js (npx) or uv (uvx) installed — see the server's README.",
@@ -1609,6 +2609,11 @@
 "声音样本",
 "Muestra de voz"
 ],
+"Общие пакеты (PyTorch и др.)": [
+"Shared packages (PyTorch etc.)",
+"共享包（PyTorch 等）",
+"Paquetes comunes (PyTorch, etc.)"
+],
 "Объясни простыми словами, как работает видеокарта": [
 "Explain in simple words how a graphics card works",
 "用通俗的话解释显卡是如何工作的",
@@ -1623,6 +2628,16 @@
 "Normal · 832×480, 3 s",
 "标准 · 832×480，3 秒",
 "Normal · 832×480, 3 s"
+],
+"Озвучивание прервано": [
+"Voice stopped",
+"朗读已中断",
+"Voz detenida"
+],
+"Озвучивание прервано пользователем": [
+"Voice stopped by the user",
+"朗读已被用户中断",
+"Voz detenida por el usuario"
 ],
 "Озвучивать ответы": [
 "Read answers aloud",
@@ -1639,15 +2654,50 @@
 "语音合成",
 "Voz"
 ],
+"Озвучка вернула WAV с неподдерживаемыми параметрами.": [
+"The voice engine returned a WAV with unsupported parameters.",
+"朗读引擎返回了参数不受支持的 WAV。",
+"El motor de voz devolvió un WAV con parámetros no compatibles."
+],
+"Озвучка вернула аудио в неожиданном формате.": [
+"The voice engine returned audio in an unexpected format.",
+"朗读引擎返回了格式异常的音频。",
+"El motor de voz devolvió audio en un formato inesperado."
+],
 "Озвучка и распознавание…": [
 "Speech and recognition…",
 "语音合成与识别…",
 "Voz y reconocimiento…"
 ],
+"Окно ещё не готово.": [
+"The window isn't ready yet.",
+"窗口尚未就绪。",
+"La ventana aún no está lista."
+],
+"Окно модели — {0} токенов. Когда переписка займёт {1}, старые сообщения перестанут отправляться модели; вторая половина окна остаётся для ответа.": [
+"The model's window is {0} tokens. Once the conversation takes {1}, older messages stop being sent to the model; the other half of the window is kept for the answer.",
+"模型窗口为 {0} 个 token。对话占到 {1} 时，较早的消息将不再发送给模型；窗口的另一半留给回答。",
+"La ventana del modelo es de {0} tokens. Cuando la conversación ocupe {1}, los mensajes antiguos dejan de enviarse; la otra mitad queda para la respuesta."
+],
+"Окно модели — {0} токенов. Когда переписка займёт {1}, старые сообщения сожмутся в краткое содержание; вторая половина окна остаётся для ответа.": [
+"The model's window is {0} tokens. Once the conversation takes {1}, older messages are folded into a summary; the other half of the window is kept for the answer.",
+"模型窗口为 {0} 个 token。对话占到 {1} 时，较早的消息会被压缩成摘要；窗口的另一半留给回答。",
+"La ventana del modelo es de {0} tokens. Cuando la conversación ocupe {1}, los mensajes antiguos se resumen; la otra mitad queda para la respuesta."
+],
 "Окно можно закрыть: загрузка продолжится, её видно в панели слева.": [
 "You can close the window: the download continues and is shown in the left panel.",
 "可以关闭此窗口：下载会继续，并显示在左侧面板中。",
 "Puedes cerrar la ventana: la descarga continuará y se verá en el panel izquierdo."
+],
+"Окно не закрыто: пользователь этого не просил.": [
+"Window not closed: the user didn't ask for it.",
+"未关闭窗口：用户没有要求。",
+"No se cerró la ventana: el usuario no lo pidió."
+],
+"Окно не переключено: пользователь не называл его.": [
+"Window not switched: the user didn't name it.",
+"未切换窗口：用户没有指明该窗口。",
+"No se cambió de ventana: el usuario no la nombró."
 ],
 "Окно повторов": [
 "Repeat window",
@@ -1684,15 +2734,45 @@
 "投票已发起。",
 "Encuesta iniciada."
 ],
+"Опрос можно запустить только на своём канале: токен принадлежит другому каналу.": [
+"A poll can only run on your own channel: the token belongs to another channel.",
+"只能在自己的频道发起投票：该令牌属于其他频道。",
+"Solo puedes lanzar una encuesta en tu propio canal: el token es de otro canal."
+],
 "Опрос не запущен.": [
 "Poll not started.",
 "投票未发起。",
 "La encuesta no se inició."
 ],
+"Освобождает память для ComfyUI": [
+"Freeing memory for ComfyUI",
+"正在为 ComfyUI 释放内存",
+"Liberando memoria para ComfyUI"
+],
+"Освобождает память для генерации видео": [
+"Freeing memory for video generation",
+"正在为生成视频释放内存",
+"Liberando memoria para generar el vídeo"
+],
+"Освобождает память для генерации изображения": [
+"Freeing memory for image generation",
+"正在为生成图片释放内存",
+"Liberando memoria para generar la imagen"
+],
 "Остальные": [
 "Others",
 "其他",
 "Otros"
+],
+"Останавливает действие": [
+"Stopping the action",
+"正在停止操作",
+"Deteniendo la acción"
+],
+"Останавливается": [
+"Stopping",
+"正在停止",
+"Deteniendo"
 ],
 "Остановить": [
 "Stop",
@@ -1704,6 +2784,11 @@
 "停止（Esc）",
 "Detener (Esc)"
 ],
+"Остановлено": [
+"Stopped",
+"已停止",
+"Detenido"
+],
 "От 2 до 5, каждый до 25 символов.": [
 "2 to 5, each up to 25 characters.",
 "2 到 5 个，每个最多 25 个字符。",
@@ -1713,6 +2798,11 @@
 "Drops words that are much less likely than the best one.",
 "舍弃比最佳词概率低得多的词。",
 "Descarta las palabras mucho menos probables que la mejor."
+],
+"Ответ на это сообщение и всё после него будет заменено.": [
+"The answer to this message and everything after it will be replaced.",
+"此消息的回答及其后的所有内容都将被替换。",
+"La respuesta a este mensaje y todo lo que sigue se reemplazará."
 ],
 "Ответить заново": [
 "Answer again",
@@ -1738,6 +2828,11 @@
 "Open File Explorer",
 "打开文件资源管理器",
 "Abre el Explorador de archivos"
+],
+"Открывается Проводник": [
+"Opening File Explorer",
+"正在打开文件资源管理器",
+"Abriendo el Explorador de archivos"
 ],
 "Открыть": [
 "Open",
@@ -1789,6 +2884,16 @@
 "已取消",
 "Cancelado"
 ],
+"Отменено: удалено файлов и папок — {0}.": [
+"Undone: {0} files and folders deleted.",
+"已撤销：删除了 {0} 个文件和文件夹。",
+"Deshecho: se eliminaron {0} archivos y carpetas."
+],
+"Отменено: удалено файлов и папок — {0}. Оставлено {1}: они изменены после этого или в папке есть другие файлы.": [
+"Undone: {0} files and folders deleted. {1} kept: they were changed afterwards or their folder has other files.",
+"已撤销：删除了 {0} 个文件和文件夹。保留了 {1} 个：它们之后被修改过，或文件夹中还有其他文件。",
+"Deshecho: se eliminaron {0} archivos y carpetas. Se conservaron {1}: se modificaron después o su carpeta tiene otros archivos."
+],
 "Отменить": [
 "Cancel",
 "取消",
@@ -1799,6 +2904,11 @@
 "取消下载",
 "Cancelar descarga"
 ],
+"Отменить и удалить": [
+"Undo and delete",
+"撤销并删除",
+"Deshacer y eliminar"
+],
 "Отображать файл в память (mmap)": [
 "Memory-map the file (mmap)",
 "内存映射文件（mmap）",
@@ -1806,8 +2916,8 @@
 ],
 "Отправится после текущего ответа": [
 "Will be sent after the current answer",
-"将在当前回答结束后发送",
-"Se enviará tras la respuesta actual"
+"将在当前回答之后发送",
+"Se enviará después de la respuesta actual"
 ],
 "Отправить": [
 "Send",
@@ -1818,6 +2928,11 @@
 "Send (Enter)",
 "发送（Enter）",
 "Enviar (Enter)"
+],
+"Отправка одного сообщения… Повторной попытки автоматически не будет.": [
+"Sending one message… It won't be retried automatically.",
+"正在发送一条消息…不会自动重试。",
+"Enviando un mensaje… No se reintentará automáticamente."
 ],
 "Отправка сообщений в чат канала.": [
 "Sending messages to the channel chat.",
@@ -1834,6 +2949,11 @@
 "已发送。",
 "Enviado."
 ],
+"Отправляет задание в ComfyUI": [
+"Sending the job to ComfyUI",
+"正在向 ComfyUI 发送任务",
+"Enviando el trabajo a ComfyUI"
+],
 "Отправляется ровно одно сообщение после твоего подтверждения.": [
 "Exactly one message is sent after you confirm.",
 "确认后只会发送一条消息。",
@@ -1848,6 +2968,16 @@
 "Appearance",
 "外观",
 "Apariencia"
+],
+"Оформляет слайды и сохраняет файл": [
+"Designing slides and saving the file",
+"正在排版幻灯片并保存文件",
+"Diseñando diapositivas y guardando el archivo"
+],
+"Очень высокий": [
+"Extra high",
+"极高",
+"Muy alto"
 ],
 "Очистить": [
 "Clear",
@@ -1873,6 +3003,16 @@
 "Error",
 "错误",
 "Error"
+],
+"Ошибка озвучивания": [
+"Voice error",
+"朗读出错",
+"Error de voz"
+],
+"Ошибка установки аудиокомпонента: {0}": [
+"Audio component installation error: {0}",
+"音频组件安装出错：{0}",
+"Error al instalar el componente de audio: {0}"
 ],
 "Память": [
 "Memory",
@@ -1904,10 +3044,25 @@
 "模型参数、云端、工具、记忆、代码和集成",
 "Parámetros del modelo, nube, herramientas, memoria, código e integraciones"
 ],
+"Пауза": [
+"Paused",
+"已暂停",
+"En pausa"
+],
+"Пауза · захват остановлен": [
+"Paused · capture stopped",
+"已暂停 · 采集已停止",
+"En pausa · captura detenida"
+],
 "Перебивать голосом": [
 "Interrupt by voice",
 "语音打断",
 "Interrumpir con la voz"
+],
+"Перебили · слушает": [
+"Interrupted · listening",
+"被打断 · 正在聆听",
+"Interrumpido · escuchando"
 ],
 "Перебить": [
 "Interrupt",
@@ -1938,6 +3093,11 @@
 "Writing an answer",
 "正在回答",
 "Escribiendo la respuesta"
+],
+"Пишет отчёт о сделанном": [
+"Writing a report on what was done",
+"正在撰写完成情况报告",
+"Escribiendo un informe de lo hecho"
 ],
 "Пиши обычным языком. Компаньон отвечает, рисует, собирает презентации, правит код и делает действия на компьютере.": [
 "Write in plain language. The companion answers, draws, makes presentations, edits code and performs actions on the computer.",
@@ -1989,6 +3149,16 @@
 "连接中",
 "Conectando"
 ],
+"Подключение": [
+"Connecting",
+"正在连接",
+"Conectando"
+],
+"Подключение к Hugging Face": [
+"Connecting to Hugging Face",
+"正在连接 Hugging Face",
+"Conectando con Hugging Face"
+],
 "Подключено, моделей: {0}.": [
 "Connected, models: {0}.",
 "已连接，模型：{0} 个。",
@@ -2024,10 +3194,20 @@
 "正在 Hugging Face 上搜索…",
 "Buscando en Hugging Face…"
 ],
+"Поиск не выполнен: пользователь не просил искать в интернете.": [
+"No search made: the user didn't ask to search the web.",
+"未搜索：用户没有要求在网上搜索。",
+"No se buscó: el usuario no pidió buscar en internet."
+],
 "Поиск не удался.": [
 "Search failed.",
 "搜索失败。",
 "La búsqueda falló."
+],
+"Поиск не удался: {0}": [
+"Search failed: {0}",
+"搜索失败：{0}",
+"La búsqueda falló: {0}"
 ],
 "Поиск по смыслу": [
 "Search by meaning",
@@ -2059,6 +3239,11 @@
 "显示面板（Ctrl+B）",
 "Mostrar panel (Ctrl+B)"
 ],
+"Пользователь не просил скачивать файл.": [
+"The user didn't ask to download a file.",
+"用户没有要求下载文件。",
+"El usuario no pidió descargar un archivo."
+],
 "Пользоваться памятью": [
 "Use memory",
 "使用记忆",
@@ -2069,10 +3254,35 @@
 "热门",
 "Populares"
 ],
+"Порт {0} занят другим ASR-сервером. Закройте его и повторите запуск.": [
+"Port {0} is taken by another speech recognition server. Close it and try again.",
+"端口 {0} 被另一个语音识别服务器占用。请关闭它后重试。",
+"El puerto {0} lo usa otro servidor de reconocimiento de voz. Ciérralo y vuelve a intentarlo."
+],
+"Порт {0} занят другим сервером озвучки. Закройте его и повторите.": [
+"Port {0} is taken by another voice server. Close it and try again.",
+"端口 {0} 被另一个朗读服务器占用。请关闭它后重试。",
+"El puerto {0} lo usa otro servidor de voz. Ciérralo y vuelve a intentarlo."
+],
+"Порт {0} занят другой программой, llama-server не может запуститься.": [
+"Port {0} is taken by another program, so llama-server can't start.",
+"端口 {0} 被其他程序占用，llama-server 无法启动。",
+"Otro programa usa el puerto {0}; llama-server no puede iniciarse."
+],
 "Потоки процессора": [
 "CPU threads",
 "CPU 线程数",
 "Hilos de CPU"
+],
+"Потом это можно поменять в настройках, в разделе «Голос и микрофон».": [
+"You can change this later in Settings → Voice and microphone.",
+"之后可以在“设置 → 语音和麦克风”中更改。",
+"Puedes cambiarlo después en Ajustes → Voz y micrófono."
+],
+"Потяни, чтобы изменить ширину; двойной щелчок — по умолчанию": [
+"Drag to resize; double-click to reset",
+"拖动以调整宽度；双击恢复默认",
+"Arrastra para cambiar el ancho; doble clic para restablecer"
 ],
 "Предыдущий слайд": [
 "Previous slide",
@@ -2083,6 +3293,16 @@
 "PowerPoint presentation",
 "PowerPoint 演示文稿",
 "Presentación de PowerPoint"
+],
+"Презентация «{0}» создана · {1} слайдов.": [
+"Presentation “{0}” created · {1} slides.",
+"演示文稿“{0}”已创建 · {1} 张幻灯片。",
+"Presentación «{0}» creada · {1} diapositivas."
+],
+"Презентация должна содержать от 1 до 20 содержательных слайдов.": [
+"A presentation must have 1 to 20 slides with content.",
+"演示文稿必须包含 1 到 20 张有内容的幻灯片。",
+"La presentación debe tener de 1 a 20 diapositivas con contenido."
 ],
 "Пресет": [
 "Preset",
@@ -2134,15 +3354,45 @@
 "检查中…",
 "Comprobando…"
 ],
+"Проверяет результат действия на компьютере": [
+"Checking the result of the computer action",
+"正在检查电脑操作的结果",
+"Comprobando el resultado de la acción"
+],
 "Программы на этом компьютере": [
 "Apps on this computer",
 "本机上的程序",
 "Apps en este equipo"
 ],
+"Прослушивание остановлено": [
+"Listening stopped",
+"聆听已停止",
+"Escucha detenida"
+],
+"Просьба создать презентацию": [
+"Presentation request",
+"创建演示文稿的请求",
+"Solicitud de presentación"
+],
 "Прочее": [
 "Other",
 "其他",
 "Otros"
+],
+"Пустое сообщение.": [
+"Empty message.",
+"消息为空。",
+"Mensaje vacío."
+],
+"Путь вне папок озвучки и не будет удалён: {0}": [
+"The path is outside the voice folders and won't be deleted: {0}",
+"该路径不在语音文件夹中，不会被删除：{0}",
+"La ruta está fuera de las carpetas de voz y no se borrará: {0}"
+],
+"Путь к файлу из репозитория некорректен.": [
+"The file path in the repository is invalid.",
+"仓库中的文件路径无效。",
+"La ruta del archivo en el repositorio no es válida."
 ],
 "Работа в фоне": [
 "Running in the background",
@@ -2174,10 +3424,25 @@
 "工作面板：浏览器、文件、代码（Ctrl+D）",
 "Panel de trabajo: navegador, archivos, código (Ctrl+D)"
 ],
+"Размер окна не изменён: пользователь этого не просил.": [
+"Window size not changed: the user didn't ask for it.",
+"未更改窗口大小：用户没有要求。",
+"No se cambió el tamaño de la ventana: el usuario no lo pidió."
+],
+"Размер окна у облачной модели задаёт сервис, поэтому здесь только размер чата.": [
+"The window of a cloud model is set by the service, so only the chat's size is shown here.",
+"云端模型的窗口大小由服务决定，因此这里只显示对话的大小。",
+"El tamaño de la ventana de un modelo en la nube lo fija el servicio, así que aquí solo se muestra el tamaño del chat."
+],
 "Размер пакета": [
 "Batch size",
 "批大小",
 "Tamaño de lote"
+],
+"Размер скачанного файла не совпадает с Hugging Face: {0} из {1} байт.": [
+"The downloaded file's size doesn't match Hugging Face: {0} of {1} bytes.",
+"下载文件的大小与 Hugging Face 不一致：{0} / {1} 字节。",
+"El tamaño del archivo descargado no coincide con Hugging Face: {0} de {1} bytes."
 ],
 "Размышление": [
 "Thinking",
@@ -2194,15 +3459,35 @@
 "思考",
 "Razona"
 ],
+"Разрешено выполнить от одного до шести простых действий за раз.": [
+"One to six simple actions are allowed at a time.",
+"每次允许执行一到六个简单操作。",
+"Se permiten de una a seis acciones simples a la vez."
+],
 "Разрешить модели пользоваться инструментами": [
 "Allow the model to use tools",
 "允许模型使用工具",
 "Permitir que el modelo use herramientas"
 ],
+"Раньше": [
+"Earlier",
+"更早",
+"Antes"
+],
 "Распознавание речи": [
 "Speech recognition",
 "语音识别",
 "Reconocimiento de voz"
+],
+"Распознавание речи Qwen3-ASR.": [
+"Qwen3-ASR speech recognition.",
+"Qwen3-ASR 语音识别。",
+"Reconocimiento de voz Qwen3-ASR."
+],
+"Распознаёт речь · Parakeet": [
+"Recognizing speech · Parakeet",
+"正在识别语音 · Parakeet",
+"Reconociendo voz · Parakeet"
 ],
 "Расчёт памяти…": [
 "Estimating memory…",
@@ -2234,6 +3519,11 @@
 "已自动选择推荐文件（Q4_K_M）；也可以选择其他量化版本。",
 "El archivo recomendado (Q4_K_M) ya está elegido; puedes elegir otra cuantización."
 ],
+"Рисование картинок и видео.": [
+"Drawing pictures and video.",
+"绘制图片和视频。",
+"Dibujar imágenes y vídeo."
+],
 "Рисование картинок.": [
 "Drawing pictures.",
 "绘制图片。",
@@ -2248,6 +3538,11 @@
 "With thinking",
 "思考",
 "Con razonamiento"
+],
+"Сайт не открыт: пользователь не указывал этот адрес.": [
+"Site not opened: the user didn't give this address.",
+"未打开网站：用户没有提供此地址。",
+"No se abrió el sitio: el usuario no indicó esta dirección."
 ],
 "Сбалансированный": [
 "Balanced",
@@ -2289,15 +3584,35 @@
 "浅色主题",
 "Tema claro"
 ],
+"Свой сервер (OpenAI API)": [
+"Custom server (OpenAI API)",
+"自定义服务器（OpenAI API）",
+"Servidor propio (API de OpenAI)"
+],
 "Сворачивать в трей при закрытии": [
 "Minimize to tray on close",
 "关闭时最小化到托盘",
 "Minimizar a la bandeja al cerrar"
 ],
+"Связь с llama.cpp оборвалась: {0}": [
+"The connection to llama.cpp was lost: {0}",
+"与 llama.cpp 的连接中断：{0}",
+"Se perdió la conexión con llama.cpp: {0}"
+],
 "Сделай презентацию про Марс на 6 слайдов": [
 "Make a 6-slide presentation about Mars",
 "制作一份关于火星的 6 页演示文稿",
 "Haz una presentación de 6 diapositivas sobre Marte"
+],
+"Сегодня": [
+"Today",
+"今天",
+"Hoy"
+],
+"Сейчас отвечают другие модели, свободного места для ещё одной нет. Дождись их ответов.": [
+"Other models are answering and there's no room for another one. Wait for their answers.",
+"其他模型正在回答，没有空间再加载一个。请等待它们回答完毕。",
+"Otros modelos están respondiendo y no hay sitio para otro. Espera a que terminen."
 ],
 "Сейчас память ищет по словам. Модель эмбеддингов научит её искать по смыслу: найди любую ниже (рекомендуем Qwen3-Embedding-0.6B, 610 МБ, Apache 2.0). Она работает на процессоре и не занимает видеопамять.": [
 "Memory now searches by words. An embedding model teaches it to search by meaning: find any below (we recommend Qwen3-Embedding-0.6B, 610 MB, Apache 2.0). It runs on the CPU and uses no video memory.",
@@ -2309,10 +3624,25 @@
 "目前记忆按字词搜索。小型模型 Qwen3-Embedding（{0}，Apache 2.0 许可证）可以让它按语义搜索。在 CPU 上运行，不占用显存。",
 "Ahora la memoria busca por palabras. El pequeño modelo Qwen3-Embedding ({0}, licencia Apache 2.0) le enseñará a buscar por significado. Funciona en el procesador y no usa memoria de vídeo."
 ],
+"Сервер сохранён, но не ответил: {0}": [
+"The server is saved but didn't answer: {0}",
+"服务器已保存，但没有响应：{0}",
+"El servidor se guardó, pero no respondió: {0}"
+],
+"Серверы MCP ещё не запущены, их инструменты появятся здесь после первого ответа: {0}": [
+"MCP servers aren't running yet; their tools will show up here after the first answer: {0}",
+"MCP 服务器尚未运行，首次回答后其工具会显示在这里：{0}",
+"Los servidores MCP aún no se han iniciado; sus herramientas aparecerán aquí tras la primera respuesta: {0}"
+],
 "Сжатие контекста в памяти (KV-кэш)": [
 "Context compression in memory (KV cache)",
 "上下文内存压缩（KV 缓存）",
 "Compresión del contexto en memoria (caché KV)"
+],
+"Сжимает раннюю часть разговора": [
+"Compressing the early part of the conversation",
+"正在压缩对话的早期部分",
+"Comprimiendo la primera parte de la conversación"
 ],
 "Сжимать раннюю часть разговора": [
 "Compress the early part of the conversation",
@@ -2384,6 +3714,26 @@
 "将 GGUF 文件下载到模型文件夹。如果仓库中有 mmproj，模型就能看图片。",
 "Descarga un archivo GGUF en la carpeta de modelos. Si el repositorio tiene un mmproj, el modelo podrá ver imágenes."
 ],
+"Скачивание {0}: {1} из {2} МБ": [
+"Downloading {0}: {1} of {2} MB",
+"正在下载 {0}：{1} / {2} MB",
+"Descargando {0}: {1} de {2} MB"
+],
+"Скачивание выполняется отдельным действием, чтобы запросить разрешение.": [
+"A download is a separate action so that permission can be asked.",
+"下载需作为单独操作执行，以便请求许可。",
+"Una descarga es una acción aparte para poder pedir permiso."
+],
+"Скачивание отменено пользователем.": [
+"Download cancelled by the user.",
+"下载已被用户取消。",
+"Descarga cancelada por el usuario."
+],
+"Скачивание файла": [
+"Downloading the file",
+"正在下载文件",
+"Descargando el archivo"
+],
 "Сколько последних токенов учитывает штраф. −1 — весь контекст.": [
 "How many recent tokens the penalty considers. −1 — the whole context.",
 "惩罚考虑的最近词元数。−1 — 整个上下文。",
@@ -2424,10 +3774,20 @@
 "隐藏面板（Ctrl+B）",
 "Ocultar panel (Ctrl+B)"
 ],
+"Скрыть панель (Ctrl+D)": [
+"Hide panel (Ctrl+D)",
+"隐藏面板（Ctrl+D）",
+"Ocultar panel (Ctrl+D)"
+],
 "Скрыть рабочую панель (Ctrl+D)": [
 "Hide workspace (Ctrl+D)",
 "隐藏工作面板（Ctrl+D）",
 "Ocultar panel de trabajo (Ctrl+D)"
+],
+"Слайд {0} должен быть объектом с заголовком и тезисами.": [
+"Slide {0} must be an object with a title and points.",
+"第 {0} 张幻灯片必须是包含标题和要点的对象。",
+"La diapositiva {0} debe ser un objeto con título y puntos."
 ],
 "Следующий слайд": [
 "Next slide",
@@ -2449,6 +3809,11 @@
 "聆听并观看中",
 "Escuchando y mirando"
 ],
+"Слушает: {0} · ждёт речь": [
+"Listening: {0} · waiting for speech",
+"正在聆听：{0} · 等待说话",
+"Escuchando: {0} · esperando voz"
+],
 "Слышит видео и игры": [
 "Hears videos and games",
 "能听到视频和游戏",
@@ -2469,10 +3834,60 @@
 "查看屏幕的间隔",
 "Mirar la pantalla cada"
 ],
+"Смотрит на картинку через {0}": [
+"Looking at the picture with {0}",
+"正在通过 {0} 查看图片",
+"Mirando la imagen con {0}"
+],
+"Смотрит на экран": [
+"Watching the screen",
+"正在看屏幕",
+"Mirando la pantalla"
+],
+"Сначала выбери модель.": [
+"Choose a model first.",
+"请先选择模型。",
+"Primero elige un modelo."
+],
+"Сначала дождись конца ответа и заверши звонок.": [
+"First wait for the answer to finish and end the call.",
+"请先等待回答结束并结束通话。",
+"Primero espera a que termine la respuesta y finaliza la llamada."
+],
+"Сначала заверши звонок и озвучку.": [
+"First end the call and the voice.",
+"请先结束通话和朗读。",
+"Primero finaliza la llamada y la voz."
+],
+"Сначала скачай эту модель.": [
+"Download this model first.",
+"请先下载这个模型。",
+"Primero descarga este modelo."
+],
 "Снижает частые слова.": [
 "Reduces frequent words.",
 "减少高频词。",
 "Reduce las palabras frecuentes."
+],
+"Собирает презентацию · планирует слайды {0}/3": [
+"Building the presentation · planning slides {0}/3",
+"正在制作演示文稿 · 规划幻灯片 {0}/3",
+"Creando la presentación · planificando diapositivas {0}/3"
+],
+"Создание окружения {0}": [
+"Creating environment {0}",
+"正在创建环境 {0}",
+"Creando el entorno {0}"
+],
+"Создание презентации остановлено пользователем": [
+"Presentation stopped by the user",
+"演示文稿的创建已被用户停止",
+"Presentación detenida por el usuario"
+],
+"Создано файлов и папок: {0}": [
+"Files and folders created: {0}",
+"已创建的文件和文件夹：{0}",
+"Archivos y carpetas creados: {0}"
 ],
 "Создать навык": [
 "Create skill",
@@ -2488,6 +3903,21 @@
 "Twitch message",
 "Twitch 消息",
 "Mensaje en Twitch"
+],
+"Сообщение от 1 до {0} символов.": [
+"The message must be 1 to {0} characters.",
+"消息长度应为 1 到 {0} 个字符。",
+"El mensaje debe tener de 1 a {0} caracteres."
+],
+"Сообщения": [
+"Messages",
+"消息",
+"Mensajes"
+],
+"Сообщения в чат канала и опросы для зрителей.": [
+"Messages to the channel chat and polls for viewers.",
+"向频道聊天发送消息，并为观众发起投票。",
+"Mensajes al chat del canal y encuestas para los espectadores."
 ],
 "Сохранено": [
 "Saved",
@@ -2514,15 +3944,40 @@
 "中",
 "Medio"
 ],
+"Старый чат": [
+"Old chat",
+"旧对话",
+"Chat antiguo"
+],
 "Существующий файл не будет перезаписан. Скачанное ничего не запускает.": [
 "An existing file won't be overwritten. The download won't run anything.",
 "不会覆盖已有文件。下载的内容不会自动运行。",
 "No se sobrescribirá un archivo existente. Lo descargado no se ejecuta."
 ],
+"Такого навыка нет.": [
+"There's no such skill.",
+"没有这个技能。",
+"No existe esa habilidad."
+],
+"Такой модели нет в папке моделей.": [
+"There's no such model in the models folder.",
+"模型文件夹中没有这个模型。",
+"Ese modelo no está en la carpeta de modelos."
+],
+"Такой модели нет в списке.": [
+"There's no such model in the list.",
+"列表中没有这个模型。",
+"Ese modelo no está en la lista."
+],
 "Творческий": [
 "Creative",
 "创意",
 "Creativo"
+],
+"Текст не введён: пользователь явно не просил его вводить.": [
+"Text not typed: the user didn't explicitly ask to type it.",
+"未输入文本：用户没有明确要求输入。",
+"No se escribió el texto: el usuario no lo pidió explícitamente."
 ],
 "Тема": [
 "Theme",
@@ -2538,6 +3993,16 @@
 "HF token (for gated models)",
 "HF 令牌（用于受限模型）",
 "Token de HF (para modelos restringidos)"
+],
+"Токену не выдано разрешение channel:manage:polls.": [
+"The token lacks the channel:manage:polls permission.",
+"令牌没有 channel:manage:polls 权限。",
+"El token no tiene el permiso channel:manage:polls."
+],
+"Токену не выдано разрешение user:write:chat.": [
+"The token lacks the user:write:chat permission.",
+"令牌没有 user:write:chat 权限。",
+"El token no tiene el permiso user:write:chat."
 ],
 "Только для {0}; поверх общих настроек.": [
 "Only for {0}; on top of the common settings.",
@@ -2589,10 +4054,20 @@
 "深色主题",
 "Tema oscuro"
 ],
+"Тёмный лес": [
+"Dark Forest",
+"暗夜森林",
+"Bosque oscuro"
+],
 "У каждого чата своя модель. Несколько моделей держатся загруженными и могут отвечать в разных чатах одновременно; модель без дела выгружается, если следующая не помещается рядом с ней в видеопамять.": [
 "Each chat has its own model. Several models stay loaded and can answer in different chats at the same time; an idle model is unloaded if the next one doesn't fit beside it in video memory.",
 "每个聊天都有自己的模型。多个模型可以同时保持加载，并在不同聊天中同时回答；如果下一个模型放不进显存，闲置的模型会被卸载。",
 "Cada chat tiene su modelo. Varios modelos permanecen cargados y pueden responder a la vez en chats distintos; un modelo inactivo se descarga si el siguiente no cabe a su lado en la memoria de vídeo."
+],
+"У этой модели нет готового GGUF-пакета.": [
+"This model has no ready GGUF package.",
+"这个模型没有现成的 GGUF 包。",
+"Este modelo no tiene un paquete GGUF listo."
 ],
 "У этой модели нет описания на Hugging Face.": [
 "This model has no description on Hugging Face.",
@@ -2659,35 +4134,105 @@
 "删除…",
 "Eliminar…"
 ],
+"Уже идёт установка.": [
+"An installation is already running.",
+"安装已在进行。",
+"Ya hay una instalación en curso."
+],
+"Уже скачивается.": [
+"Already downloading.",
+"已在下载。",
+"Ya se está descargando."
+],
+"Укажи workflow ComfyUI для видео в Настройки → Картинки и видео.": [
+"Set a ComfyUI video workflow in Settings → Images and video.",
+"请在“设置 → 图片和视频”中指定视频用的 ComfyUI workflow。",
+"Indica un workflow de ComfyUI para vídeo en Ajustes → Imágenes y vídeo."
+],
+"Укажи свой канал в настройках → Интеграции.": [
+"Set your channel in Settings → Integrations.",
+"请在“设置 → 集成”中指定你的频道。",
+"Indica tu canal en Ajustes → Integraciones."
+],
+"Умеет размышлять": [
+"Can think",
+"能够思考",
+"Puede razonar"
+],
 "Уменьшить (−)": [
 "Zoom out (−)",
 "缩小（−）",
 "Reducir (−)"
+],
+"Управление компьютером доступно только в Windows.": [
+"Computer control is only available on Windows.",
+"电脑控制仅在 Windows 上可用。",
+"El control del equipo solo está disponible en Windows."
 ],
 "Ускорение (спекулятивное декодирование)": [
 "Speed-up (speculative decoding)",
 "加速（推测解码）",
 "Aceleración (decodificación especulativa)"
 ],
+"Устанавливаю аудиокомпонент в фоне…": [
+"Installing the audio component in the background…",
+"正在后台安装音频组件…",
+"Instalando el componente de audio en segundo plano…"
+],
 "Установка": [
 "Installing",
 "安装中",
 "Instalando"
+],
+"Установка {0}": [
+"Installing {0}",
+"正在安装 {0}",
+"Instalando {0}"
+],
+"Установка отменена.": [
+"Installation cancelled.",
+"安装已取消。",
+"Instalación cancelada."
 ],
 "Файл": [
 "File",
 "文件",
 "Archivo"
 ],
+"Файл workflow не похож на экспорт ComfyUI.": [
+"The workflow file doesn't look like a ComfyUI export.",
+"workflow 文件看起来不像 ComfyUI 的导出文件。",
+"El archivo de workflow no parece una exportación de ComfyUI."
+],
+"Файл {0} скачался не полностью: {1} из {2} байт.": [
+"File {0} downloaded incompletely: {1} of {2} bytes.",
+"文件 {0} 未完整下载：{1} / {2} 字节。",
+"El archivo {0} no se descargó completo: {1} de {2} bytes."
+],
+"Файл лежит вне папки моделей и не будет удалён: {0}": [
+"The file is outside the models folder and won't be deleted: {0}",
+"该文件不在模型文件夹中，不会被删除：{0}",
+"El archivo está fuera de la carpeta de modelos y no se borrará: {0}"
+],
 "Файл не выбран": [
 "No file chosen",
 "未选择文件",
 "Ningún archivo elegido"
 ],
+"Файлов пока нет": [
+"No files yet",
+"暂无文件",
+"Aún no hay archivos"
+],
 "Файлы": [
 "Files",
 "文件",
 "Archivos"
+],
+"Файлы не изменены: пользователь явно не просил об этом.": [
+"Files not changed: the user didn't explicitly ask for it.",
+"未修改文件：用户没有明确要求。",
+"No se modificaron archivos: el usuario no lo pidió explícitamente."
 ],
 "Факты": [
 "Facts",
@@ -2703,6 +4248,16 @@
 "The part of the batch computed on the GPU at once.",
 "每次在显卡上计算的批次部分。",
 "La parte del lote que se calcula en la tarjeta gráfica de una vez."
+],
+"Чат": [
+"Chat",
+"对话",
+"Chat"
+],
+"Чат не найден.": [
+"Chat not found.",
+"未找到对话。",
+"No se encontró el chat."
 ],
 "Чаты": [
 "Chats",
@@ -2728,6 +4283,16 @@
 "What to do and how, step by step. Markdown is allowed.",
 "要做什么、怎么做，分步骤写。支持 Markdown。",
 "Qué hacer y cómo, paso a paso. Se admite Markdown."
+],
+"Что компаньон будет слышать и видеть": [
+"What the companion will hear and see",
+"助手将听到和看到什么",
+"Qué oirá y verá el compañero"
+],
+"Что компаньон слышит и видит, когда ты нажимаешь кнопку звонка у поля ввода.": [
+"What the companion hears and sees when you press the call button by the input.",
+"按下输入框旁的通话按钮时，助手能听到和看到什么。",
+"Qué oye y ve el compañero cuando pulsas el botón de llamada junto al campo de texto."
 ],
 "Что найти?": [
 "What to find?",
@@ -2814,25 +4379,80 @@
 "该模型总是会思考。",
 "Este modelo siempre razona."
 ],
+"Эта модель не передала отдельный текст рассуждения.": [
+"This model didn't send separate reasoning text.",
+"这个模型没有单独提供推理文本。",
+"Este modelo no envió un texto de razonamiento aparte."
+],
 "Эта модель не размышляет.": [
 "This model doesn't think.",
 "该模型不会思考。",
 "Este modelo no razona."
+],
+"Эта модель озвучки говорит только голосом из образца. Выбери образец голоса в Настройки → Голос и микрофон или поставь модель CustomVoice.": [
+"This voice model speaks only in a sample's voice. Choose a voice sample in Settings → Voice and microphone or pick a CustomVoice model.",
+"此配音模型只能用样本的声音说话。请在 设置 → 语音和麦克风 中选择声音样本，或改用 CustomVoice 模型。",
+"Este modelo de voz solo habla con la voz de una muestra. Elige una muestra de voz en Ajustes → Voz y micrófono o usa un modelo CustomVoice."
+],
+"Эта модель сейчас отвечает. Дождись конца ответа или останови его.": [
+"This model is answering now. Wait for it to finish or stop it.",
+"这个模型正在回答。请等待回答结束或停止它。",
+"Este modelo está respondiendo. Espera a que termine o detenlo."
+],
+"Эта модель сейчас скачивается.": [
+"This model is downloading now.",
+"这个模型正在下载。",
+"Este modelo se está descargando."
 ],
 "Эти параметры применяются при следующем ответе: модель перезагрузится.": [
 "These parameters apply with the next answer: the model will reload.",
 "这些参数将在下次回答时生效：模型将重新加载。",
 "Estos parámetros se aplican en la siguiente respuesta: el modelo se recargará."
 ],
+"Это не адрес сайта.": [
+"This isn't a website address.",
+"这不是网址。",
+"Esto no es una dirección web."
+],
+"Это не изображение.": [
+"This isn't an image.",
+"这不是图片。",
+"Esto no es una imagen."
+],
+"Это оценка, около трёх символов на токен. Точное число знает только сама модель. Сведения из долговременной памяти добавляются при каждом ответе и сюда не входят. Навыки и инструменты посчитаны для обычного ответа; при выключенных инструментах они не отправляются.": [
+"This is an estimate, about three characters per token; only the model knows the exact number. Long-term memory is added at every answer and is not counted here. Skills and tools are counted for an ordinary answer; with tools turned off they are not sent.",
+"这是估算值，约每三个字符一个 token，确切数字只有模型自己知道。长期记忆在每次回答时加入，不计入此处。技能和工具按普通回答计算；关闭工具后不会发送。",
+"Es una estimación, unos tres caracteres por token; solo el modelo sabe la cifra exacta. La memoria a largo plazo se añade en cada respuesta y no se cuenta aquí. Las habilidades y herramientas se cuentan para una respuesta normal; con las herramientas desactivadas no se envían."
+],
+"Это сообщение нельзя изменить: идёт ответ или оно уже в кратком содержании.": [
+"This message can't be edited: an answer is in progress or it is already in the summary.",
+"无法编辑此消息：正在回答，或它已被纳入摘要。",
+"No se puede editar este mensaje: hay una respuesta en curso o ya está en el resumen."
+],
+"Этот GGUF сделан для другой программы (архитектура «{0}»), NeMo-Speech его не откроет. Поищи ту же модель в формате Transformers, обычно это репозиторий без «gguf» в названии.": [
+"This GGUF is made for another program (architecture “{0}”), NeMo-Speech can't open it. Look for the same model in Transformers format, usually a repository without “gguf” in its name.",
+"这个 GGUF 是为其他程序制作的（架构“{0}”），NeMo-Speech 无法打开。请查找 Transformers 格式的同一模型，通常是名称中不含“gguf”的仓库。",
+"Este GGUF es para otro programa (arquitectura «{0}»); NeMo-Speech no puede abrirlo. Busca el mismo modelo en formato Transformers, normalmente un repositorio sin «gguf» en el nombre."
+],
 "Этот интерфейс открывается файлом «Запустить веб-интерфейс» в папке Компаньона.": [
 "This interface is opened with the “Запустить веб-интерфейс” file in the Companion folder.",
 "此界面通过伙伴文件夹中的“Запустить веб-интерфейс”文件打开。",
 "Esta interfaz se abre con el archivo «Запустить веб-интерфейс» de la carpeta del Compañero."
 ],
+"Этот файл не из чата.": [
+"This file isn't from the chat.",
+"这个文件不是来自对话。",
+"Este archivo no es del chat."
+],
 "Этот файл не показывается в программе. Открой его кнопкой выше.": [
 "This file can't be shown in the app. Open it with the button above.",
 "此文件无法在程序中显示。请用上方按钮打开。",
 "Este archivo no se puede mostrar en el programa. Ábrelo con el botón de arriba."
+],
+"Этот язык не поддерживается.": [
+"This language isn't supported.",
+"不支持这种语言。",
+"Este idioma no es compatible."
 ],
 "Эту модель программа не запустит:": [
 "The app can't run this model:",
@@ -2879,6 +4499,11 @@
 "内置",
 "integrado"
 ],
+"встроенный браузер не открылся": [
+"the built-in browser didn't open",
+"内置浏览器未能打开",
+"el navegador integrado no se abrió"
+],
 "выбери, что слушать": [
 "choose what to listen to",
 "选择要聆听的来源",
@@ -2909,6 +4534,11 @@
 "所有模型",
 "para todos los modelos"
 ],
+"запрос не поместился в контекст модели ({0} токенов). Увеличь «Контекст» в параметрах модели (хватит 8192) или начни новый чат.": [
+"the request didn't fit into the model's context ({0} tokens). Raise Context in the model's parameters (8192 is enough) or start a new chat.",
+"请求超出了模型的上下文（{0} 个 token）。请在模型参数中增大“上下文”（8192 即可），或新建对话。",
+"la solicitud no cabe en el contexto del modelo ({0} tokens). Aumenta «Contexto» en los parámetros del modelo (basta con 8192) o empieza un chat nuevo."
+],
 "запустится при первом ответе": [
 "starts with the first answer",
 "将在首次回答时启动",
@@ -2928,6 +4558,11 @@
 "and {0} more",
 "以及另外 {0} 个",
 "y {0} más"
+],
+"из": [
+"of",
+"/",
+"de"
 ],
 "из {0}": [
 "of {0}",
@@ -3004,6 +4639,16 @@
 "无法获取，请查看模型页面",
 "no se pudo saber, consulta la página del modelo"
 ],
+"не указан адрес сервера": [
+"no server address given",
+"未指定服务器地址",
+"no se indicó la dirección del servidor"
+],
+"не указана команда запуска": [
+"no start command given",
+"未指定启动命令",
+"no se indicó el comando de inicio"
+],
 "не указано": [
 "not specified",
 "未指定",
@@ -3014,10 +4659,30 @@
 "未安装",
 "no instalada"
 ],
+"не хватило видеопамяти: её уже заняли модель чата и распознавание речи. Выбери модель озвучки поменьше (например, Qwen3-TTS 0.6B), модель чата поменьше или меньший контекст. Сервер озвучки перезапустится сам при следующей фразе.": [
+"not enough video memory: the chat model and speech recognition already use it. Pick a smaller voice model (for example, Qwen3-TTS 0.6B), a smaller chat model or a smaller context. The voice server restarts by itself on the next phrase.",
+"显存不足：已被对话模型和语音识别占用。请选择更小的配音模型（例如 Qwen3-TTS 0.6B）、更小的对话模型或更小的上下文。配音服务器会在下一句时自动重启。",
+"no hay suficiente memoria de vídeo: ya la usan el modelo de chat y el reconocimiento de voz. Elige un modelo de voz más pequeño (por ejemplo, Qwen3-TTS 0.6B), un modelo de chat más pequeño o un contexto menor. El servidor de voz se reiniciará solo con la siguiente frase."
+],
+"неизвестна": [
+"unknown",
+"未知",
+"desconocida"
+],
 "некоммерческая": [
 "non-commercial",
 "非商业",
 "no comercial"
+],
+"нет связи: {0}": [
+"no connection: {0}",
+"无法连接：{0}",
+"sin conexión: {0}"
+],
+"нужен API-ключ": [
+"an API key is needed",
+"需要 API 密钥",
+"hace falta una clave API"
 ],
 "объяснить": [
 "explain",
@@ -3064,10 +4729,20 @@
 "检查中…",
 "comprobando…"
 ],
+"программа не запущена": [
+"the program isn't running",
+"程序未运行",
+"el programa no está en marcha"
+],
 "прочее {0}": [
 "other {0}",
 "其他 {0}",
 "otros {0}"
+],
+"пустой ответ": [
+"empty answer",
+"空回复",
+"respuesta vacía"
 ],
 "распознавания": [
 "recognition",
@@ -3088,6 +4763,21 @@
 "sec",
 "秒",
 "s"
+],
+"сервер закрылся": [
+"the server closed",
+"服务器已关闭",
+"el servidor se cerró"
+],
+"сервер не ответил": [
+"the server didn't answer",
+"服务器未响应",
+"el servidor no respondió"
+],
+"сервер не прислал ответ": [
+"the server sent no answer",
+"服务器没有回复",
+"el servidor no respondió"
 ],
 "симв.": [
 "chars",
@@ -3124,15 +4814,30 @@
 "停止",
 "detener"
 ],
+"страница не ответила": [
+"the page didn't answer",
+"页面没有响应",
+"la página no respondió"
+],
 "токен": [
 "token",
 "令牌",
 "token"
 ],
+"токенов": [
+"tokens",
+"个 token",
+"tokens"
+],
 "токенов ·": [
 "tokens ·",
 "词元 ·",
 "tokens ·"
+],
+"токенов в этом чате": [
+"tokens in this chat",
+"个 token（本对话）",
+"tokens en este chat"
 ],
 "экран": [
 "screen",

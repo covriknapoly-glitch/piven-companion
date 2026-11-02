@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { EngineState, Slide, WebApi } from "./bridge";
 import { BrowserPane } from "./browser";
 import { useImage } from "./cards";
+import { ContextTab } from "./context";
 import { Icon } from "./icons";
-import { Button, IconButton, fileName } from "./ui";
+import { Button, Decor, IconButton, fileName } from "./ui";
 
-export type WorkspaceTab = "browser" | "files";
+export type WorkspaceTab = "browser" | "files" | "context";
 
 
 /** The right-hand panel: browser, files of the chat, code editor (and the call above them while it runs). */
@@ -15,19 +16,20 @@ export function Workspace({ api, state, tab, setTab, browserRequest, covered, on
   return (
     <div className="workspace-body">
       <div className="workspace-tabs" role="tablist">
-        {([["browser", "Браузер", "external"], ["files", "Файлы", "folder"]] as const).map(([id, label, icon]) => (
+        {([["browser", "Браузер", "external"], ["files", "Файлы", "folder"], ["context", "Контекст", "database"]] as const).map(([id, label, icon]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
             <Icon name={icon} size={14} />{label}
           </button>
         ))}
         <span className="topbar-spacer" />
-        <IconButton icon="close" label="Закрыть панель (Ctrl+D)" size={15} onClick={onClose} />
+        <IconButton icon="workspace" label="Скрыть панель (Ctrl+D)" onClick={onClose} />
       </div>
       {/* The browser stays mounted so its pages survive switching tabs; its native view hides meanwhile. */}
       <div className={tab === "browser" ? "workspace-slot" : "workspace-hidden"}>
         <BrowserPane api={api} openRequest={browserRequest} covered={covered || tab !== "browser"} />
       </div>
       {tab === "files" && <FilesTab api={api} state={state} />}
+      {tab === "context" && <ContextTab api={api} state={state} />}
     </div>
   );
 }
@@ -60,7 +62,7 @@ function FilesTab({ api, state }: { api: WebApi; state: EngineState }) {
   );
   return (
     <div className="workspace-slot files-list">
-      {!files.length && <p className="pane-note files-empty">В этом чате пока нет файлов. Здесь появятся картинки, презентации и другие файлы из ответов.</p>}
+      {!files.length && <div className="files-empty"><Decor corner="br" /><p className="pane-note">Файлов пока нет</p></div>}
       {files.map((path) => (
         <button key={path} type="button" className="file-row" onClick={() => setOpen(path)} title={path}>
           {IMAGE.test(path) ? <Thumb api={api} path={path} /> : <span className="file-icon"><Icon name={/\.pptx$/i.test(path) ? "presentation" : VIDEO.test(path) ? "play" : "file"} size={18} /></span>}
