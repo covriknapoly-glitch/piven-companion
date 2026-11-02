@@ -9,6 +9,7 @@ export interface DialogueItem {
   role: ChatRole;
   text: string;
   images: string[];
+  undo?: number;   // files and folders the request behind this answer made, which its undo button deletes
 }
 
 export interface ChatSummary {
@@ -131,7 +132,8 @@ export interface VoiceModel { id: string; title: string; note: string; license: 
 export interface VoiceSearchHit { id: string; title?: string; note?: string; downloads: number; gated: boolean; engine: string; engineLabel: string; reason: string; license?: string; nonCommercial?: boolean }
 export interface VoiceDetails { ok: boolean; error?: string; supported?: boolean; reason?: string; engine?: string; mode?: "custom" | "design"; voices?: string[]; files?: (HfFile & { label?: string })[]; bytes?: number; note?: string; license?: string }
 export interface MemoryEstimate { total: number; weights: number; kv: number; other: number; speed?: number; measured?: boolean }
-export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number }
+export interface ModelFeatures { vision: boolean; thinking: boolean; context: number }
+export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number; features?: Record<string, ModelFeatures> }
 export interface ContextUsage {
   ok: boolean; error?: string; model: string; cloud: boolean; used: number; limit: number; turns: number; images: number; toolCount: number; serversWaiting: string[];
   parts: { system: number; summary: number; skills: number; tools: number; history: number; images: number };
@@ -159,6 +161,8 @@ interface WebApi {
   export_chat(chatId: string, markdown: boolean): Promise<CommandResult>;
   search_messages(query: string): Promise<SearchHit[]>;
   retry_last(): Promise<CommandResult>;
+  edit_message(index: number, text: string): Promise<CommandResult>;
+  undo_files(index: number): Promise<CommandResult>;
   speak(text: string): Promise<CommandResult>;
   set_model(name: string): Promise<CommandResult>;
   set_speech(enabled: boolean): Promise<CommandResult>;

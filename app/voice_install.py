@@ -273,9 +273,17 @@ def asr_model_path(model_id):
     return info.get("path") or ASR_MODELS_DIR / info["file"]
 
 
+def clone_only(info):
+    """True for a Qwen3-TTS Base model in audio.cpp: it has no built-in speakers and speaks only in a sample's
+    voice (its model card still lists the CustomVoice speakers, which it refuses)."""
+    return info.get("engine") == "audiocpp" and info.get("family") == "qwen3_tts" and "base" in str(info.get("title", "")).lower()
+
+
 def tts_voices(model_id):
     """[(value, label)] for the voice picker of a TTS model."""
     info = tts_model(model_id)
+    if clone_only(info):
+        return [("sample", "Мой образец голоса")]
     if info["engine"] != "qwen":
         voices = [(name, name) for name in info.get("voices") or []]
         sample = [("sample", "Мой образец голоса")] if info["engine"] in CLONING_ENGINES or info.get("clone") else []

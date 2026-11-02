@@ -314,6 +314,13 @@ kbd { padding: 0 4px; border-radius: 3px; background: var(--element-2); color: v
 .msg:hover .msg-actions, .msg-actions:focus-within { opacity: 1; }
 .msg-user .msg-actions { position: absolute; top: 4px; right: 4px; margin: 0; }
 .msg-action { width: 26px; height: 26px; }
+.undo-files { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+.undo-files .link-btn.danger { color: var(--danger); }
+.model-marks { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.model-context { font-size: 11px; font-variant-numeric: tabular-nums; }
+.msg-edit textarea { width: 100%; padding: 0; border: 0; outline: none; resize: none; background: transparent; color: var(--text); font: inherit; line-height: 1.55; }
+.msg-edit-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.msg-edit-foot span { flex: 1; color: var(--muted); font-size: 12px; }
 .msg.flash { animation: msgFlash 1.6s ease-out; }
 @keyframes msgFlash { 0%, 40% { outline: 1px solid var(--blue); outline-offset: 4px; } }
 .msg-working { color: var(--text-2); }

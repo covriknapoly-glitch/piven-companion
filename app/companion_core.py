@@ -98,7 +98,7 @@ from presentation_skill import create_presentation
 
 COMPUTER_SKILL_DIR = APP_DIR / "skills" / "computer-control"
 COMPUTER_SKILL_PROMPT = (COMPUTER_SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
-COMPUTER_ACTIONS = {"open_app", "open_url", "open_path", "web_search", "activate_window", "minimize_window", "maximize_window",
+COMPUTER_ACTIONS = {"write_file", "open_app", "open_url", "open_path", "web_search", "activate_window", "minimize_window", "maximize_window",
                     "restore_window", "get_active_window", "click", "type_text", "press_key", "scroll", "wait", "list_files",
                     "search_files", "read_file", "create_file", "create_folder", "rename_file", "move_file", "copy_file",
                     "download_file"}
@@ -431,6 +431,8 @@ def model_chat(model, messages, timeout=600, on_status=None, on_thinking=None,
 
 LANGUAGE_NAMES = {"en": "English", "zh": "简体中文 (Simplified Chinese)", "es": "Español"}  # interface languages besides Russian
 # The program's own lines inside an answer after computer actions (answers are not translated by the interface).
+# File commands that build a program; they do not count toward the eight actions on the computer per request.
+WRITING_ACTIONS = {"create_file", "write_file", "create_folder", "read_file", "list_files"}
 REPORT_WORDS = {
     "done": {"ru": "Что сделано:", "en": "What was done:", "zh": "已完成的操作：", "es": "Lo que se hizo:"},
     "nothing": {"ru": "Модель не выполнила ни одного действия.", "en": "The model did not perform any action.",
@@ -953,6 +955,25 @@ class CompanionCore:
                     return results
         return results
 
+    def cut_history_at(self, item_index):
+        """Remove a user's message (by its place among the shown items) and everything after it, from the shown chat
+        and from the model's history. Returns its (text, images), or None when it cannot be cut (busy, not a user
+        message, or already folded into the chat's summary)."""
+        if self.busy or not 0 <= item_index < len(self.dialogue_items):
+            return None
+        item = self.dialogue_items[item_index]
+        if item.get("role") != "user":
+            return None
+        # the model's history may have lost its start to the summary: match user messages from the end
+        later = sum(1 for entry in self.dialogue_items[item_index:] if entry.get("role") == "user")
+        users = [index for index, message in enumerate(self.messages) if index and message.get("role") == "user"]
+        if len(users) < later:
+            return None
+        self.messages = self.messages[:users[-later]]
+        self.dialogue_items = self.dialogue_items[:item_index]
+        self._save_conversation()
+        return str(item.get("text", "")), [str(path) for path in item.get("images") or []]
+
     def retry_last_answer(self, model):
         """Ask the model again for the last user message, dropping the answer after it."""
         if self.busy:
@@ -1383,6 +1404,11 @@ class CompanionCore:
             return {"model":"qwen3-tts-12hz-1.7b","input":text,"voice":voice,"response_format":"wav","speed":1.1}
         body={"model":"m","input":text}
         sample=self.settings.get("voice_sample","")
+        if voice_install.clone_only(info):  # a Base model speaks only in the sample's voice, whatever speaker was picked
+            if not (sample and Path(sample).is_file()):
+                raise RuntimeError("Эта модель озвучки говорит только голосом из образца. Выбери образец голоса в "
+                                   "Настройки → Голос и микрофон или поставь модель CustomVoice.")
+            voice="sample"
         if voice=="sample" and sample and Path(sample).is_file():
             body["voice_ref"]=sample; body["reference_text"]=self.settings.get("voice_sample_text","").strip()
             if not body["reference_text"]:  # without the sample's words clone the timbre only (Qwen3-TTS needs one or the other)
@@ -1846,6 +1872,46 @@ class CompanionCore:
         return bool(re.search(r"\b(?:кликни|щелкни|прокрути|посмотри на экран|что на экране|на экране нажми)\b", normalized))
 
     @staticmethod
+    def _undo_record(paths):
+        """[{path, folder, size, mtime}] of what a request made, as it is now (undo leaves anything changed later)."""
+        record = []
+        for path in dict.fromkeys(paths):
+            try:
+                info = Path(path).stat()
+            except OSError:
+                continue
+            folder = Path(path).is_dir()
+            record.append({"path": path, "folder": folder, "size": 0 if folder else info.st_size,
+                           "mtime": 0 if folder else info.st_mtime_ns})
+        return record
+
+    @staticmethod
+    def undo_files(record):
+        """Delete what one request made: files unchanged since then, then its folders if they are empty.
+        Returns (removed, kept) lists of paths."""
+        removed, kept = [], []
+        for entry in [item for item in record if not item.get("folder")]:
+            path = Path(entry["path"])
+            try:
+                info = path.stat()
+            except OSError:
+                continue   # already gone
+            if info.st_size != entry.get("size") or info.st_mtime_ns != entry.get("mtime"):
+                kept.append(str(path))   # changed after the request: the user's work now, left alone
+                continue
+            path.unlink()
+            removed.append(str(path))
+        for entry in sorted((item for item in record if item.get("folder")), key=lambda item: -len(item["path"])):
+            path = Path(entry["path"])
+            try:
+                path.rmdir()   # only an empty folder; one with other files stays
+                removed.append(str(path))
+            except OSError:
+                if path.exists():
+                    kept.append(str(path))
+        return removed, kept
+
+    @staticmethod
     def _describe_computer_action(item):
         """"create_file C:/…/index.html" — a command and its main target, for the closing report."""
         name = str(item.get("computer_action") or item.get("project_action") or "действие")
@@ -2018,8 +2084,9 @@ class CompanionCore:
                 }[action_name]
                 if not any(term in request_normalized for term in requested_terms):
                     raise ValueError("Размер окна не изменён: пользователь этого не просил.")
-            elif action_name in ("create_file", "create_folder", "rename_file", "move_file", "copy_file"):
-                explicit_change = re.search(r"\b(?:создай|создать|напиши|переименуй|перемести|скопируй|сделай копию)\b", request_normalized)
+            elif action_name in ("create_file", "write_file", "create_folder", "rename_file", "move_file", "copy_file"):
+                explicit_change = re.search(r"\b(?:создай|создать|напиши|написать|сделай|сделать|запиши|сохрани|"
+                                            r"переименуй|перемести|скопируй|сделай копию)\b", request_normalized)
                 if not explicit_change:
                     raise ValueError("Файлы не изменены: пользователь явно не просил об этом.")
         return "\n".join(self._run_computer_action(item, screenshot_size, display_size) for item in actions)
@@ -2036,7 +2103,17 @@ class CompanionCore:
                 url = "https://search.brave.com/search?q=" + urllib.parse.quote(str(item.get("query", "")))
             title, text = browser.open(url)
             return f"Открыто во встроенном браузере: «{title}». {tools.DATA_NOTE}\n" + text[:4000]
-        return execute_computer_action(item, screenshot_size, display_size)
+        created = getattr(self, "_run_created", None)
+        if name == "open_path" and created is not None:
+            # a page this request made opens in the built-in browser next to the chat
+            target = str(Path(str(item.get("path", ""))).expanduser().resolve())
+            made_here = target in created or any(target.startswith(folder + os.sep) for folder in created)
+            browser = self.tool_browser() if made_here and target.lower().endswith((".html", ".htm")) else None
+            if browser is not None:
+                import preview_server
+                title, _text = browser.open(preview_server.url_for(target))
+                return f"Страница «{Path(target).name}» открыта во встроенном браузере справа от чата."
+        return execute_computer_action(item, screenshot_size, display_size, created)
 
     @staticmethod
     def _extract_project_actions(text):
@@ -2211,6 +2288,31 @@ class CompanionCore:
             log(f"computer skill screenshot error: {error}")
             return None
 
+    def _describe_images(self, prompt, images):
+        """For a model that cannot see: the lightest local model with vision describes the pictures, and the
+        description is added to the request as text. "" when there is no such model or it failed."""
+        helpers = [name for name in llama_backend.model_files() if llama_backend.has_vision(name)]
+        if not helpers:
+            return ""
+        sizes = llama_backend.model_sizes()
+        helper = min(helpers, key=lambda name: sizes.get(name, 1 << 62))
+        images = images if isinstance(images, list) else [images]
+        self.events.put(("activity", f"Смотрит на картинку через {helper}"))
+        try:
+            description = model_chat(helper, [{"role": "user", "images": images, "content": (
+                "Опиши подробно и точно, что на " + ("этих изображениях" if len(images) > 1 else "этом изображении")
+                + ": предметы, людей, текст (дословно), цвета, расположение. Только описание, без вступлений. "
+                "Что пользователь хочет узнать о картинке: " + prompt[:1500])}],
+                think=False, cancel_event=self.action_cancel, overrides={"max_tokens": 800})
+        except InterruptedError:
+            raise
+        except Exception as error:
+            log(f"image description error: {error}")
+            return ""
+        description = " ".join(str(description).split())
+        return (f"\n\n[Выбранная модель не видит картинки. Модель {helper} посмотрела "
+                + ("их" if len(images) > 1 else "её") + f" и описала так: {description}]") if description else ""
+
     @staticmethod
     def _extract_image_tool_prompt(text):
         if "dalle.text2im" not in str(text).lower() and "text2im" not in str(text).lower():
@@ -2265,6 +2367,11 @@ class CompanionCore:
             computer_screenshot_size = computer_display_size = None
             system_message = self.messages[0]
             sees_screen = llama_backend.has_vision(model)
+            if screenshot and not sees_screen and not proactive:
+                described = self._describe_images(content, screenshot)
+                if described:   # the chosen model gets the picture as words from a model that can see
+                    content += described
+                    screenshot = None
             if computer_request:
                 home = Path.home()
                 known_folders = [home / name for name in ("Desktop", "Documents", "Downloads", "Pictures", "Videos",
@@ -2432,6 +2539,8 @@ class CompanionCore:
                 stop_reason = ""     # why the program stopped the run before the model finished
                 last_failure = ""
                 steps = []           # "command target → result" for the closing report
+                rounds = 0
+                self._run_created = []   # files and folders this request makes: rewritable, previewable, undoable
                 while computer_action:
                     if self.action_cancel.is_set():
                         raise InterruptedError("Действие на компьютере остановлено пользователем")
@@ -2439,8 +2548,15 @@ class CompanionCore:
                     if not actions or any(not isinstance(item, dict) for item in actions):
                         stop_reason = "Модель вернула пустую или некорректную команду, управление компьютером остановлено."
                         break
-                    if action_count + len(actions) > 8:
+                    # Writing and reading files of a bigger program does not use up the eight actions on the
+                    # computer itself (clicks, keys, apps); the whole run still ends after 30 rounds.
+                    counted = [item for item in actions if str(item.get("computer_action", "")).lower() not in WRITING_ACTIONS]
+                    if action_count + len(counted) > 8:
                         stop_reason = "Выполнение остановлено после восьми действий, чтобы можно было проверить результат."
+                        break
+                    rounds += 1
+                    if rounds > 30:
+                        stop_reason = "Выполнение остановлено после 30 шагов, чтобы можно было проверить результат."
                         break
                     action_label = str(actions[0].get("computer_action", "действие")) if actions else "действие"
                     context.append({"role": "assistant", "content": answer})
@@ -2459,7 +2575,7 @@ class CompanionCore:
                         last_failure = ""
                     steps.append("; ".join(self._describe_computer_action(item) for item in actions)
                                  + " → " + " ".join(str(result).split())[:300])
-                    action_count += len(actions)
+                    action_count += len(counted)
                     if "Скачивание отменено пользователем" in result:
                         stop_reason = result
                         break
@@ -2513,6 +2629,9 @@ class CompanionCore:
                 self.messages.extend([{"role": "user", "content": prompt},
                                       {"role": "assistant", "content": final_answer}])
                 self.events.put(("message", ("assistant", final_answer, voice)))
+                made, self._run_created = self._run_created, None
+                if made:   # the answer gets an "undo" button for exactly these files and folders
+                    self.events.put(("undo_ready", self._undo_record(made)))
                 return
             if not reasoning_received.is_set():
                 self.events.put(("reasoning","Эта модель не передала отдельный текст рассуждения."))

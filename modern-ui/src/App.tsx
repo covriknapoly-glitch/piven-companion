@@ -220,6 +220,7 @@ export default function App() {
         <Transcript api={api} state={state} focusIndex={focusIndex}
               onCopy={copy} onView={setLightbox} onStop={stop}
               onRetry={() => { void api.retry_last().then((result) => done(result.ok ? undefined : result.error)); }}
+              onEdit={(index, text) => { void api.edit_message(index, text).then((result) => done(result.ok ? undefined : result.error)); }}
               onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} />
 
         <div className="composer-dock" ref={trackDockHeight}>

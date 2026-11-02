@@ -152,7 +152,8 @@ class WebCompanion(CompanionCore):
                                             if item.get("role") in ("assistant", "user") and item.get("text")), "")}
                           for chat in chats],
                 "items": [{"role": item.get("role", "system"), "text": str(item.get("text", "")),
-                           "images": [str(path) for path in item.get("images") or []]}
+                           "images": [str(path) for path in item.get("images") or []],
+                           "undo": len(item.get("undo") or [])}
                           for item in self.dialogue_items if isinstance(item, dict)],
                 "chatTitle": active.get("title") or "Новый чат",
                 "busy": bool(self.busy),
@@ -183,6 +184,13 @@ class WebCompanion(CompanionCore):
                 },
             }
 
+    @staticmethod
+    def _attach_undo(items, record):
+        """Give the latest answer of a chat the files and folders its request made (for its undo button)."""
+        answer = next((item for item in reversed(items) if isinstance(item, dict) and item.get("role") == "assistant"), None)
+        if answer is not None:
+            answer["undo"] = record
+
     def _background_event(self, chat_id, kind, value):
         """An event of an answer whose chat is not on screen: its cards go to that chat. Under the state lock."""
         chat = next((item for item in self.chats if item.get("id") == chat_id), None)
@@ -194,6 +202,9 @@ class WebCompanion(CompanionCore):
                 self._notify(f"Ответ в чате «{title}»", content)
         elif kind == "error":
             self._show_error(chat_id, value)
+        elif kind == "undo_ready" and chat:
+            self._attach_undo(chat.get("items", []), value)
+            self._save_conversation()
         elif kind == "generated_image":
             self.append_to_chat(chat_id, "assistant", "Изображение создано через ComfyUI.", [str(value)])
         elif kind == "presentation_created":
@@ -318,6 +329,9 @@ class WebCompanion(CompanionCore):
                 elif kind == "error":
                     self._show_error(self.active_chat_id, value); self._activity = "Ошибка"; self._reasoning = ""
                     self._notify("Ошибка", str(value))
+                elif kind == "undo_ready":
+                    self._attach_undo(self.dialogue_items, value)
+                    self._save_conversation()
                 elif kind == "chats_changed":
                     self._changed()
                 elif kind == "action_interrupted":
@@ -1224,6 +1238,39 @@ class WebApi:
             app._changed()
         return {"ok": ok, "error": "" if ok else "Нечего повторять или идёт другое действие."}
 
+    def undo_files(self, index):
+        """Delete the files and folders the request behind one answer made (only ones unchanged since)."""
+        app = self._app
+        with app._state_lock:
+            items = app.dialogue_items
+            item = items[int(index)] if 0 <= int(index) < len(items) else None
+            record = (item or {}).get("undo") or []
+            if not record:
+                return {"ok": False, "error": "Здесь нечего отменять."}
+            try:
+                removed, kept = app.undo_files(record)
+            except OSError as error:
+                return {"ok": False, "error": f"Не удалось удалить: {error}"}
+            item.pop("undo", None)
+            note = f"Отменено: удалено файлов и папок — {len(removed)}."
+            if kept:
+                note += f" Оставлено {len(kept)}: они изменены после этого или в папке есть другие файлы."
+            app._record("system", note)
+        return {"ok": True}
+
+    def edit_message(self, index, text):
+        """Replace one of the user's messages: it and everything after it leave the chat, the new text is sent."""
+        app = self._app
+        with app._state_lock:
+            cut = app.cut_history_at(int(index))
+            if cut is None:
+                return {"ok": False, "error": "Это сообщение нельзя изменить: идёт ответ или оно уже в кратком содержании."}
+            _old_text, images = cut
+            images = [path for path in images if Path(path).is_file()]
+            app._allowed_files |= set(images)   # they left the chat's items with the old message; they go with the new one
+            app._changed()
+        return app.send(text, images)
+
     def speak(self, text):
         threading.Thread(target=self._app._speak, args=(str(text or ""),), daemon=True).start()
         return {"ok": True}
@@ -1537,6 +1584,21 @@ class WebApi:
             log(f"disk usage error: {error}")
             return {"ok": False, "error": str(error), "models": [], "voiceModels": 0, "engines": []}
 
+    @staticmethod
+    def _model_features(wanted=None):
+        """{model: {"vision", "thinking", "context"}} of local models for the marks in the model menu."""
+        features = {}
+        for name in llama_backend.model_files():
+            if wanted is not None and name not in wanted:
+                continue
+            try:
+                values, default = llama_backend.thinking_modes(name)
+            except Exception:
+                values, default = [], None
+            features[name] = {"vision": llama_backend.has_vision(name), "thinking": bool(values) or default is True,
+                              "context": llama_backend.context_size(name)}
+        return features
+
     def model_memory(self, names=None):
         """Estimated video memory of local models once loaded, and the GPU's total."""
         try:
@@ -1544,7 +1606,8 @@ class WebApi:
             reserved = self._app.voice_vram()
             llama_backend.reserved_vram[0] = reserved
             return {"gpu": memory_estimate.gpu_memory(), "context": llama_backend.context_size(self._app.settings.get("model", "")),
-                    "models": llama_backend.memory_estimates(wanted), "voiceReserved": reserved}
+                    "models": llama_backend.memory_estimates(wanted), "voiceReserved": reserved,
+                    "features": self._model_features(wanted)}
         except Exception as error:
             log(f"model memory error: {error}")
             return {"gpu": 0, "context": 0, "models": {}}

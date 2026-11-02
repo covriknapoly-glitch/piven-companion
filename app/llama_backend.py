@@ -453,7 +453,12 @@ class LlamaServer:
             if _port_busy(self.port):
                 raise RuntimeError(f"Порт {self.port} занят другой программой, llama-server не может запуститься.")
             if on_status:
-                on_status(f"Загрузка модели {model}")
+                on_status(f"Загрузка модели {model} · 0%")
+            # llama-server reports no loading progress: the percent is the time so far against this model's
+            # previous load (the first time, against its size at about 1.5 GB/s), held at 99% until it answers
+            files = _model_parts(gguf) + ([projector] if projector else [])
+            expected = _load_times().get(model) or 2 + sum(item.stat().st_size for item in files) / 1.5e9
+            started, shown = time.monotonic(), 0
             log_file = SERVER_LOG.open("ab")
             log_file.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} {' '.join(args)}\n".encode("utf-8"))
             log_file.flush()
@@ -471,10 +476,34 @@ class LlamaServer:
                     self._model = ""
                     raise RuntimeError("llama-server закрылся при загрузке модели. Подробности в журнале: " + str(SERVER_LOG))
                 if self._healthy():
+                    _save_load_time(model, time.monotonic() - started)
                     return
+                percent = min(99, int((time.monotonic() - started) / expected * 100))
+                if on_status and percent != shown:
+                    on_status(f"Загрузка модели {model} · {percent}%")
+                    shown = percent
                 time.sleep(0.5)
             self._stop_locked()
             raise RuntimeError("Модель не загрузилась за 10 минут. Подробности в журнале: " + str(SERVER_LOG))
+
+
+LOAD_TIMES_PATH = DATA_DIR / "load_times.json"   # {model: seconds its last load took}, for the loading percent
+
+
+def _load_times():
+    try:
+        return json.loads(LOAD_TIMES_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_load_time(model, seconds):
+    times = _load_times()
+    times[model] = round(seconds, 1)
+    try:
+        LOAD_TIMES_PATH.write_text(json.dumps(times, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def free_port(port, owner_dir):

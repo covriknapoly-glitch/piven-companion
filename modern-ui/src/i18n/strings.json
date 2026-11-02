@@ -759,6 +759,11 @@
 "根据图片生成视频 · 启动 ComfyUI",
 "Vídeo a partir de imagen · iniciando ComfyUI"
 ],
+"Видит картинки и экран": [
+"Sees pictures and the screen",
+"能看图片和屏幕",
+"Ve imágenes y la pantalla"
+],
 "Видит экран в паузах": [
 "Looks at the screen in pauses",
 "在停顿时查看屏幕",
@@ -893,6 +898,11 @@
 "Off",
 "关闭",
 "Desactivado"
+],
+"Выполнение остановлено после 30 шагов, чтобы можно было проверить результат.": [
+"Stopped after 30 steps so you can check the result.",
+"已在 30 步后停止，以便检查结果。",
+"Se detuvo tras 30 pasos para que puedas comprobar el resultado."
 ],
 "Выполнение остановлено после восьми действий, чтобы можно было проверить результат.": [
 "Stopped after eight actions so you can check the result.",
@@ -1269,6 +1279,11 @@
 "正在加载模型 {0}",
 "Cargando el modelo {0}"
 ],
+"Загрузка модели {0} · {1}%": [
+"Loading model {0} · {1}%",
+"正在加载模型 {0} · {1}%",
+"Cargando modelo {0} · {1}%"
+],
 "Загрузка описания…": [
 "Loading description…",
 "正在加载描述…",
@@ -1433,6 +1448,11 @@
 "Here the companion reads and edits files when you ask it to do something with code.",
 "当你让伙伴处理代码时，它会在这里读取和修改文件。",
 "Aquí el compañero lee y edita archivos cuando le pides algo con el código."
+],
+"Здесь нечего отменять.": [
+"There is nothing to undo here.",
+"这里没有可撤销的内容。",
+"Aquí no hay nada que deshacer."
 ],
 "Зерно (seed)": [
 "Seed",
@@ -1728,6 +1748,11 @@
 "Context",
 "上下文",
 "Contexto"
+],
+"Контекст: сколько текста модель помнит за раз": [
+"Context: how much text the model keeps in mind at once",
+"上下文：模型一次能记住多少文本",
+"Contexto: cuánto texto recuerda el modelo a la vez"
 ],
 "Контрольная сумма {0} не совпала, файл повреждён.": [
 "The checksum of {0} didn't match, the file is damaged.",
@@ -2419,6 +2444,11 @@
 "无法删除。",
 "No se pudo eliminar."
 ],
+"Не удалось удалить: {0}": [
+"Couldn't delete: {0}",
+"无法删除：{0}",
+"No se pudo eliminar: {0}"
+],
 "Не удалось узнать у модели: {0}": [
 "Couldn't ask the model: {0}",
 "无法从模型获取：{0}",
@@ -2769,6 +2799,11 @@
 "舍弃比最佳词概率低得多的词。",
 "Descarta las palabras mucho menos probables que la mejor."
 ],
+"Ответ на это сообщение и всё после него будет заменено.": [
+"The answer to this message and everything after it will be replaced.",
+"此消息的回答及其后的所有内容都将被替换。",
+"La respuesta a este mensaje y todo lo que sigue se reemplazará."
+],
 "Ответить заново": [
 "Answer again",
 "重新回答",
@@ -2849,6 +2884,16 @@
 "已取消",
 "Cancelado"
 ],
+"Отменено: удалено файлов и папок — {0}.": [
+"Undone: {0} files and folders deleted.",
+"已撤销：删除了 {0} 个文件和文件夹。",
+"Deshecho: se eliminaron {0} archivos y carpetas."
+],
+"Отменено: удалено файлов и папок — {0}. Оставлено {1}: они изменены после этого или в папке есть другие файлы.": [
+"Undone: {0} files and folders deleted. {1} kept: they were changed afterwards or their folder has other files.",
+"已撤销：删除了 {0} 个文件和文件夹。保留了 {1} 个：它们之后被修改过，或文件夹中还有其他文件。",
+"Deshecho: se eliminaron {0} archivos y carpetas. Se conservaron {1}: se modificaron después o su carpeta tiene otros archivos."
+],
 "Отменить": [
 "Cancel",
 "取消",
@@ -2858,6 +2903,11 @@
 "Cancel download",
 "取消下载",
 "Cancelar descarga"
+],
+"Отменить и удалить": [
+"Undo and delete",
+"撤销并删除",
+"Deshacer y eliminar"
 ],
 "Отображать файл в память (mmap)": [
 "Memory-map the file (mmap)",
@@ -3784,6 +3834,11 @@
 "查看屏幕的间隔",
 "Mirar la pantalla cada"
 ],
+"Смотрит на картинку через {0}": [
+"Looking at the picture with {0}",
+"正在通过 {0} 查看图片",
+"Mirando la imagen con {0}"
+],
 "Смотрит на экран": [
 "Watching the screen",
 "正在看屏幕",
@@ -3828,6 +3883,11 @@
 "Presentation stopped by the user",
 "演示文稿的创建已被用户停止",
 "Presentación detenida por el usuario"
+],
+"Создано файлов и папок: {0}": [
+"Files and folders created: {0}",
+"已创建的文件和文件夹：{0}",
+"Archivos y carpetas creados: {0}"
 ],
 "Создать навык": [
 "Create skill",
@@ -4094,6 +4154,11 @@
 "请在“设置 → 集成”中指定你的频道。",
 "Indica tu canal en Ajustes → Integraciones."
 ],
+"Умеет размышлять": [
+"Can think",
+"能够思考",
+"Puede razonar"
+],
 "Уменьшить (−)": [
 "Zoom out (−)",
 "缩小（−）",
@@ -4324,6 +4389,11 @@
 "该模型不会思考。",
 "Este modelo no razona."
 ],
+"Эта модель озвучки говорит только голосом из образца. Выбери образец голоса в Настройки → Голос и микрофон или поставь модель CustomVoice.": [
+"This voice model speaks only in a sample's voice. Choose a voice sample in Settings → Voice and microphone or pick a CustomVoice model.",
+"此配音模型只能用样本的声音说话。请在 设置 → 语音和麦克风 中选择声音样本，或改用 CustomVoice 模型。",
+"Este modelo de voz solo habla con la voz de una muestra. Elige una muestra de voz en Ajustes → Voz y micrófono o usa un modelo CustomVoice."
+],
 "Эта модель сейчас отвечает. Дождись конца ответа или останови его.": [
 "This model is answering now. Wait for it to finish or stop it.",
 "这个模型正在回答。请等待回答结束或停止它。",
@@ -4353,6 +4423,11 @@
 "This is an estimate, about three characters per token; only the model knows the exact number. Long-term memory is added at every answer and is not counted here. Skills and tools are counted for an ordinary answer; with tools turned off they are not sent.",
 "这是估算值，约每三个字符一个 token，确切数字只有模型自己知道。长期记忆在每次回答时加入，不计入此处。技能和工具按普通回答计算；关闭工具后不会发送。",
 "Es una estimación, unos tres caracteres por token; solo el modelo sabe la cifra exacta. La memoria a largo plazo se añade en cada respuesta y no se cuenta aquí. Las habilidades y herramientas se cuentan para una respuesta normal; con las herramientas desactivadas no se envían."
+],
+"Это сообщение нельзя изменить: идёт ответ или оно уже в кратком содержании.": [
+"This message can't be edited: an answer is in progress or it is already in the summary.",
+"无法编辑此消息：正在回答，或它已被纳入摘要。",
+"No se puede editar este mensaje: hay una respuesta en curso o ya está en el resumen."
 ],
 "Этот GGUF сделан для другой программы (архитектура «{0}»), NeMo-Speech его не откроет. Поищи ту же модель в формате Transformers, обычно это репозиторий без «gguf» в названии.": [
 "This GGUF is made for another program (architecture “{0}”), NeMo-Speech can't open it. Look for the same model in Transformers format, usually a repository without “gguf” in its name.",

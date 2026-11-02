@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
-import type { EngineState, ModelMemory, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
+import type { EngineState, ModelFeatures, ModelMemory, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
 import { useImage } from "./cards";
 import { CallControl } from "./dialogs";
 import { Icon } from "./icons";
@@ -19,6 +19,18 @@ function AttachmentChip({ api, path, onRemove }: { api: WebApi; path: string; on
       {src ? <img src={src} alt="" /> : <span className="attach-chip-empty" />}
       <button type="button" aria-label="Убрать картинку" onClick={onRemove}><Icon name="close" size={12} /></button>
     </div>
+  );
+}
+
+/** What a model can do, as small marks in the model menu: sees pictures, thinks, its context size. */
+function ModelMarks({ features }: { features?: ModelFeatures }) {
+  if (!features) return null;
+  return (
+    <span className="model-marks">
+      {features.vision && <span title="Видит картинки и экран"><Icon name="image" size={13} /></span>}
+      {features.thinking && <span title="Умеет размышлять"><Icon name="spark" size={13} /></span>}
+      <span className="model-context" title="Контекст: сколько текста модель помнит за раз">{Math.round(features.context / 1024)}K</span>
+    </span>
   );
 }
 
@@ -46,7 +58,8 @@ function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: E
             {models.map((name) => (
               <button key={name} type="button" className={name === model ? "selected" : ""}
                 onClick={() => { close(); if (name !== model) void api.set_model(name).then((result) => onDone(result.ok ? undefined : result.error)); }}>
-                <ModelLogo api={api} name={name} size={18} /><span className="mono-ish grow">{name}</span><MemoryBadge estimate={memory?.models[name]} gpu={Math.max(0, (memory?.gpu ?? 0) - (memory?.voiceReserved ?? 0))} context={memory?.context} />{name === model && <Icon name="check" size={15} />}
+                <ModelLogo api={api} name={name} size={18} /><span className="mono-ish grow">{name}</span>
+                <ModelMarks features={memory?.features?.[name]} /><MemoryBadge estimate={memory?.models[name]} gpu={Math.max(0, (memory?.gpu ?? 0) - (memory?.voiceReserved ?? 0))} context={memory?.context} />{name === model && <Icon name="check" size={15} />}
               </button>
             ))}
             {!models.length && <div className="menu-empty">{state.models.length ? "Ничего не найдено" : state.modelsError || "Нет моделей"}</div>}
