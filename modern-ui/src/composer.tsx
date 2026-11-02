@@ -33,9 +33,10 @@ function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: E
   const models = state.models.filter((name) => name.toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <div className="menu-anchor" ref={ref}>
-      <button type="button" className="chip-btn" disabled={state.busy} onClick={() => setOpen((value) => !value)} title="Модель">
+      <button type="button" className="chip-btn" disabled={state.busy} onClick={() => setOpen((value) => !value)} title={model || "Модель"}>
         {model && state.models.includes(model) ? <ModelLogo api={api} name={model} size={16} /> : <span className={`status-dot ${state.models.length ? "ok" : "warn"}`} />}
-        <span className="chip-text">{model || (state.modelsError ? "Нет моделей" : "Выбрать модель")}</span>
+        {/* only the start of the file name; the whole name is in the tooltip and the menu */}
+        <span className="chip-text">{model ? (model.length > 10 ? `${model.slice(0, 10)}…` : model) : (state.modelsError ? "Нет моделей" : "Выбрать модель")}</span>
         <Icon name="chevronDown" size={14} />
       </button>
       {open && (
@@ -188,7 +189,7 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
         </div>
       )}
       <textarea ref={inputRef} rows={1} aria-label="Сообщение" value={draft} spellCheck
-        placeholder={state.busy ? "Можно писать дальше: сообщение отправится после текущего ответа" : "Напиши сообщение, попроси нарисовать картинку или сделать презентацию"}
+        placeholder={state.busy ? "Отправится после текущего ответа" : "Сообщение"}
         onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
       <div className="composer-bar">
         <IconButton icon="paperclip" label="Прикрепить картинку (можно вставить Ctrl+V или перетащить)"

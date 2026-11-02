@@ -1,80 +1,74 @@
-import type { SVGProps } from "react";
+import type { HTMLAttributes } from "react";
 
-// Icons without a Material Symbol: 24px grid, 1.7px round strokes.
-const paths = {
-  call: ["M5 3.5h3.5l1.7 4.3-2.3 1.6a11.5 11.5 0 0 0 6.7 6.7l1.6-2.3 4.3 1.7V19a1.5 1.5 0 0 1-1.5 1.5A16.5 16.5 0 0 1 3.5 5 1.5 1.5 0 0 1 5 3.5Z"],
-  alert: ["M12 3 2.5 20h19L12 3Z", "M12 10v4.5", "M12 17.5h.01"],
-  arrowDown: ["M12 4v15", "m6 13 6 6 6-6"],
-  arrowRight: ["M4 12h15", "m13 6 6 6-6 6"],
-  check: ["m5 12.5 4.5 4.5L19 7.5"],
-  chevronDown: ["m6 9 6 6 6-6"],
-  chevronRight: ["m9 6 6 6-6 6"],
-  close: ["m6 6 12 12", "M18 6 6 18"],
-  download: ["M12 4v11", "m7 10 5 5 5-5", "M5 20h14"],
-  external: ["M14 4h6v6", "m20 4-9 9", "M18 14v6H4V6h6"],
-  fit: ["M4 9V4h5", "M20 9V4h-5", "M4 15v5h5", "M20 15v5h-5"],
-  paperclip: ["m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.3 3.3 0 0 1 4.7 4.7L9.2 17.2a1.7 1.7 0 0 1-2.4-2.4L15 6.6"],
-  pause: ["M8 5v14", "M16 5v14"],
-  play: ["M7 4.5v15L19.5 12 7 4.5Z"],
-  presentation: ["M3 4h18v12H3z", "M12 16v4", "M8 20h8", "M7 12l3-3 2 2 4-4"],
-  retry: ["M4 12a8 8 0 1 0 2.4-5.7L4 8.5", "M4 4v4.5h4.5"],
-  send: ["m3 11 18-8-8 18-2-8-8-2Z", "m11 13 10-10"],
-  spark: ["m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"],
-  stop: ["M7 7h10v10H7z"],
-  twitch: ["M4 3h16v11l-5 5h-4l-3 3v-3H4V3Z", "M11 8v4", "M15 8v4"],
-  user: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z", "M4 21a8 8 0 0 1 16 0"],
-  zoomIn: ["M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z", "m16 16 5 5", "M11 8v6", "M8 11h6"],
-  zoomOut: ["M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z", "m16 16 5 5", "M8 11h6"],
+// Icons are glyphs of Symbols Nerd Font (subset in assets/fonts/SymbolsNerdFont-Icons.ttf):
+// Codicons (CC BY 4.0), Material Design Icons (Apache 2.0) and Font Awesome (CC BY 4.0), see docs/THIRD_PARTY_NOTICES.md.
+// To add one, add its glyph name to modern-ui/scripts/subset_icons.py and run it again.
+const glyphs = {
+  call: "\u{f03f2}", // md-phone
+  alert: "\u{ea6c}", // cod-warning
+  arrowDown: "\u{ea9a}", // cod-arrow_down
+  arrowRight: "\u{ea9c}", // cod-arrow_right
+  arrowUp: "\u{eaa1}", // cod-arrow_up
+  check: "\u{eab2}", // cod-check
+  chevronDown: "\u{eab4}", // cod-chevron_down
+  chevronRight: "\u{eab6}", // cod-chevron_right
+  close: "\u{ea76}", // cod-close
+  download: "\u{eac2}", // cod-cloud_download
+  external: "\u{eb14}", // cod-link_external
+  fit: "\u{eb4c}", // cod-screen_full
+  paperclip: "\u{ec34}", // cod-attach
+  pause: "\u{ead1}", // cod-debug_pause
+  play: "\u{eb2c}", // cod-play
+  presentation: "\u{f0428}", // md-presentation
+  retry: "\u{ebc0}", // cod-debug_rerun
+  send: "\u{ec0f}", // cod-send
+  spark: "\u{ec10}", // cod-sparkle
+  stop: "\u{ead7}", // cod-debug_stop
+  twitch: "\u{f1e8}", // fa-twitch
+  user: "\u{eb99}", // cod-account
+  zoomIn: "\u{eb81}", // cod-zoom_in
+  zoomOut: "\u{eb82}", // cod-zoom_out
+  plus: "\u{ea60}", // cod-add
+  moon: "\u{f0594}", // md-weather_night
+  sun: "\u{f0599}", // md-weather_sunny
+  chat: "\u{ea6b}", // cod-comment
+  code: "\u{eac4}", // cod-code
+  copy: "\u{ebcc}", // cod-copy
+  trash: "\u{ea81}", // cod-trash
+  box: "\u{eb29}", // cod-package
+  monitor: "\u{ea7a}", // cod-vm
+  file: "\u{ea7b}", // cod-file
+  edit: "\u{ea73}", // cod-edit
+  compose: "\u{ec0e}", // cod-comment_draft
+  extension: "\u{eae6}", // cod-extensions
+  folder: "\u{ea83}", // cod-folder
+  headphones: "\u{f02cb}", // md-headphones
+  image: "\u{eaea}", // cod-file_media
+  share: "\u{ebac}", // cod-export
+  pin: "\u{eb2b}", // cod-pin
+  sidebar: "\u{ebf3}", // cod-layout_sidebar_left
+  sidebarOpen: "\u{ec02}", // cod-layout_sidebar_left_off
+  workspace: "\u{ebf4}", // cod-layout_sidebar_right
+  workspaceOff: "\u{ec00}", // cod-layout_sidebar_right_off
+  menu: "\u{eb94}", // cod-menu
+  mic: "\u{ec12}", // cod-mic
+  more: "\u{ea7c}", // cod-ellipsis
+  refresh: "\u{eb37}", // cod-refresh
+  search: "\u{ea6d}", // cod-search
+  settings: "\u{eb51}", // cod-settings_gear
+  volume: "\u{eb75}", // cod-unmute
+  palette: "\u{eb5c}", // cod-symbol_color
+  globe: "\u{eb01}", // cod-globe
+  tools: "\u{eb6d}", // cod-tools
+  database: "\u{eace}", // cod-database
+  plug: "\u{eb2d}", // cod-plug
+  keyboard: "\u{ec3c}", // cod-keyboard_tab
 } as const;
 
-// Google Material Symbols (weight 400, filled), Apache 2.0. Source SVGs: assets/icons/material.
-const material = {
-  plus: "M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z", // add
-  arrowUp: "M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z", // arrow_upward
-  moon: "M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Z", // bedtime
-  chat: "M80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Z", // chat_bubble
-  code: "M320-240 80-480l240-240 57 57-184 184 183 183-56 56Zm320 0-57-57 184-184-183-183 56-56 240 240-240 240Z", // code
-  copy: "M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Z", // content_copy
-  trash: "M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm80-160h80v-360h-80v360Zm160 0h80v-360h-80v360Z", // delete
-  box: "M440-91 160-252q-19-11-29.5-29T120-321v-318q0-22 10.5-40t29.5-29l280-161q19-11 40-11t40 11l280 161q19 11 29.5 29t10.5 40v318q0 22-10.5 40T800-252L520-91q-19 11-40 11t-40-11Zm0-366v274l40 23 40-23v-274l240-139v-42l-43-25-237 137-237-137-43 25v42l240 139Z", // deployed_code
-  monitor: "M320-120v-80h80v-80H160q-33 0-56.5-23.5T80-360v-400q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v400q0 33-23.5 56.5T800-280H560v80h80v80H320Z", // desktop_windows
-  file: "M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520h200L520-800v200Z", // draft
-  edit: "M120-120v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm584-528 56-56-56-56-56 56 56 56Z", // edit
-  compose: "M360-360v-170l367-367q12-12 27-18t30-6q16 0 30.5 6t26.5 18l56 57q11 12 17 26.5t6 29.5q0 15-5.5 29.5T897-728L530-360H360Zm424-368 57-56-56-56-57 56 56 56ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h357L280-563v283h282l278-278v358q0 33-23.5 56.5T760-120H200Z", // edit_square
-  extension: "M200-120q-34 0-57-23t-23-57v-152q48 0 84-30.5t36-77.5q0-46-36-76t-84-32v-152q0-33 23.5-56.5T200-800h122q7-51 46-85.5t92-34.5q52 0 91 34.5t47 85.5h122q33 0 56.5 23.5T800-720v134q36 18 58 52t22 74q0 41-22 75t-58 51v134q0 34-23.5 57T720-120H200Z", // extension
-  folder: "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h240l80 80h320q33 0 56.5 23.5T880-640v400q0 33-23.5 56.5T800-160H160Z", // folder
-  headphones: "M360-120H200q-33 0-56.5-23.5T120-200v-280q0-75 28.5-140.5t77-114q48.5-48.5 114-77T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480v280q0 33-23.5 56.5T760-120H600v-320h160v-40q0-117-81.5-198.5T480-760q-117 0-198.5 81.5T200-480v40h160v320Z", // headphones
-  image: "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm40-160h480L570-480 450-320l-90-120-120 160Zm142.5-297.5Q400-595 400-620t-17.5-42.5Q365-680 340-680t-42.5 17.5Q280-645 280-620t17.5 42.5Q315-560 340-560t42.5-17.5Z", // imagesmode
-  share: "M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h120v80H240v400h480v-400H600v-80h120q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm200-240v-447l-64 64-56-57 160-160 160 160-56 57-64-64v447h-80Z", // ios_share
-  pin: "m640-480 80 80v80H520v240l-40 40-40-40v-240H240v-80l80-80v-280h-40v-80h400v80h-40v280Z", // keep
-  sidebar: "M660-320v-320L500-480l160 160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm200-80h360v-560H400v560Z", // left_panel_close
-  sidebarOpen: "M500-640v320l160-160-160-160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm200-80h360v-560H400v560Z", // left_panel_open
-  sun: "M338.5-338.5Q280-397 280-480t58.5-141.5Q397-680 480-680t141.5 58.5Q680-563 680-480t-58.5 141.5Q563-280 480-280t-141.5-58.5ZM200-440H40v-80h160v80Zm720 0H760v-80h160v80ZM440-760v-160h80v160h-80Zm0 720v-160h80v160h-80ZM256-650l-101-97 57-59 96 100-52 56Zm492 496-97-101 53-55 101 97-57 59Zm-98-550 97-101 59 57-100 96-56-52ZM154-212l101-97 55 53-97 101-59-57Z", // light_mode
-  menu: "M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z", // menu
-  mic: "M395-435q-35-35-35-85v-240q0-50 35-85t85-35q50 0 85 35t35 85v240q0 50-35 85t-85 35q-50 0-85-35Zm45 315v-123q-104-14-172-93t-68-184h80q0 83 58.5 141.5T480-320q83 0 141.5-58.5T680-520h80q0 105-68 184t-172 93v123h-80Z", // mic
-  more: "M240-400q-33 0-56.5-23.5T160-480q0-33 23.5-56.5T240-560q33 0 56.5 23.5T320-480q0 33-23.5 56.5T240-400Zm240 0q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm240 0q-33 0-56.5-23.5T640-480q0-33 23.5-56.5T720-560q33 0 56.5 23.5T800-480q0 33-23.5 56.5T720-400Z", // more_horiz
-  refresh: "M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z", // refresh
-  search: "M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z", // search
-  settings: "m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm112-260q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z", // settings
-  volume: "M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z", // volume_up
-} as const;
+export type IconName = keyof typeof glyphs;
 
-export type IconName = keyof typeof paths | keyof typeof material;
+type IconProps = HTMLAttributes<HTMLElement> & { name: IconName; size?: number };
 
-type IconProps = SVGProps<SVGSVGElement> & { name: IconName; size?: number };
-
-export function Icon({ name, size = 18, ...props }: IconProps) {
-  if (name in material) {
-    return (
-      <svg aria-hidden="true" width={size} height={size} viewBox="0 -960 960 960" fill="currentColor" {...props}>
-        <path d={material[name as keyof typeof material]} />
-      </svg>
-    );
-  }
-  return (
-    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      {paths[name as keyof typeof paths].map((path) => <path key={path} d={path} />)}
-    </svg>
-  );
+export function Icon({ name, size = 18, className = "", style, ...props }: IconProps) {
+  return <i aria-hidden="true" className={`ico ${className}`} style={{ fontSize: size, ...style }} {...props}>{glyphs[name]}</i>;
 }

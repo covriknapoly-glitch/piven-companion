@@ -20,6 +20,7 @@ export interface ChatSummary {
   busy?: boolean;      // an answer is being written in this chat (it may be in the background)
   unread?: boolean;    // an answer arrived while another chat was open
   model?: string;
+  updated?: number;    // last change, seconds since the epoch; 0 for chats saved before it was tracked
 }
 
 export interface EngineSettings {
@@ -49,6 +50,7 @@ export interface EngineState {
   listening: { running: boolean; options: ListenOptions };
   call: { speaking: boolean; hearing: boolean; muted: boolean };
   confirm: DownloadConfirm | null;
+  error: string;
   downloads: DownloadRow[];
   browserRequest: { url: string; nonce: number } | null;
   activity: string;
@@ -130,6 +132,11 @@ export interface VoiceSearchHit { id: string; title?: string; note?: string; dow
 export interface VoiceDetails { ok: boolean; error?: string; supported?: boolean; reason?: string; engine?: string; mode?: "custom" | "design"; voices?: string[]; files?: (HfFile & { label?: string })[]; bytes?: number; note?: string; license?: string }
 export interface MemoryEstimate { total: number; weights: number; kv: number; other: number; speed?: number; measured?: boolean }
 export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number }
+export interface ContextUsage {
+  ok: boolean; error?: string; model: string; cloud: boolean; used: number; limit: number; turns: number; images: number; toolCount: number; serversWaiting: string[];
+  parts: { system: number; summary: number; skills: number; tools: number; history: number; images: number };
+  historyShare: number; compress: boolean;   // the part of the window the conversation may take, and whether older turns are summarised
+}
 export interface VoiceStatus {
   asr: { models: VoiceModel[]; engine: boolean; engineNote: string; selected: string };
   tts: { models: VoiceModel[]; engine: boolean; engineNote: string; selected: string };
@@ -223,6 +230,7 @@ interface WebApi {
   model_description(repoId: string, token: string): Promise<{ text: string; source: string }>;
   model_logos(names: string[], authors?: Record<string, string>, archs?: Record<string, string>): Promise<Record<string, string>>;
   model_memory(names?: string[]): Promise<ModelMemory>;
+  context_usage(): Promise<ContextUsage>;
   hf_memory(repoId: string, filePath: string, size: number, token: string): Promise<{ gpu: number; context: number; estimate: MemoryEstimate | null; known: boolean }>;
   voice_cancel(): Promise<CommandResult>;
   voice_delete(kind: VoiceKind, modelId: string): Promise<{ ok: boolean; error?: string; freed?: number }>;

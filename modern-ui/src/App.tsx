@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { isUnchanged, waitForEngine, type ChatSummary, type EngineState, type SearchHit, type WebApi } from "./bridge";
 import { Lightbox } from "./cards";
 import { Composer } from "./composer";
@@ -7,15 +7,17 @@ import { VoiceHubDialog } from "./voicehub";
 import { Icon } from "./icons";
 import { CallPanel } from "./call";
 import { LinkContext } from "./markdown";
-import { SettingsDialog, FONT_CHOICES, type ThemeChoice, type FontChoice } from "./settings";
+import { SettingsDialog, FONT_CHOICES, type FontChoice } from "./settings";
 import { Sidebar, type ChatActions } from "./sidebar";
 import { Transcript, TwitchPollContext } from "./transcript";
-import { IconButton, Logo, MenuButton } from "./ui";
+import { Decor, IconButton } from "./ui";
+import { THEME_IDS, isLightTheme, type ThemeId } from "./themes";
 import { Workspace, type WorkspaceTab } from "./workspace";
 import { LANGUAGES, defaultLanguage, setLanguage, type Language } from "./i18n";
 
 const THEME_KEY = "piven-ui-theme";
 const BROWSER_KEY = "piven-browser-open";
+const WIDTH_KEY = "piven-workspace-width";
 const FONT_KEY = "piven-font";
 const LANGUAGE_KEY = "piven-language";
 
@@ -30,23 +32,24 @@ function writeStored(key: string, value: string) {
   try { localStorage.setItem(key, value); } catch { /* ignore */ }
 }
 
-function readTheme(): ThemeChoice {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "light" || saved === "dark" || saved === "system") return saved;
-  } catch { /* storage may be unavailable */ }
-  return "system";
+/** The floating input's height as --dock-h on the chat area, so the conversation can scroll fully clear of it. */
+function trackDockHeight(dock: HTMLDivElement | null) {
+  if (!dock?.parentElement) return;
+  const area = dock.parentElement;
+  const observer = new ResizeObserver(() => area.style.setProperty("--dock-h", `${dock.offsetHeight}px`));
+  observer.observe(dock);
+  return () => observer.disconnect();
 }
 
 function useTheme() {
-  const [choice, setChoice] = useState<ThemeChoice>(readTheme);
+  const [choice, setChoice] = useState<ThemeId>(() => readStored(THEME_KEY, THEME_IDS, "system") as ThemeId);
   const [resolved, setResolved] = useState<"light" | "dark">("dark");
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: light)");
     const apply = () => {
       const next = choice === "system" ? (media.matches ? "light" : "dark") : choice;
       document.documentElement.dataset.theme = next;
-      setResolved(next);
+      setResolved(isLightTheme(next) ? "light" : "dark");
     };
     apply();
     media.addEventListener("change", apply);
@@ -67,11 +70,44 @@ export default function App() {
   const [lightbox, setLightbox] = useState("");
   const [focusIndex, setFocusIndex] = useState<{ index: number; nonce: number } | null>(null);
   const [browserOpen, setBrowserOpen] = useState(() => readStored(BROWSER_KEY, ["1", "0"], "0") === "1");
+  // The panel stays mounted while it slides out.
+  const [workspaceMounted, setWorkspaceMounted] = useState(browserOpen);
+  useEffect(() => {
+    if (browserOpen) { setWorkspaceMounted(true); return; }
+    const timer = window.setTimeout(() => setWorkspaceMounted(false), 260);
+    return () => window.clearTimeout(timer);
+  }, [browserOpen]);
+  const workspaceClosing = workspaceMounted && !browserOpen && !state?.listening.running;
+  // Width set by dragging the panel's edge; 0 keeps the default.
+  const [workspaceWidth, setWorkspaceWidth] = useState(() => { try { return Number(localStorage.getItem(WIDTH_KEY)) || 0; } catch { return 0; } });
+  const [resizing, setResizing] = useState(false);
+  useEffect(() => { writeStored(WIDTH_KEY, String(Math.round(workspaceWidth))); }, [workspaceWidth]);
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    setResizing(true);
+    document.body.classList.add("resizing");
+    const move = (moveEvent: PointerEvent) => {
+      const max = Math.max(320, window.innerWidth - (sidebarOpen ? 260 : 0) - 380);
+      setWorkspaceWidth(Math.min(max, Math.max(320, window.innerWidth - moveEvent.clientX)));
+    };
+    const stop = () => {
+      setResizing(false);
+      document.body.classList.remove("resizing");
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", stop);
+      handle.removeEventListener("pointercancel", stop);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  };
   const [browserRequest, setBrowserRequest] = useState<{ url: string; nonce: number } | null>(null);
   useEffect(() => { writeStored(BROWSER_KEY, browserOpen ? "1" : "0"); }, [browserOpen]);
   const [language, setLanguageChoice] = useState<Language>(() => readStored(LANGUAGE_KEY, LANGUAGES.map(([value]) => value), defaultLanguage()) as Language);
   useEffect(() => { writeStored(LANGUAGE_KEY, language); setLanguage(language); if (api) void api.set_language(language); }, [language, api]);
-  const [fontChoice, setFontChoice] = useState<FontChoice>(() => readStored(FONT_KEY, FONT_CHOICES.map(([value]) => value), "mono") as FontChoice);
+  const [fontChoice, setFontChoice] = useState<FontChoice>(() => readStored(FONT_KEY, FONT_CHOICES.map(([value]) => value), FONT_CHOICES[0][0]) as FontChoice);
   useEffect(() => { writeStored(FONT_KEY, fontChoice); document.documentElement.dataset.font = fontChoice; }, [fontChoice]);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("browser");
   const [twitchPoll, setTwitchPoll] = useState<{ question: string; options: string[] } | null>(null);
@@ -82,7 +118,6 @@ export default function App() {
   useEffect(() => { if (modelBrowse && state?.browserRequest) openLink(state.browserRequest.url); }, [modelBrowse]); // eslint-disable-line react-hooks/exhaustive-deps
   const [pendingFocus, setPendingFocus] = useState<SearchHit | null>(null);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
-  const [renaming, setRenaming] = useState(false);
   const [theme, setTheme, resolvedTheme] = useTheme();
   const versionRef = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -142,11 +177,12 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const mod = event.ctrlKey || event.metaKey;
-      const key = event.key.toLowerCase();
+      // By physical key, so shortcuts also work with a Russian or other non-Latin layout.
+      const key = event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : event.key.toLowerCase();
       if (mod && event.shiftKey && key === "f") { event.preventDefault(); setDialog("search"); }
       else if (mod && key === "k") { event.preventDefault(); setSidebarOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }
       else if (mod && key === "n") { event.preventDefault(); newChat(); }
-      else if (mod && event.key === ",") { event.preventDefault(); setDialog("settings"); }
+      else if (mod && (event.code === "Comma" || event.key === ",")) { event.preventDefault(); setDialog("settings"); }
       else if (mod && key === "b") { event.preventDefault(); setSidebarOpen((open) => !open); }
       else if (mod && key === "d") { event.preventDefault(); setBrowserOpen((open) => !open); }
       else if (event.key === "Escape" && state?.busy && !dialog && !lightbox && !deleting) stop();
@@ -156,16 +192,12 @@ export default function App() {
   }, [newChat, stop, state?.busy, dialog, lightbox, deleting]);
 
   if (engineMissing) {
-    return <div className="splash"><Logo size={96} /><h2>Нет связи с движком</h2><p>Этот интерфейс открывается файлом «Запустить веб-интерфейс» в папке Компаньона.</p></div>;
+    return <div className="splash"><Decor corner="br" /><h2>Нет связи с движком</h2><p>Этот интерфейс открывается файлом «Запустить веб-интерфейс» в папке Компаньона.</p></div>;
   }
   if (!api || !state || !actions) {
-    return <div className="splash"><Logo size={96} pulse /><p>Загрузка чатов…</p></div>;
+    return <div className="splash"><Decor corner="br" /></div>;
   }
 
-  const empty = !state.items.length && !state.busy;
-  const activeChat = state.chats.find((chat) => chat.id === state.activeChatId);
-  const recent = state.chats.filter((chat) => chat.id !== state.activeChatId && chat.count > 1).slice(0, 5);
-  const messageCount = state.items.filter((item) => item.role !== "system").length;
 
   return (
     <LinkContext.Provider value={openLink}>
@@ -175,54 +207,37 @@ export default function App() {
         onSearchMessages={() => setDialog("search")} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
 
       <main className="main">
-        <header className="topbar">
-          {!sidebarOpen && <>
-            <IconButton icon="sidebarOpen" label="Показать панель (Ctrl+B)" onClick={() => setSidebarOpen(true)} />
-            <IconButton icon="compose" label="Новый чат (Ctrl+N)" onClick={newChat} />
-          </>}
-          <div className="topbar-title">
-            {renaming && activeChat
-              ? <input className="title-input" autoFocus defaultValue={activeChat.title} maxLength={80}
-                  onBlur={(event) => { setRenaming(false); const title = event.target.value.trim(); if (title && title !== activeChat.title) actions.rename(activeChat, title); }}
-                  onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") setRenaming(false); }} />
-              : <h1 title="Щёлкни, чтобы переименовать" onClick={() => { if (activeChat) setRenaming(true); }}>{empty ? "Новый чат" : state.chatTitle}</h1>}
-            <span>{empty ? "Пока без сообщений" : `${messageCount} ${messageCount % 10 === 1 && messageCount % 100 !== 11 ? "сообщение" : messageCount % 10 >= 2 && messageCount % 10 <= 4 && (messageCount % 100 < 12 || messageCount % 100 > 14) ? "сообщения" : "сообщений"}`}</span>
-          </div>
-          <span className="topbar-spacer" />
-          <IconButton icon={resolvedTheme === "light" ? "moon" : "sun"} label={resolvedTheme === "light" ? "Тёмная тема" : "Светлая тема"} onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")} />
-          <IconButton icon={browserOpen ? "sidebar" : "sidebarOpen"} label={browserOpen ? "Скрыть рабочую панель (Ctrl+D)" : "Рабочая панель: браузер и файлы (Ctrl+D)"} active={browserOpen} className="flip" onClick={() => setBrowserOpen((open) => !open)} />
-          {activeChat && <MenuButton label="Действия с чатом" items={[
-            { icon: "search", label: "Искать в сообщениях", hint: "Ctrl+Shift+F", onClick: () => setDialog("search") },
-            { icon: "edit", label: "Переименовать", onClick: () => setRenaming(true) },
-            { icon: "pin", label: activeChat.pinned ? "Открепить" : "Закрепить", onClick: () => actions.pin(activeChat) },
-            "divider",
-            { icon: "share", label: "Экспорт в Markdown", onClick: () => actions.exportChat(activeChat, true) },
-            { icon: "file", label: "Экспорт в текст", onClick: () => actions.exportChat(activeChat, false) },
-            "divider",
-            { icon: "trash", label: "Удалить чат…", danger: true, disabled: state.busy, onClick: () => setDeleting(activeChat) },
-          ]} />}
-        </header>
+        {!sidebarOpen && <div className="main-corner">
+          <IconButton icon="sidebarOpen" label="Показать панель (Ctrl+B)" onClick={() => setSidebarOpen(true)} />
+          <IconButton icon="compose" label="Новый чат (Ctrl+N)" onClick={newChat} />
+        </div>}
+        {!browserOpen && !state.listening.running && <div className="main-corner main-corner-right">
+          <IconButton icon="workspaceOff" label="Браузер и файлы (Ctrl+D)" onClick={() => setBrowserOpen(true)} />
+        </div>}
 
         {state.busy && <div className="activity-strip"><i /></div>}
 
-        <Transcript api={api} state={state} focusIndex={focusIndex} recent={recent}
+        <Transcript api={api} state={state} focusIndex={focusIndex}
               onCopy={copy} onView={setLightbox} onStop={stop}
               onRetry={() => { void api.retry_last().then((result) => done(result.ok ? undefined : result.error)); }}
-              onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} onSelectChat={actions.select} />
+              onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} />
 
-        <div className="composer-dock">
+        <div className="composer-dock" ref={trackDockHeight}>
           <Composer api={api} state={state} inputRef={inputRef} prefill={prefill} onStop={stop} onError={done} onOpenHub={() => setDialog("hub")} onOpenVoiceHub={() => setDialog("voice-tts")}
             onSent={(queued) => { if (queued) notify("Отправится после текущего ответа", "info"); void poll(); }} />
         </div>
       </main>
 
-      {(browserOpen || state.listening.running) && (
-        <aside className={`workspace ${state.listening.running ? "in-call" : ""}`} aria-label={state.listening.running ? "Звонок" : "Рабочая панель"}>
+      {(workspaceMounted || state.listening.running) && (
+        <aside className={`workspace ${state.listening.running ? "in-call" : ""} ${workspaceClosing ? "closing" : ""}`} aria-label={state.listening.running ? "Звонок" : "Рабочая панель"}
+          style={workspaceWidth ? { ["--ws-w" as string]: `${workspaceWidth}px` } : undefined}>
+          <div className={`workspace-resize ${resizing ? "dragging" : ""}`} role="separator" aria-orientation="vertical" title="Потяни, чтобы изменить ширину; двойной щелчок — по умолчанию"
+            onPointerDown={startResize} onDoubleClick={() => setWorkspaceWidth(0)} />
           {state.listening.running && <CallPanel api={api} state={state} onError={done} />}
           {/* The panel stays mounted under a call so the browser's page survives; its native view is hidden meanwhile. */}
-          {browserOpen && <div className={state.listening.running ? "workspace-hidden" : "workspace-slot"}>
+          {workspaceMounted && <div className={state.listening.running ? "workspace-hidden" : "workspace-slot"}>
             <Workspace api={api} state={state} tab={workspaceTab} setTab={setWorkspaceTab} browserRequest={browserRequest}
-              onClose={() => setBrowserOpen(false)} covered={Boolean(dialog || deleting || lightbox || state.confirm || state.listening.running)} />
+              onClose={() => setBrowserOpen(false)} covered={Boolean(dialog || deleting || lightbox || state.confirm || state.listening.running || workspaceClosing)} />
           </div>}
         </aside>
       )}

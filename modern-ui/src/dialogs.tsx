@@ -260,38 +260,65 @@ function readListenOptions(fallback: ListenOptions): ListenOptions {
   try { return { ...fallback, ...JSON.parse(localStorage.getItem(LISTEN_KEY) || "{}") }; } catch { return fallback; }
 }
 
-/** The call button by the input: starts/stops live listening; the arrow chooses what the companion hears and sees. */
+const CALL_ASKED_KEY = "piven-call-asked";
+
+function ListenOptionList({ options, disabled, onChange }: { options: ListenOptions; disabled?: boolean; onChange: (next: ListenOptions) => void }) {
+  return <>{SOURCES.map((source) => (
+    <label key={source.key} className="listen-option">
+      <span className="listen-icon"><Icon name={source.icon} size={16} /></span>
+      <span className="listen-copy"><strong>{source.label}</strong><small>{source.hint}</small></span>
+      <Switch label={source.label} checked={options[source.key]} disabled={disabled} onChange={(value) => onChange({ ...options, [source.key]: value })} />
+    </label>
+  ))}</>;
+}
+
+/** What the companion hears and sees during a call, for the settings. */
+export function ListenSettings({ state }: { state: EngineState }) {
+  const [options, setOptions] = useState<ListenOptions>(() => readListenOptions(state.listening.options));
+  const change = (next: ListenOptions) => { setOptions(next); try { localStorage.setItem(LISTEN_KEY, JSON.stringify(next)); } catch { /* ignore */ } };
+  return (
+    <div className="listen-settings">
+      <ListenOptionList options={options} disabled={state.listening.running} onChange={change} />
+      {state.listening.running && <div className="menu-note">Чтобы поменять источники, заверши звонок.</div>}
+    </div>
+  );
+}
+
+/** The call button by the input. Before the first call it asks what the companion should hear and see; later that lives in the settings. */
 export function CallControl({ api, state, onError }: { api: WebApi; state: EngineState; onError: (message?: string) => void }) {
   const running = state.listening.running;
+  const [asking, setAsking] = useState(false);
   const [options, setOptions] = useState<ListenOptions>(() => readListenOptions(state.listening.options));
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
-  const ref = useOutsideClose(open, close);
-  useEffect(() => { try { localStorage.setItem(LISTEN_KEY, JSON.stringify(options)); } catch { /* ignore */ } }, [options]);
-  const active = SOURCES.filter((source) => (running ? state.listening.options : options)[source.key] && source.key !== "proactive");
+  const close = useCallback(() => setAsking(false), []);
+  const ref = useOutsideClose(asking, close);
+  const active = SOURCES.filter((source) => state.listening.options[source.key] && source.key !== "proactive");
+  const start = (chosen: ListenOptions) => {
+    try { localStorage.setItem(LISTEN_KEY, JSON.stringify(chosen)); localStorage.setItem(CALL_ASKED_KEY, "1"); } catch { /* ignore */ }
+    setAsking(false);
+    void api.start_listening(chosen).then((reply) => onError(reply.ok ? undefined : reply.error));
+  };
   const toggle = () => {
-    if (running) void api.stop_listening();
-    else void api.start_listening(options).then((reply) => onError(reply.ok ? undefined : reply.error));
+    if (running) { void api.stop_listening(); return; }
+    let asked = false;
+    try { asked = localStorage.getItem(CALL_ASKED_KEY) === "1"; } catch { /* ask */ }
+    const saved = readListenOptions(state.listening.options);
+    if (asked) start(saved);
+    else { setOptions(saved); setAsking((value) => !value); }
   };
   return (
     <div className={`call ${running ? "on" : ""}`} ref={ref}>
       {running && <span className="call-status" title={active.map((source) => source.label).join(", ")}><span className="live-dot" />Звонок</span>}
-      <button type="button" className="call-more" aria-label="Что слышит и видит" title="Что слышит и видит компаньон" onClick={() => setOpen((value) => !value)}><Icon name="chevronDown" size={14} /></button>
-      <button type="button" className="call-btn" onClick={toggle} aria-label={running ? "Завершить звонок" : "Позвонить"}
-        title={running ? "Завершить звонок" : `Позвонить: ${active.map((source) => source.label.toLowerCase()).join(", ") || "выбери, что слушать"}`}>
+      <button type="button" className="call-btn" onClick={toggle} aria-label={running ? "Завершить звонок" : "Позвонить"} title={running ? "Завершить звонок" : "Позвонить"}>
         <Icon name="call" size={17} />
       </button>
-      {open && (
+      {asking && (
         <div className="menu menu-up-right listen-menu">
-          <div className="menu-title">Что слышит и видит компаньон</div>
-          {SOURCES.map((source) => (
-            <label key={source.key} className="listen-option">
-              <span className="listen-icon"><Icon name={source.icon} size={16} /></span>
-              <span className="listen-copy"><strong>{source.label}</strong><small>{source.hint}</small></span>
-              <Switch label={source.label} checked={options[source.key]} disabled={running} onChange={(value) => setOptions((current) => ({ ...current, [source.key]: value }))} />
-            </label>
-          ))}
-          {running && <div className="menu-note">Чтобы поменять источники, заверши звонок.</div>}
+          <div className="menu-title">Что компаньон будет слышать и видеть</div>
+          <ListenOptionList options={options} onChange={setOptions} />
+          <div className="listen-foot">
+            <small>Потом это можно поменять в настройках, в разделе «Голос и микрофон».</small>
+            <Button kind="primary" icon="call" onClick={() => start(options)}>Позвонить</Button>
+          </div>
         </div>
       )}
     </div>

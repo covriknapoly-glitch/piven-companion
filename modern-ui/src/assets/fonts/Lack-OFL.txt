@@ -1,8 +1,9 @@
-Copyright 2011 The Roboto Project Authors (https://github.com/googlefonts/roboto-classic)
+Lack — Adrien Midzic, 2018. Source: https://gitlab.com/velvetyne/lack (Velvetyne Type Foundry).
+Velvetyne: "All the fonts hosted on Velvetyne are libre and open-source"; their fonts are released under the SIL Open Font License 1.1, reproduced below.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
-https://openfontlicense.org
+http://scripts.sil.org/OFL
 
 
 -----------------------------------------------------------

@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { ChatSummary, DialogueItem, EngineState, HfFile, WebApi } from "./bridge";
+import type { DialogueItem, EngineState, HfFile, WebApi } from "./bridge";
 import { Attachment } from "./cards";
 import { Icon } from "./icons";
 import { Markdown } from "./markdown";
-import { IconButton, Logo, formatElapsed } from "./ui";
+import { Decor, IconButton, Logo, formatElapsed } from "./ui";
 
 const SUGGESTIONS: { label: string; text: string }[] = [
   { label: "объяснить", text: "Объясни простыми словами, как работает видеокарта" },
@@ -17,7 +17,6 @@ interface MessageProps {
   api: WebApi;
   item: DialogueItem;
   index: number;
-  model: string;
   canRetry: boolean;
   onCopy: (text: string) => void;
   onView: (path: string) => void;
@@ -32,8 +31,8 @@ function Welcome({ api, state }: { api: WebApi; state: EngineState }) {
   const downloading = state.downloads.some((row) => row.kind === "model" && row.state === "running");
   return (
     <div className="intro welcome">
-      <div className="intro-brand"><Logo size={72} /><div><strong>PIVEN</strong><span>Добро пожаловать</span></div></div>
-      <p>PIVEN — помощник, который работает прямо на твоём компьютере: отвечает на вопросы, рисует, делает презентации, говорит голосом. Для начала нужна модель — «мозг» помощника.</p>
+      <Decor corner="tr" />
+      <p>Для начала нужна модель — «мозг» помощника.</p>
       <ol className="welcome-steps">
         <li className={downloading || started ? "done" : "current"}>
           <strong>Скачай модель</strong>
@@ -78,7 +77,7 @@ function PollCard({ api, text, index }: { api: WebApi; text: string; index: numb
 /** Opens the Twitch dialog with a poll from the chat filled in (set by App). */
 export const TwitchPollContext = createContext<(poll: { question: string; options: string[] }) => void>(() => undefined);
 
-function Message({ api, item, index, model, canRetry, onCopy, onView, onRetry }: MessageProps) {
+function Message({ api, item, index, canRetry, onCopy, onView, onRetry }: MessageProps) {
   const attachments = item.images.length > 0 && (
     <div className="attachments">{item.images.map((path) => <Attachment key={path} api={api} path={path} onView={onView} />)}</div>
   );
@@ -100,7 +99,6 @@ function Message({ api, item, index, model, canRetry, onCopy, onView, onRetry }:
   }
   return (
     <div className="msg msg-assistant" id={`msg-${index}`}>
-      <div className="msg-head"><Logo size={24} /><strong>piven</strong><span>{model}</span></div>
       {item.text && <Markdown text={item.text} onCopy={onCopy} />}
       {attachments}
       <div className="msg-actions">
@@ -120,8 +118,7 @@ function Working({ state, onStop }: { state: EngineState; onStop: () => void }) 
   return (
     <div className="msg msg-working">
       <div className="working-line">
-        <span className="spinner" aria-hidden="true" />
-        <span className="activity">{state.activity || "Думает"}</span>
+        <span className="activity"><span className="shimmer">{state.activity || "Думает"}</span></span>
         <span className="elapsed">{formatElapsed(elapsed)}</span>
         <button type="button" className="text-btn" onClick={onStop}>стоп <kbd>esc</kbd></button>
       </div>
@@ -137,10 +134,10 @@ function Working({ state, onStop }: { state: EngineState; onStop: () => void }) 
   );
 }
 
-export function Transcript({ api, state, focusIndex, recent, onCopy, onView, onRetry, onStop, onPrefill, onSelectChat }:
-  { api: WebApi; state: EngineState; focusIndex: { index: number; nonce: number } | null; recent: ChatSummary[];
+export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, onStop, onPrefill }:
+  { api: WebApi; state: EngineState; focusIndex: { index: number; nonce: number } | null;
     onCopy: (text: string) => void; onView: (path: string) => void; onRetry: () => void; onStop: () => void;
-    onPrefill: (text: string) => void; onSelectChat: (chat: ChatSummary) => void }) {
+    onPrefill: (text: string) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const lastAssistant = state.items.map((item) => item.role).lastIndexOf("assistant");
@@ -171,29 +168,24 @@ export function Transcript({ api, state, focusIndex, recent, onCopy, onView, onR
   } else if (!state.items.length && !state.busy) {
     body = (
       <div className="intro">
-        <div className="intro-brand"><Logo size={72} /><div><strong>PIVEN</strong><span>{state.settings.model || "модель не выбрана"}</span></div></div>
-        <p>Пиши обычным языком. Компаньон отвечает, рисует, собирает презентации, правит код и делает действия на компьютере.</p>
+        <Decor corner="tr" />
+        <div className="intro-brand"><Logo size={64} /><div><strong>PIVEN</strong></div></div>
         <div className="intro-list">
           {SUGGESTIONS.map((item) => (
             <button key={item.label} type="button" onClick={() => onPrefill(item.text)}><span>{item.label}</span>{item.text}</button>
           ))}
         </div>
-        {recent.length > 0 && (
-          <div className="intro-list">
-            <h3>Недавние</h3>
-            {recent.map((chat) => <button key={chat.id} type="button" onClick={() => onSelectChat(chat)}><span>{chat.title}</span>{chat.preview}</button>)}
-          </div>
-        )}
       </div>
     );
   } else {
     body = (
       <>
         {state.items.map((item, index) => (
-          <Message key={index} api={api} item={item} index={index} model={state.settings.model}
+          <Message key={index} api={api} item={item} index={index}
             canRetry={index === lastAssistant && !state.busy} onCopy={onCopy} onView={onView} onRetry={onRetry} />
         ))}
         {state.busy && <Working state={state} onStop={onStop} />}
+        {state.error && !state.busy && <div className="msg msg-system msg-error"><span className="msg-mark">#</span><p className="plain">{state.error}</p></div>}
       </>
     );
   }

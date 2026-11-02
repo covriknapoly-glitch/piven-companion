@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { BrowserState, WebApi } from "./bridge";
-import { IconButton } from "./ui";
+import { IconButton, RandomDots } from "./ui";
 
 const START_LINKS = [
-  { title: "Поиск Google", url: "https://www.google.com/" },
+  { title: "Brave Search", url: "https://search.brave.com/" },
   { title: "YouTube", url: "https://www.youtube.com/" },
   { title: "Википедия", url: "https://ru.wikipedia.org/" },
-  { title: "Minecraft Wiki", url: "https://minecraft.wiki/" },
-  { title: "Модели Ollama", url: "https://ollama.com/library" },
+  { title: "Hugging Face", url: "https://huggingface.co/models" },
 ];
 
 /** Address bar text → a URL: keeps addresses, turns everything else into a search. */
@@ -16,7 +15,7 @@ function toUrl(text: string) {
   if (!clean) return "";
   if (/^https?:\/\//i.test(clean)) return clean;
   if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(clean)) return `https://${clean}`;
-  return `https://www.google.com/search?q=${encodeURIComponent(clean)}`;
+  return `https://search.brave.com/search?q=${encodeURIComponent(clean)}`;
 }
 
 const EMPTY: BrowserState = { url: "", title: "", loading: false, canBack: false, canForward: false, notice: "" };
@@ -52,7 +51,10 @@ export function BrowserPane({ api, openRequest, covered }:
     const observer = new ResizeObserver(() => place());
     if (element) observer.observe(element);
     window.addEventListener("resize", place);
-    return () => { observer.disconnect(); window.removeEventListener("resize", place); };
+    // The panel slides in without changing size, so follow it once the slide ends.
+    const slid = (event: AnimationEvent) => { if ((event.target as Element).classList?.contains("workspace")) place(); };
+    document.addEventListener("animationend", slid);
+    return () => { observer.disconnect(); window.removeEventListener("resize", place); document.removeEventListener("animationend", slid); };
   }, [place]);
   useEffect(() => () => { void api.browser_place(0, 0, 0, 0, false); }, [api]);
 
@@ -117,10 +119,10 @@ export function BrowserPane({ api, openRequest, covered }:
       <div className="browser-view" ref={viewRef}>
         {!started && (
           <div className="browser-start">
-            <p>Введи адрес или запрос сверху. Ссылки из ответов компаньона тоже открываются здесь.</p>
             {START_LINKS.map((link) => (
               <button key={link.url} type="button" onClick={() => go(link.url)}><span>{link.title}</span>{link.url.replace(/^https:\/\/(www\.)?/, "")}</button>
             ))}
+            <RandomDots />
           </div>
         )}
         {started && covered && <div className="browser-note">Браузер скрыт, пока открыто окно поверх.</div>}
