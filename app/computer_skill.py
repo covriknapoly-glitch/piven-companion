@@ -404,6 +404,17 @@ def execute_project_action(project_root: str | os.PathLike, action: dict) -> str
     raise ValueError("Неизвестное действие проекта.")
 
 
+COMPUTER_ACTIONS = ("list_files", "read_file", "create_file", "create_folder", "rename_file", "move_file", "copy_file",
+                    "open_path", "search_files", "download_file", "web_search", "open_url", "open_app", "activate_window",
+                    "get_active_window", "minimize_window", "maximize_window", "restore_window", "wait", "click",
+                    "type_text", "press_key", "scroll")
+# Names models tend to invent for the commands above.
+_ACTION_ALIASES = {"write_file": "create_file", "save_file": "create_file", "make_file": "create_file",
+                   "create_text_file": "create_file", "new_file": "create_file", "mkdir": "create_folder",
+                   "make_folder": "create_folder", "create_directory": "create_folder", "open_file": "open_path",
+                   "open_folder": "open_path", "list_folder": "list_files", "list_directory": "list_files"}
+
+
 def execute_computer_action(action: dict, screenshot_size=None, display_size=None) -> str:
     """Execute one explicitly requested action; never runs a shell command from model text."""
     if _user32 is None:
@@ -411,6 +422,7 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
     if not isinstance(action, dict):
         raise ValueError("Команда компьютера должна быть объектом.")
     name = str(action.get("computer_action", "")).strip().lower()
+    name = _ACTION_ALIASES.get(name, name)
     if name in ("list_files", "read_file", "create_file", "create_folder", "rename_file", "move_file",
                 "copy_file", "open_path", "search_files"):
         return _file_action(name, action)
@@ -422,9 +434,9 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         query = " ".join(str(action.get("query", "")).split())
         if not query or len(query) > 300:
             raise ValueError("Поисковый запрос должен содержать от 1 до 300 символов.")
-        url = "https://www.google.com/search?" + urllib.parse.urlencode({"q": query})
+        url = "https://search.brave.com/search?" + urllib.parse.urlencode({"q": query})
         webbrowser.open(url)
-        return f"Открыты результаты Google по запросу «{query}»."
+        return f"Открыты результаты Brave Search по запросу «{query}»."
     if name == "open_url":
         url = str(action.get("url", "")).strip()
         if "://" not in url:
@@ -518,4 +530,4 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         amount = max(-1200, min(1200, int(action.get("amount", -480))))
         _user32.mouse_event(_MOUSEEVENTF_WHEEL, 0, 0, ctypes.c_ulong(amount).value, 0)
         return "Страница прокручена."
-    raise ValueError("Эта команда компьютера не поддерживается.")
+    raise ValueError(f"Команды «{name}» нет. Доступны: " + ", ".join(COMPUTER_ACTIONS) + ".")

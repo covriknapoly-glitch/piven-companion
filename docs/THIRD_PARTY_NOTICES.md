@@ -9,8 +9,9 @@ PIVEN Companion использует и распространяет вмест�
 | Компонент | Лицензия | Где |
 |---|---|---|
 | React, React DOM, Scheduler (Meta Platforms) | MIT | встроены в `modern-ui/dist/app.js`; `docs/licenses/react*-MIT.txt`, `scheduler-MIT.txt` |
-| Material Symbols (Google) | Apache 2.0 | `assets/icons/material`, пути иконок в `modern-ui/src/icons.tsx`; `docs/licenses/Apache-2.0.txt` |
-| IBM Plex Mono, LINE Seed JP, Huninn, Martian Mono, Playfair Display, Roboto Condensed, JetBrains Mono, Ledger, Manrope, Shantell Sans | SIL Open Font License 1.1 | `assets/fonts`, `modern-ui/src/assets/fonts` (тексты `*-OFL.txt` рядом) |
+| Material Symbols (Google) | Apache 2.0 | `assets/icons/material` (обычное окно); `docs/licenses/Apache-2.0.txt` |
+| Symbols Nerd Font (Nerd Fonts) | MIT; значки внутри: Codicons (Microsoft) — CC BY 4.0, Material Design Icons — Apache 2.0, Font Awesome — CC BY 4.0 | иконки веб-интерфейса, подмножество `modern-ui/src/assets/fonts/SymbolsNerdFont-Icons.ttf`; `SymbolsNerdFont-MIT.txt` рядом |
+| Lack (Adrien Midzic, Velvetyne), Martian Grotesk Wide (Evil Martians), Cascadia Code (Microsoft), Smiley Sans / 得意黑 (atelierAnchor, без изменений, для китайского интерфейса) — веб-интерфейс; JetBrains Mono, Ledger, Manrope, Shantell Sans — обычное окно | SIL Open Font License 1.1 | `assets/fonts`, `modern-ui/src/assets/fonts` (тексты `*-OFL.txt` рядом) |
 
 ## В установщике (не в репозитории)
 

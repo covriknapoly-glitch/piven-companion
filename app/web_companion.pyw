@@ -70,6 +70,12 @@ def style_title_bar(window, dark=True):
         return False
 
 
+# What the model is asked when a picture is sent without a message (keyed by "more than one picture").
+# The chat itself shows just the pictures, not this text.
+IMAGE_ONLY_PROMPTS = {False: "Посмотри на это изображение и коротко расскажи, что на нём.",
+                      True: "Посмотри на эти изображения и коротко расскажи, что на них."}
+
+
 class WebCompanion(CompanionCore):
     """Plays the role of the Qt window's `_drain_events` for the web interface."""
 
@@ -91,6 +97,7 @@ class WebCompanion(CompanionCore):
         self._allowed_files = set()
         # A pending download confirmation, answered from the page (see _confirm_download).
         self._confirm = None
+        self._error = None  # the last failed answer {"chat", "text", "id"}: shown under its chat for ERROR_SECONDS, never saved
         self._confirm_answer = threading.Event()
         self._browser_request = None  # the model asked to show a page: {"url", "nonce"}; the page opens its panel
         self.tray = None          # the notification-area icon (tray.Tray), when it could be created
@@ -105,6 +112,23 @@ class WebCompanion(CompanionCore):
     # ---------- state ----------
     def _changed(self):
         self._version += 1
+
+    ERROR_SECONDS = 20
+
+    def _show_error(self, chat_id, text):
+        """Show a failed answer under its chat for a while instead of writing it into the history. Under the state lock."""
+        error_id = uuid.uuid4().hex
+        self._error = {"chat": chat_id, "text": str(text), "id": error_id}
+        self._changed()
+
+        def clear():
+            with self._state_lock:
+                if self._error and self._error["id"] == error_id:
+                    self._error = None
+                    self._changed()
+        timer = threading.Timer(self.ERROR_SECONDS, clear)
+        timer.daemon = True
+        timer.start()
 
     def known_files(self):
         with self._state_lock:
@@ -122,7 +146,7 @@ class WebCompanion(CompanionCore):
                 "chats": [{"id": chat.get("id"), "title": chat.get("title") or "Новый чат",
                            "pinned": bool(chat.get("pinned")), "count": len(chat.get("items", [])),
                            "busy": chat.get("id") in self._busy_chats, "unread": bool(chat.get("unread")),
-                           "model": chat.get("model", ""),
+                           "model": chat.get("model", ""), "updated": chat.get("updated", 0),
                            "preview": next((" ".join(str(item.get("text", "")).split())[:90]
                                             for item in reversed(chat.get("items", []))
                                             if item.get("role") in ("assistant", "user") and item.get("text")), "")}
@@ -137,6 +161,7 @@ class WebCompanion(CompanionCore):
                               "options": dict(zip(("mic", "loopback", "screen", "proactive"), map(bool, self.capture_options)))},
                 "call": dict(zip(("speaking", "hearing", "muted"), self._call_flags())),
                 "confirm": self._confirm,
+                "error": self._error["text"] if self._error and self._error["chat"] == self.active_chat_id else "",
                 "downloads": self._downloads(),
                 "browserRequest": self._browser_request,
                 "activity": self._activity,
@@ -168,7 +193,7 @@ class WebCompanion(CompanionCore):
             if role == "assistant":
                 self._notify(f"Ответ в чате «{title}»", content)
         elif kind == "error":
-            self.append_to_chat(chat_id, "system", value)
+            self._show_error(chat_id, value)
         elif kind == "generated_image":
             self.append_to_chat(chat_id, "assistant", "Изображение создано через ComfyUI.", [str(value)])
         elif kind == "presentation_created":
@@ -291,7 +316,7 @@ class WebCompanion(CompanionCore):
                     self._activity = "Презентация создана"
                     self._notify("Презентация готова", Path(value).name)
                 elif kind == "error":
-                    self._record("system", value); self._activity = "Ошибка"; self._reasoning = ""
+                    self._show_error(self.active_chat_id, value); self._activity = "Ошибка"; self._reasoning = ""
                     self._notify("Ошибка", str(value))
                 elif kind == "chats_changed":
                     self._changed()
@@ -308,7 +333,7 @@ class WebCompanion(CompanionCore):
                     if self.pending_text_prompts:
                         text, model, images, image_paths = self.pending_text_prompts.pop(0)
                         self.busy = True; self.selected_model = model
-                        self._record("user", text, image_paths)
+                        self._record("user", "" if text in IMAGE_ONLY_PROMPTS.values() else text, image_paths)
                         self._activity = "Думает · отвечает на сообщение из очереди"
                         threading.Thread(target=self.ask_model, args=(text, images or None, self.speech_enabled),
                                          daemon=True).start()
@@ -403,8 +428,8 @@ class WebCompanion(CompanionCore):
         if not model:
             return {"ok": False, "error": "Сначала выбери модель."}
         if not text:
-            text = ("Посмотри на эти изображения и коротко расскажи, что на них." if len(image_paths) > 1
-                    else "Посмотри на это изображение и коротко расскажи, что на нём.")
+            # The model needs something to answer; the chat shows only the picture.
+            text = IMAGE_ONLY_PROMPTS[len(image_paths) > 1]
         try:
             image_data = [encode_chat_image(path) for path in image_paths]
         except Exception as error:
@@ -414,7 +439,7 @@ class WebCompanion(CompanionCore):
                 self.pending_text_prompts.append((text, model, image_data, image_paths))
                 self._activity = "Сообщение добавлено в очередь"; self._changed()
                 return {"ok": True, "queued": True}
-            self._record("user", text, image_paths)
+            self._record("user", "" if text in IMAGE_ONLY_PROMPTS.values() else text, image_paths)
             self.action_cancel.clear()
             self._active_ollama_response = None
             self.busy = True; self.selected_model = model; self._activity = "Думает"
@@ -757,16 +782,18 @@ class WebApi:
         app = self._app
         model = str(model or "")
         cached = app.settings.get("thinking_capabilities", {}).get(model)
-        if cached is None:
+        if cached is None or cached.get("version") != 2:   # version 1 knew only on/off for most models
             try:
                 values, default = model_thinking(model)
             except Exception as error:
                 return {"values": [], "default": None, "current": "__auto__", "error": str(error)}
-            cached = {"values": values, "default": default}
+            cached = {"values": values, "default": default, "version": 2}
             with app._state_lock:
                 app.settings.setdefault("thinking_capabilities", {})[model] = cached
                 app._save_settings()
         current = app.settings.get("thinking_levels", {}).get(model, "__auto__")
+        if current != "__auto__" and current not in cached.get("values", []):
+            current = False if current is False and False in cached.get("values", []) else "__auto__"  # "on" from before levels
         return {"values": cached.get("values", []), "default": cached.get("default"), "current": current, "error": ""}
 
     def set_thinking(self, model, value):
@@ -1522,6 +1549,49 @@ class WebApi:
             log(f"model memory error: {error}")
             return {"gpu": 0, "context": 0, "models": {}}
 
+    def context_usage(self):
+        """How much of the model's context the current chat fills, by the same estimate the app uses to decide
+        what to fold into the summary (about CHARS_PER_TOKEN characters per token, a fixed cost per picture)."""
+        try:
+            app = self._app
+            model = str(app.settings.get("model", ""))
+            with app._state_lock:
+                messages = list(app.messages)
+                summary = str(app._chat_summary() or "")
+            turns = messages[1:]
+            per_token = companion_core.CHARS_PER_TOKEN
+
+            def tokens(characters):
+                return int(round(characters / per_token))
+            images = sum(len(item.get("images") or []) for item in turns)
+            # What an ordinary answer adds: the skill list in the instructions and the tool definitions sent along.
+            skills_chars = tools_chars = 0
+            tools_names, waiting = 0, []
+            if app.settings.get("tools_enabled", True):
+                try:
+                    toolbox = tools.ToolBox(APP_DIR, DATA_DIR, app.tool_browser(),
+                                            memory=app.memory if app.settings.get("memory_enabled", True) else None)
+                    specs = toolbox.specs(start_servers=False)  # servers that are not running are not started just to count
+                    skills_chars = len(toolbox.skills_prompt())
+                    tools_chars = len(json.dumps(specs, ensure_ascii=False))
+                    tools_names, waiting = len(specs), list(toolbox.unstarted)
+                except Exception as error:
+                    log(f"context tools count error: {error}")
+            parts = {"system": tokens(len(str(messages[0].get("content", ""))) if messages else 0),
+                     "summary": tokens(len(summary)),
+                     "skills": tokens(skills_chars),
+                     "tools": tokens(tools_chars),
+                     "history": tokens(sum(len(str(item.get("content", ""))) for item in turns)),
+                     "images": tokens(1500 * images)}
+            cloud = providers.is_provider_model(model)
+            return {"ok": True, "model": model, "cloud": cloud, "parts": parts, "used": sum(parts.values()),
+                    "turns": len(turns), "images": images, "toolCount": tools_names, "serversWaiting": waiting,
+                    "limit": 0 if cloud or not model else llama_backend.context_size(model),
+                    "historyShare": companion_core.HISTORY_SHARE, "compress": bool(llama_backend.params_for(model)["compress_context"]) if model and not cloud else False}
+        except Exception as error:
+            log(f"context usage error: {error}")
+            return {"ok": False, "error": str(error)}
+
     def hf_memory(self, repo_id, file_path, size, token=""):
         """The same estimate for a file on Hugging Face, from the first megabytes of its header."""
         try:
@@ -1585,6 +1655,9 @@ def main():
                                              "Закрой его, чтобы не перезаписать чаты.</h3>", width=620, height=200)
         webview.start()
         return
+    # The page is served from the same address on every start without cache headers, so WebView2 may keep an
+    # older build of app.js and app.css. Its HTTP cache is dropped before the window opens (storage stays).
+    shutil.rmtree(companion_core.DATA_DIR / "webview" / "EBWebView" / "Default" / "Cache", ignore_errors=True)
     app = WebCompanion()
     threading.Thread(target=app.refresh_models, daemon=True).start()
     window = webview.create_window(WINDOW_TITLE, url=str(UI_INDEX), js_api=WebApi(app),

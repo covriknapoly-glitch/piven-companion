@@ -29,6 +29,7 @@ USER_AGENT = "PIVEN-Companion/1.0"
 config = {}            # settings["providers"]: {id: {"enabled": bool, "url": str, "key": encrypted str}}
 _models = {}           # {provider: [model ids]} from the last refresh
 _errors = {}           # {provider: error text} from the last refresh
+_reasoning = {}        # {provider: {model ids that accept a reasoning setting}} where the model list says so (OpenRouter)
 _lock = threading.Lock()
 
 
@@ -98,16 +99,53 @@ def _get(url, headers, timeout=15):
 
 def _http_error(error):
     try:
-        body = json.loads(error.read().decode("utf-8", "replace"))
-        detail = body.get("error")
-        detail = detail.get("message") if isinstance(detail, dict) else detail
+        text = error.read().decode("utf-8", "replace")
+        try:
+            body = json.loads(text)
+            body = body[0] if isinstance(body, list) and body else body  # Gemini wraps the error in a list
+            detail = body.get("error") if isinstance(body, dict) else body
+            detail = detail.get("message") if isinstance(detail, dict) else detail
+        except ValueError:
+            detail = text.strip()[:300]
     except Exception:
         detail = ""
     if error.code in (401, 403):
         return f"ключ не подошёл ({error.code}){': ' + str(detail) if detail else ''}"
     if error.code == 429:
-        return "превышен лимит запросов или закончились деньги на счёте"
+        return "превышен лимит запросов или закончились деньги на счёте" + (f" ({detail})" if detail else "")
     return f"HTTP {error.code}{': ' + str(detail) if detail else ''}"
+
+
+_server_start_tried = {}   # {provider: time of the last attempt to start its server}
+
+
+def _lms_path():
+    """LM Studio's command-line tool, which can start its local server without opening the window."""
+    import shutil
+    from pathlib import Path
+    candidate = Path.home() / ".lmstudio" / "bin" / "lms.exe"
+    return str(candidate) if candidate.is_file() else shutil.which("lms")
+
+
+def _start_lmstudio_server(url):
+    """Start LM Studio's local server with `lms server start` on the port of the configured address.
+    Returns "" when it is running afterwards, otherwise a readable reason. Tried at most once a minute."""
+    import subprocess
+    from urllib.parse import urlparse
+    now = time.monotonic()
+    if now - _server_start_tried.get("lmstudio", -1e9) < 60:
+        return "сервер LM Studio не запущен"
+    _server_start_tried["lmstudio"] = now
+    lms = _lms_path()
+    if not lms:
+        return "сервер LM Studio не запущен: включи его в самой программе (раздел Developer → Start Server)"
+    port = urlparse(url).port or 1234
+    try:
+        subprocess.run([lms, "server", "start", "--port", str(port)], capture_output=True, timeout=60,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except Exception as error:
+        return f"не удалось запустить сервер LM Studio ({error})"
+    return ""
 
 
 def fetch_models(provider):
@@ -118,14 +156,29 @@ def fetch_models(provider):
         raise RuntimeError("не указан адрес сервера")
     if info["key"] and not info.get("optional_key") and not options["key"]:
         raise RuntimeError("нужен API-ключ")
+    local_timeout = 5 if info.get("local") else 15
     try:
-        data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=5 if info.get("local") else 15)
+        try:
+            data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=local_timeout)
+        except (urllib.error.URLError, OSError) as error:
+            if provider != "lmstudio" or isinstance(error, urllib.error.HTTPError):
+                raise
+            # LM Studio is installed but its server is off: start it, as the user switched this integration on.
+            problem = _start_lmstudio_server(options["url"])
+            if problem:
+                raise RuntimeError(problem) from error
+            data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=local_timeout)
     except urllib.error.HTTPError as error:
         raise RuntimeError(_http_error(error)) from error
     except (urllib.error.URLError, OSError) as error:
         raise RuntimeError("программа не запущена" if info.get("local") else f"нет связи: {getattr(error, 'reason', error)}") from error
     items = data.get("data") if isinstance(data, dict) else data
     ids = [str(item.get("id") or "") for item in items or [] if isinstance(item, dict)]
+    if provider == "openrouter":
+        _reasoning[provider] = {str(item.get("id")) for item in items or [] if isinstance(item, dict)
+                                and "reasoning" in (item.get("supported_parameters") or [])}
+    if info.get("local"):  # embedding models cannot chat; they only clutter the list
+        ids = [i for i in ids if "embed" not in i.lower()]
     if provider == "openai":  # only chat models, not embeddings, images, audio or moderation
         ids = [i for i in ids if i.startswith(("gpt-", "o1", "o3", "o4", "chatgpt")) and not any(
             word in i for word in ("audio", "realtime", "transcribe", "tts", "image", "search", "embedding"))]
@@ -211,8 +264,116 @@ def _anthropic_messages(messages):
     return system, converted
 
 
+# ---------- thinking levels ----------
+EFFORTS = ["low", "medium", "high", "xhigh", "max"]
+CLAUDE_BUDGETS = {"low": 2048, "medium": 8192, "high": 24576}   # thinking tokens for Claude models before 4.6
+_capabilities = {}     # {"provider:model": (values, default)} asked from Ollama and LM Studio
+
+
+def _claude_generation(model):
+    """("opus" | "sonnet" | "haiku" | "fable" | "mythos", version) from a Claude model id, ("", 0) when unknown."""
+    import re
+    match = re.match(r"claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d)(?!\d))?", model)
+    if match:
+        return match.group(1), int(match.group(2)) + int(match.group(3) or 0) / 10
+    match = re.match(r"claude-(\d)(?:-(\d)(?!\d))?-(opus|sonnet|haiku)", model)
+    if match:
+        return match.group(3), int(match.group(1)) + int(match.group(2) or 0) / 10
+    return "", 0.0
+
+
+def _claude_thinking(model):
+    """(values, default, style) of a Claude model: style "adaptive" (effort levels), "budget" (budget_tokens)
+    or "" when it does not think. False in values means it can be switched off."""
+    family, version = _claude_generation(model)
+    if family in ("fable", "mythos") or (family == "opus" and version >= 5.5):   # thinking is always on
+        return EFFORTS, "medium" if family == "opus" else "high", "adaptive"
+    if family == "haiku" and version >= 5.5:
+        return [False] + EFFORTS, "medium", "adaptive"
+    if version >= 5:
+        return [False] + EFFORTS, "high", "adaptive"
+    if version >= 4.7:   # adaptive thinking only when asked for
+        return [False] + EFFORTS, False, "adaptive"
+    if version >= 4.6:
+        return [False, "low", "medium", "high", "max"], False, "adaptive"
+    if family and version >= 3.7:
+        return [False, "low", "medium", "high"], False, "budget"
+    return [], None, ""
+
+
+def _local_thinking(provider, model):
+    """What Ollama or LM Studio report about a model's reasoning, cached; raises when the program is off."""
+    name = f"{provider}:{model}"
+    if name in _capabilities:
+        return _capabilities[name]
+    base = settings_of(provider)["url"].rsplit("/v1", 1)[0]
+    result = [], None
+    if provider == "ollama":
+        request = urllib.request.Request(base + "/api/show", data=json.dumps({"model": model}).encode("utf-8"),
+                                         headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            capabilities = json.loads(response.read().decode("utf-8")).get("capabilities") or []
+        if "thinking" in capabilities:
+            result = (["low", "medium", "high"], "medium") if "gpt-oss" in model else ([True, False], True)
+    else:   # LM Studio: capabilities.reasoning.allowed_options, e.g. ["off", "on"] or ["low", "medium", "high"]
+        for item in _get(base + "/api/v1/models", {"User-Agent": USER_AGENT}, timeout=5).get("models") or []:
+            reasoning = (item.get("capabilities") or {}).get("reasoning") if item.get("key") == model else None
+            if isinstance(reasoning, dict):
+                named = {"off": False, "on": True}
+                values = [named.get(option, option) for option in reasoning.get("allowed_options") or []]
+                result = values, named.get(reasoning.get("default"), reasoning.get("default"))
+    _capabilities[name] = result
+    return result
+
+
+def thinking_modes(name):
+    """(values, default) for an integration model's thinking switch, like llama_backend.thinking_modes."""
+    provider, model = split(name)
+    lowered = model.lower()
+    if provider == "anthropic":
+        values, default, _ = _claude_thinking(model)
+        return values, default
+    if provider == "openai" and lowered.startswith(("o1", "o3", "o4", "gpt-5", "gpt-oss")):
+        return ["low", "medium", "high"], "medium"
+    if provider == "gemini" and lowered.startswith(("gemini-2.5", "gemini-3")):
+        return ["low", "medium", "high"], "high"
+    if provider == "openrouter" and model in _reasoning.get(provider, ()):
+        return [False, "low", "medium", "high"], "medium"
+    if provider in ("ollama", "lmstudio"):
+        return _local_thinking(provider, model)
+    return [], None
+
+
+def _apply_thinking(provider, model, payload, think):
+    """Put the chosen thinking level into an OpenAI-style request, in the form this provider reads. A level the
+    model does not offer (a quick service request asks every model for no thinking) is not sent."""
+    if think in (None, "__auto__"):
+        return
+    try:
+        values, _ = thinking_modes(f"{provider}:{model}")
+    except Exception:
+        return
+    if think not in values:
+        return
+    if provider == "openrouter":
+        payload["reasoning"] = {"enabled": False} if think is False else {"effort": think}
+    elif provider == "lmstudio":
+        payload["reasoning"] = {True: "on", False: "off"}.get(think, think)
+        if isinstance(think, bool):
+            payload["chat_template_kwargs"] = {"enable_thinking": think}
+        else:
+            payload["reasoning_effort"] = think
+    elif provider == "ollama":
+        if think is False:
+            payload["reasoning_effort"] = "none"
+        elif think is not True:
+            payload["reasoning_effort"] = think
+    elif isinstance(think, str):   # OpenAI, Gemini
+        payload["reasoning_effort"] = think
+
+
 def chat(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_event=None, on_response=None,
-         on_text=None, overrides=None, sampling=None, tools=None, tool_calls=None):
+         on_text=None, overrides=None, sampling=None, tools=None, tool_calls=None, think="__auto__"):
     """Stream one answer from a provider's model; returns the final text (same contract as llama_backend.chat)."""
     provider, model = split(name)
     options = settings_of(provider)
@@ -225,15 +386,39 @@ def chat(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
                    "max_tokens": int(overrides.pop("max_tokens", 0) or sampling.get("max_tokens") or 8192)}
         if system:
             payload["system"] = system
-        if "temperature" in sampling or "temperature" in overrides:
-            payload["temperature"] = min(1.0, float(overrides.pop("temperature", sampling.get("temperature", 0.7))))
+        family, version = _claude_generation(model)
+        values, default, style = _claude_thinking(model)
+        level = default if think in (None, "__auto__") else think
+        thinking = False
+        if think is False and False in values:
+            # Claude Sonnet 5.5 turns thinking off with "between_tools"; "disabled" is refused there
+            payload["thinking"] = {"type": "between_tools" if family == "sonnet" and version >= 5.5 else "disabled"}
+        elif style == "budget" and level in CLAUDE_BUDGETS:
+            budget = CLAUDE_BUDGETS[level]
+            payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
+            payload["max_tokens"] = max(payload["max_tokens"], budget + 4096)
+            thinking = True
+        elif style == "adaptive" and level:
+            payload["thinking"] = {"type": "adaptive", "display": "summarized"}   # readable reasoning in the panel
+            if think not in (None, "__auto__"):
+                payload["output_config"] = {"effort": think}
+            thinking = True
+        # Claude 4.7 and later accept only the default sampling; with thinking on no model takes a temperature
+        temperature = overrides.pop("temperature", sampling.get("temperature"))
+        if temperature is not None and not thinking and family not in ("fable", "mythos") and version < 4.7:
+            payload["temperature"] = min(1.0, float(temperature))
         url = options["url"] + "/messages"
     else:
         payload = {"model": model, "messages": llama_backend._to_openai(messages), "stream": True}
         if tools:
             payload["tools"] = tools
+        if provider == "openai" and model.lower().startswith(("o1", "o3", "o4", "gpt-5")):
+            # OpenAI's reasoning models accept only the default sampling
+            for key in ("temperature", "top_p", "presence_penalty", "frequency_penalty"):
+                sampling.pop(key, None); overrides.pop(key, None)
         for key in ("temperature", "top_p", "presence_penalty", "frequency_penalty", "seed"):
-            if key in sampling:
+            # zero penalties are the default anyway, and Gemini refuses the field outright on its newer models
+            if key in sampling and not (key.endswith("_penalty") and not sampling[key]):
                 payload[key] = sampling[key]
         if provider in ("ollama", "lmstudio", "openrouter", "custom"):  # these accept llama.cpp-style sampling too
             for key in ("top_k", "min_p", "repeat_penalty"):
@@ -241,6 +426,7 @@ def chat(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
                     payload[key] = sampling[key]
         if sampling.get("max_tokens", -1) > 0:
             payload["max_tokens"] = sampling["max_tokens"]
+        _apply_thinking(provider, model, payload, think)
         payload.update(overrides)
         url = options["url"] + "/chat/completions"
     if on_status:

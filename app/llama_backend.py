@@ -8,6 +8,7 @@ is its vision projector and is passed with --mmproj, so the model can see images
 from __future__ import annotations
 
 import json
+import re
 import os
 import socket
 import subprocess
@@ -106,19 +107,53 @@ def gguf_metadata(path, wanted=("tokenizer.chat_template",)):
     return found
 
 
+EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+
+def effort_levels(template):
+    """(levels, default) the template itself compares reasoning_effort with, e.g. == 'xhigh' or in ['low', 'high'].
+    A template that only passes the value on (gpt-oss) gets the documented levels low, medium and high."""
+    named = set()
+    for match in re.finditer(r"reasoning_effort\s*(?:==|!=|not\s+in|in)\s*(\[[^\]]*\]|\([^)]*\)|['\"][\w-]+['\"])", template):
+        named.update(re.findall(r"['\"]([\w-]+)['\"]", match.group(1)))
+    default = re.search(r"reasoning_effort\s*=\s*['\"]([\w-]+)['\"]", template) or re.search(r"reasoning_effort\s*\|\s*default\(\s*['\"]([\w-]+)", template)
+    if len(named) < 2:  # the template only passes the value on (gpt-oss): its documented levels
+        named |= {"low", "medium", "high"}
+    if default:
+        named.add(default.group(1))
+    levels = sorted(named, key=lambda level: EFFORT_ORDER.index(level) if level in EFFORT_ORDER else len(EFFORT_ORDER))
+    return levels, default.group(1) if default else ("medium" if "medium" in levels else levels[len(levels) // 2])
+
+
+# Levels for a model whose template only switches thinking on and off (Qwen3.5/3.6, GLM, Gemma): llama.cpp ends the
+# reasoning after this many tokens. "high" has no limit.
+THINKING_BUDGETS = {"low": 1024, "medium": 4096}
+
+
+def _template(model):
+    entry = model_files().get(model)
+    return str(gguf_metadata(entry[0]).get("tokenizer.chat_template") or "") if entry else ""
+
+
+def _budget_levels(model):
+    """True when the model's levels are emulated with a reasoning budget (its template has no effort of its own)."""
+    template = _template(model)
+    return "enable_thinking" in template and "reasoning_effort" not in template and "<|channel|>" not in template
+
+
 def thinking_modes(model):
     """(values, default) for the model's thinking switch, from its chat template.
-    values: [] when it cannot be switched; default: True/False/effort, None when unknown."""
+    values: [] when it cannot be switched; False means off, the rest are effort levels; default: None when unknown."""
     if providers.is_provider_model(model):
+        return providers.thinking_modes(model)
+    if model not in model_files():
         return [], None
-    entry = model_files().get(model)
-    if not entry:
-        return [], None
-    template = str(gguf_metadata(entry[0]).get("tokenizer.chat_template") or "")
+    template = _template(model)
     if "reasoning_effort" in template or "<|channel|>" in template:
-        return ["low", "medium", "high"], "medium"
+        levels, default = effort_levels(template)
+        return ([False] if "enable_thinking" in template else []) + levels, default
     if "enable_thinking" in template:
-        return [True, False], True
+        return [False, "low", "medium", "high"], "high"
     if "<think>" in template or "thinking" in template.lower():
         return [], True   # thinks every time
     return [], False
@@ -643,7 +678,7 @@ def chat(model, messages, think="__auto__", timeout=600, on_status=None, on_thin
     if providers.is_provider_model(model):  # Ollama, LM Studio, cloud: their own servers
         return providers.chat(model, messages, timeout, on_status, on_thinking, cancel_event, on_response, on_text,
                               overrides, {**sampling_payload(params_for(model)), "max_tokens": params_for(model)["max_tokens"]},
-                              tools, tool_calls)
+                              tools, tool_calls, think=think)
     if any(message.get("images") for message in messages) and not has_vision(model):
         raise RuntimeError("model does not support images: у этой модели нет файла mmproj рядом с GGUF, "
                            "поэтому она не видит картинки и экран.")
@@ -672,6 +707,10 @@ def _stream(server, model, messages, think, timeout, on_status, on_thinking, can
         payload["chat_template_kwargs"] = {"enable_thinking": think in (True, "true")}
         if think in (False, "false"):
             payload["reasoning_budget"] = 0
+    elif isinstance(think, str) and think not in ("", "__auto__") and _budget_levels(model):
+        payload["chat_template_kwargs"] = {"enable_thinking": True}
+        if think in THINKING_BUDGETS:
+            payload["thinking_budget_tokens"] = THINKING_BUDGETS[think]
     elif isinstance(think, str) and think not in ("", "__auto__"):
         payload["reasoning_effort"] = think
         payload["chat_template_kwargs"] = {"reasoning_effort": think}  # gpt-oss reads it from the template

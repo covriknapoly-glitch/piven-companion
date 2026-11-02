@@ -108,8 +108,11 @@ class ToolBox:
         self._mcp = {}  # tool name → (server, tool)
         self.errors = []
 
-    def specs(self):
+    def specs(self, start_servers=True):
+        """The tool list for the model. With start_servers=False, MCP servers that are not running yet are left out
+        (listed in self.unstarted) instead of being started just to count their tools."""
         specs = []
+        self.unstarted = []
         if self.browser is not None:
             specs += [
                 _tool("open_web_page", "Открыть сайт во встроенном браузере программы (пользователь его видит) и прочитать текст страницы.",
@@ -145,6 +148,9 @@ class ToolBox:
                                 "instructions": {"type": "string", "description": "сами инструкции, по шагам"}},
                                ["name", "description", "instructions"]))
         for server in list(mcp_client.servers.values()):
+            if not start_servers and server._tools is None:
+                self.unstarted.append(server.name)
+                continue
             try:
                 for tool in server.tools():
                     name = _mcp_name(server.name, tool["name"])
@@ -178,7 +184,7 @@ class ToolBox:
                     title, text = self.browser.open(url)
                 elif name == "web_search":
                     query = str(arguments.get("query", "")).strip()
-                    title, text = self.browser.open("https://duckduckgo.com/html/?q=" + urllib.parse.quote(query))
+                    title, text = self.browser.open("https://search.brave.com/search?q=" + urllib.parse.quote(query))
                 else:
                     title, text = self.browser.text()
                 return f"Страница «{title}». {DATA_NOTE}\n\n{text[:MAX_RESULT]}"
