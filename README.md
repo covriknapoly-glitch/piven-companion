@@ -133,22 +133,22 @@ The installer already contains everything the program needs (Python, llama.cpp a
    ```
    runtime\Python311\python.exe -m pip install --target .packages -r requirements.txt
    ```
-   The app reads packages from `.packages` and `.qt_runtime` and ignores the user's site-packages.
+   The app reads packages from `.packages` and ignores the user's site-packages.
 3. Put **llama.cpp** in `llama.cpp\bin` (the app starts `llama-server.exe` from there).
-4. Start `Запустить веб-интерфейс.cmd` (web interface) or `Запустить компаньон.cmd` (classic PySide6 window).
+4. Start `Запустить PIVEN.cmd`.
 
 </details>
 
 <details>
 <summary><b>Build the interface</b></summary>
 
-After editing `modern-ui/src`, rebuild `modern-ui/dist`:
+After editing `ui/src`, rebuild `ui/dist`:
 
 ```
-modern-ui\scripts\build.cmd
+ui\scripts\build.cmd
 ```
 
-The script uses `esbuild` from `modern-ui/node_modules` (run `npm install` in `modern-ui` first). With a portable Node.js in `runtime\node` it also type-checks the TypeScript.
+The script uses `esbuild` from `ui/node_modules` (run `npm install` in `ui` first). With a portable Node.js in `runtime\node` it also type-checks the TypeScript.
 
 </details>
 
@@ -161,7 +161,7 @@ With [Inno Setup](https://jrsoftware.org/isinfo.php) 6.3 or newer:
 "%LOCALAPPDATA%\Programs\Inno Setup 7\ISCC.exe" installer\piven.iss
 ```
 
-The result is `installer\Output\PIVEN-Companion-<version>-Setup.exe`. It packs the program, the bundled Python with its libraries, Qt and llama.cpp from this folder — never models or voice engines.
+The result is `installer\Output\PIVEN-Companion-<version>-Setup.exe`. It packs the program, the bundled Python with its libraries and llama.cpp from this folder — never models or voice engines.
 
 </details>
 
@@ -169,21 +169,20 @@ The result is `installer\Output\PIVEN-Companion-<version>-Setup.exe`. It packs t
 <summary><b>Project layout</b></summary>
 
 ```
-app/                     the program's code
-  companion_core.py      the engine: settings, chats, models, voice, skills
-  web_companion.pyw      the web interface window (pywebview)
-  desktop_companion.pyw  the classic window (PySide6)
-  llama_backend.py       runs llama-server and talks to the model
-  providers.py           Ollama, LM Studio and cloud providers
-  tools.py, mcp_client.py   tools, skills and MCP servers
-  memory.py              long-term memory
-  hf_models.py           Hugging Face search and downloads
-  voice_install.py, voice_engines.py   voice models and engines
-modern-ui/               the web interface: sources (src/) and build (dist/)
-voice/, voice-servers/   speech recognition and text-to-speech servers
-skills/                  instructions for the model
-installer/               the Inno Setup script
-assets/, docs/           icons, fonts, licenses
+app/
+  chat/       engine.py (chats, answers, settings), memory.py (long-term memory)
+  models/     llama.py (local models), integrations.py (Ollama, LM Studio, cloud),
+              huggingface.py, download.py, memory_fit.py, logos.py
+  voice/      engines.py, install.py, catalog.py
+  tools/      computer.py, presentation.py, toolbox.py, mcp.py, preview.py, video.py, twitch.py
+  window/     main.pyw (the window), browser.py, tray.py, workspace.py
+ui/           the interface: src/ and the built dist/
+voice-engines/  voice model servers
+skills/       instructions for the model
+tests/        python -m unittest discover -s tests
+installer/    the Inno Setup script
+assets/, docs/
+Запустить PIVEN.cmd
 ```
 
 Models, voice engines and the bundled runtimes are not in the repository.
