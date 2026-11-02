@@ -156,11 +156,22 @@ class Memory:
         """Switch to another embedding model: its vectors differ, so every entry is indexed again later."""
         path = Path(path)
         (self.folder / "model" / "chosen.txt").write_text(path.name, encoding="utf-8")
-        self.stop()
+        self.stop()   # the server holds the old file open; it has to stop before the file can go
         self.model_path = path
         with self._lock:
             self._db.execute("UPDATE memories SET vector=NULL")
             self._db.commit()
+        self._remove_other_models(path)
+
+    def _remove_other_models(self, keep):
+        """Delete the earlier models and unfinished downloads in memory/model: after a switch nothing uses them
+        (every entry is indexed again with the new one). Only that folder is touched."""
+        for item in (self.folder / "model").iterdir():
+            if item.is_file() and item.name != Path(keep).name and item.suffix.lower() in (".gguf", ".download"):
+                try:
+                    item.unlink()
+                except OSError:
+                    pass   # still locked: it goes with the next switch
 
     def query_prefix(self):
         """What the model expects before a search query (models are trained with such prompts)."""

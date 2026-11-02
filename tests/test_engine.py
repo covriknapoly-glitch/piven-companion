@@ -160,6 +160,18 @@ class SavedErrors(unittest.TestCase):
         self.assertEqual(appended, [("b", "error", "boom")])
 
 
+class MemoryModels(unittest.TestCase):
+    def test_switch_removes_earlier_models_and_unfinished_downloads(self):
+        import memory
+        with tempfile.TemporaryDirectory() as folder:
+            models = Path(folder) / "model"
+            models.mkdir()
+            for name in ("old.gguf", "new.gguf", "broken.gguf.download", "chosen.txt", "notes.md"):
+                (models / name).write_text("x", encoding="utf-8")
+            memory.Memory._remove_other_models(types.SimpleNamespace(folder=Path(folder)), models / "new.gguf")
+            self.assertEqual(sorted(item.name for item in models.iterdir()), ["chosen.txt", "new.gguf", "notes.md"])
+
+
 class ThinkingLevels(unittest.TestCase):
     def test_effort_levels_in_round_brackets(self):
         template = "{%- if reasoning_effort not in ('xhigh', 'medium', 'low') %}{%- set e = reasoning_effort|default('xhigh') %}"
