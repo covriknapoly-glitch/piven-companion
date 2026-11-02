@@ -205,16 +205,26 @@ def _register(kind, model_id, info):
     REGISTRY_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+def _current_path(saved):
+    path = Path(saved)
+    if path.exists():
+        return path
+    try:
+        return VOICE_DIR / path.relative_to(APP_DIR / "voice")
+    except ValueError:
+        return path
+
+
 def _registered(kind):
     found = {}
     for model_id, info in _registry()[kind].items():
         info = dict(info)
         if info.get("engine") in ("piper", "audiocpp"):
-            info["path"] = Path(info["path"])
+            info["path"] = _current_path(info["path"])
             if not info["path"].is_file():
                 continue
         elif info.get("path"):
-            info["path"] = Path(info["path"])
+            info["path"] = _current_path(info["path"])
             if not (info["path"] / ".piven-complete").is_file():
                 continue
         elif not _snapshot_ready(info.get("repo", "")):

@@ -170,6 +170,17 @@ class MemoryModels(unittest.TestCase):
             self.assertEqual(sorted(item.name for item in models.iterdir()), ["chosen.txt", "new.gguf", "notes.md"])
 
 
+class VoicePaths(unittest.TestCase):
+    def test_models_saved_under_the_old_voice_folder_are_found_in_voice_engines(self):
+        from app.voice import install
+        old = install.APP_DIR / "voice" / "engines" / "audiocpp" / "models" / "x.gguf"
+        with mock.patch.object(Path, "exists", lambda self: False):
+            self.assertEqual(install._current_path(old), install.VOICE_DIR / "engines" / "audiocpp" / "models" / "x.gguf")
+        elsewhere = Path("D:/models/y.gguf")
+        with mock.patch.object(Path, "exists", lambda self: False):
+            self.assertEqual(install._current_path(elsewhere), elsewhere)
+
+
 class ThinkingLevels(unittest.TestCase):
     def test_effort_levels_in_round_brackets(self):
         template = "{%- if reasoning_effort not in ('xhigh', 'medium', 'low') %}{%- set e = reasoning_effort|default('xhigh') %}"
