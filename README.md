@@ -7,7 +7,7 @@
 
 # PIVEN Companion
 
-AI agent for Windows that runs on your own PC.
+ai agent for Windows that runs on your own pc.
 
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
@@ -16,70 +16,70 @@ AI agent for Windows that runs on your own PC.
 
 </div>
 
-## What is this
+## what is this
 
-I wanted an AI agent that works without internet and keeps my stuff on my PC, so I made one.
+i wanted an ai agent that works without internet and keeps my stuff on my pc, so i made one.
 
-You download a model right in the app and talk to it. Before downloading it tells you if the model will fit and how fast it will be.
+you download a model right in the app and talk to it. before downloading it tells you if the model will fit and how fast it will be.
 
-## What it can do
+## what it can do
 
-- Chat by text or voice. You can also just call it and talk.
-- Search the internet, open programs and make files.
-- Write programs for you. It works in its own folder and you can undo what it did.
-- Make presentations.
-- Draw pictures and short videos if you have ComfyUI.
-- Remember stuff between chats. You can see and delete everything it remembers.
-- Work with Ollama, LM Studio, OpenAI, Claude, Gemini and OpenRouter if you want.
+- chat by text or voice. you can also just call it and talk.
+- search the internet, open programs and make files.
+- write programs for you. it works in its own folder and you can undo what it did.
+- make presentations.
+- draw pictures and short videos if you have ComfyUI.
+- remember stuff between chats. you can see and delete everything it remembers.
+- work with Ollama, LM Studio, OpenAI, Claude, Gemini and OpenRouter if you want.
 
-English and Russian. Light and dark themes.
+english and russian. light and dark themes.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/tools.png" alt="The agent writing a program"><br><sub>Writes programs</sub></td>
-<td width="50%"><img src="docs/images/models.png" alt="Model settings"><br><sub>Shows if a model fits</sub></td>
+<td width="50%"><img src="docs/images/tools.png" alt="the agent writing a program"><br><sub>writes programs</sub></td>
+<td width="50%"><img src="docs/images/models.png" alt="model settings"><br><sub>shows if a model fits</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/voice.png" alt="Voice settings"><br><sub>Voice and calls</sub></td>
-<td><img src="docs/images/settings.png" alt="Language and themes"><br><sub>Themes</sub></td>
+<td><img src="docs/images/voice.png" alt="voice settings"><br><sub>voice and calls</sub></td>
+<td><img src="docs/images/settings.png" alt="language and themes"><br><sub>themes</sub></td>
 </tr>
 </table>
 
-## How to install
+## how to install
 
-1. Download `PIVEN-Companion-<version>-Setup.exe` from [Releases](https://github.com/covriknapoly-glitch/piven-companion/releases).
-2. Run it.
-3. Open PIVEN Companion from the Start menu.
+1. download `PIVEN-Companion-<version>-Setup.exe` from [releases](https://github.com/covriknapoly-glitch/piven-companion/releases).
+2. run it.
+3. open PIVEN Companion from the start menu.
 
-You need:
+you need:
 
 - Windows 10 or 11
-- An NVIDIA card is best. Without one it still works but slower.
-- About 1.2 GB for the app and more for models (usually 2 to 20 GB each)
+- an NVIDIA card is best. without one it still works but slower.
+- about 1.2 GB for the app and more for models (usually 2 to 20 GB each)
 
-When you open it, it suggests a model for your PC. Download it and say hi.
+when you open it, it suggests a model for your pc. download it and say hi.
 
-## Your data
+## your data
 
-- Everything stays on your PC in `%LOCALAPPDATA%\PIVEN`.
-- Nothing downloads unless you say so.
-- If you use a cloud model, your messages go to that service. On a call that includes screenshots and what it hears, so tell people if you're on a call with them.
-- Only copy your own voice or the voice of someone who said it's ok.
-- Pictures and videos made in the app have a hidden mark that says AI made them.
+- everything stays on your pc in `%LOCALAPPDATA%\PIVEN`.
+- nothing downloads unless you say so.
+- if you use a cloud model, your messages go to that service. on a call that includes screenshots and what it hears, so tell people if you're on a call with them.
+- only copy your own voice or the voice of someone who said it's ok.
+- pictures and videos made in the app have a hidden mark that says ai made them.
 
-## If you want to build it
+## if you want to build it
 
-1. Put Python 3.11 in `runtime\Python311`.
-2. Run `runtime\Python311\python.exe -m pip install --target .packages -r requirements.txt`
-3. Put llama.cpp in `llama.cpp\bin`.
-4. Run `Запустить PIVEN.cmd`.
+1. put Python 3.11 in `runtime\Python311`.
+2. run `runtime\Python311\python.exe -m pip install --target .packages -r requirements.txt`
+3. put llama.cpp in `llama.cpp\bin`.
+4. run `Запустить PIVEN.cmd`.
 
-If you change the interface, run `npm install` in `ui` once and then `ui\scripts\build.cmd`.
+if you change the interface, run `npm install` in `ui` once and then `ui\scripts\build.cmd`.
 
-## Rules
+## rules
 
-You pick the models, voices and services, and what you do with them is on you. I don't make them and I'm not connected to them. See [TERMS.txt](TERMS.txt).
+you pick the models, voices and services, and what you do with them is on you. i don't make them and i'm not connected to them. see [TERMS.txt](TERMS.txt).
 
-## License
+## license
 
-GPL v3 or later. It's free. If you share a changed version it has to stay open too. Other people's stuff and its licenses are in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
+GPL v3 or later. it's free. if you share a changed version it has to stay open too. other people's stuff and its licenses are in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
