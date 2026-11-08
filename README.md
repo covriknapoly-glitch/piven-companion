@@ -18,20 +18,20 @@ Ai agent for Windows that runs on your own pc.
 
 ## What is this
 
-I wanted an ai agent that works better than opencode and easier to use, so i made one.
+I wanted an ai agent that works better than opencode and easier to use, so I made one.
 
-You can download almost any model from HuggingFace right in the app. Before downloading it tells you if the model will fit and how fast it will be.
+You can download almost any model from Hugging Face right in the app. Before downloading it tells you if the model will fit and how fast it will be.
 
 ## What it can do
 
 - Chat by text or voice. You can also just call it and talk.
-- Search the internet, open programs and create files in folder you chose.
+- Search the internet, open programs and create files in folder you choose.
 - Make presentations.
 - Draw pictures and short videos if you have ComfyUI.
 - Remember stuff between chats. You can see and delete everything it remembers.
-- Also, you can connect models from Ollama, LMStudio, Openrouter, Google, OpenAI, Antrophic.
+- Also, you can connect models from Ollama, LM Studio, OpenRouter, Google, OpenAI, Anthropic.
 
-Supported languages are english and russian. 
+Supported languages are English and Russian.
 
 <table>
 <tr>
@@ -49,13 +49,13 @@ Supported languages are english and russian.
 1. Download `PIVEN-Companion-<version>-Setup.exe` from [releases](https://github.com/covriknapoly-glitch/piven-companion/releases).
 2. Run it.
 
-you need:
+You need:
 
 - Windows 10 or 11
 - An NVIDIA card is best. Without one it still works but slower.
 - About 1.2 GB for the app and more for models.
 
-When you open it, it suggests a model for your pc, in case you want other model, you can go in settings and download any model from Hugging Face.
+When you open it, it suggests a model for your pc. In case you want another model, you can go to settings and download any model from Hugging Face.
 
 ## Your data
 
@@ -76,8 +76,8 @@ If you change the interface, run `npm install` in `ui` once and then `ui\scripts
 
 ## Rules
 
-You pick the models, voices and services, and what you do with them is on you. I don't make them and i'm not connected to them. See [TERMS.txt](TERMS.txt).
+You pick the models, voices and services, and what you do with them is on you. I don't make them and I'm not connected to them. See [TERMS.txt](TERMS.txt).
 
 ## License
 
-GPL v3 or later.Iit's free. If you share a changed version it has to stay open too. Other people's stuff and its licenses are in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
+GPL v3 or later. It's free. If you share a changed version it has to stay open too. Other people's stuff and its licenses are in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
