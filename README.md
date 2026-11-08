@@ -7,7 +7,7 @@
 
 # PIVEN Companion
 
-AI chat for Windows that runs on your own PC.
+AI agent for Windows that runs on your own PC.
 
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
@@ -18,7 +18,7 @@ AI chat for Windows that runs on your own PC.
 
 ## What is this
 
-I wanted an AI chat that works without internet and keeps my stuff on my PC, so I made one.
+I wanted an AI agent that works without internet and keeps my stuff on my PC, so I made one.
 
 You download a model right in the app and talk to it. Before downloading it tells you if the model will fit and how fast it will be.
 
