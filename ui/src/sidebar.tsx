@@ -9,9 +9,15 @@ export interface ChatActions {
   pin: (chat: ChatSummary) => void;
   exportChat: (chat: ChatSummary, markdown: boolean) => void;
   remove: (chat: ChatSummary) => void;
+  moveToProjects: (chat: ChatSummary) => void;
+  project: (chat: ChatSummary, action: "folder" | "open") => void;
 }
 
+const folderName = (path: string) => path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? path;
+
 function ChatRow({ chat, active, disabled, actions }: { chat: ChatSummary; active: boolean; disabled: boolean; actions: ChatActions }) {
+  const folder = chat.code && chat.root ? folderName(chat.root) : "";
+  const shownTitle = chat.code && chat.title === "Новый чат" ? folder || "Новый проект" : chat.title;
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(chat.title);
   const commit = () => {
@@ -29,15 +35,20 @@ function ChatRow({ chat, active, disabled, actions }: { chat: ChatSummary; activ
   }
   return (
     <div className={`chat-row ${active ? "active" : ""}`}>
-      <button type="button" className="chat-row-main" disabled={disabled} onClick={() => actions.select(chat)} onDoubleClick={() => { setTitle(chat.title); setRenaming(true); }} title={chat.title}>
-        <span className="chat-row-title">{chat.pinned && <Icon name="pin" size={12} className="pin-mark" />}{chat.title}
+      <button type="button" className="chat-row-main" disabled={disabled} onClick={() => actions.select(chat)} onDoubleClick={() => { setTitle(chat.title); setRenaming(true); }} title={chat.root || chat.title}>
+        <span className="chat-row-title">{chat.pinned && <Icon name="pin" size={12} className="pin-mark" />}{shownTitle}
           {chat.busy && <span className="chat-busy" title="Пишет ответ"><i /><i /><i /></span>}
           {!chat.busy && chat.unread && <span className="chat-unread" title="Новый ответ" />}</span>
-        <span className="chat-row-preview">{chat.preview || "Пока без сообщений"}</span>
+        {folder ? <span className="chat-row-folder" data-i18n-skip>{folder}</span> : <span className="chat-row-preview">{chat.preview || "Пока без сообщений"}</span>}
       </button>
-      <MenuButton label="Действия с чатом" className="chat-row-menu" items={[
-        { icon: "edit", label: "Переименовать", onClick: () => { setTitle(chat.title); setRenaming(true); } },
+      <MenuButton label={chat.code ? "Действия с проектом" : "Действия с чатом"} className="chat-row-menu" items={[
+        { icon: "edit" as const, label: "Переименовать", onClick: () => { setTitle(chat.title); setRenaming(true); } },
         { icon: "pin", label: chat.pinned ? "Открепить" : "Закрепить", onClick: () => actions.pin(chat) },
+        { icon: "code", label: chat.code ? "Сделать обычным чатом" : "Сделать проектом", onClick: () => actions.moveToProjects(chat) },
+        ...(chat.code ? [{ icon: "folder" as const, label: folder ? "Сменить папку…" : "Выбрать папку…", onClick: () => actions.project(chat, "folder") }] : []),
+        ...(folder ? [
+          { icon: "external" as const, label: "Открыть в проводнике", onClick: () => actions.project(chat, "open") },
+        ] : []),
         "divider",
         { icon: "share", label: "Экспорт в Markdown", onClick: () => actions.exportChat(chat, true) },
         { icon: "file", label: "Экспорт в текст", onClick: () => actions.exportChat(chat, false) },
@@ -66,18 +77,25 @@ export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMes
   { api: WebApi; state: EngineState; actions: ChatActions; searchRef: RefObject<HTMLInputElement | null>; onNewChat: () => void;
     onSearchMessages: () => void; onSettings: () => void; onHide: () => void }) {
   const [query, setQuery] = useState("");
+  const projects = state.code.on;
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return needle ? state.chats.filter((chat) => chat.title.toLowerCase().includes(needle) || chat.preview.toLowerCase().includes(needle)) : state.chats;
-  }, [state.chats, query]);
+    const kind = state.chats.filter((chat) => Boolean(chat.code) === projects);
+    return needle ? kind.filter((chat) => chat.title.toLowerCase().includes(needle) || chat.preview.toLowerCase().includes(needle) || (chat.root ?? "").toLowerCase().includes(needle)) : kind;
+  }, [state.chats, query, projects]);
   const pinned = filtered.filter((chat) => chat.pinned);
-  const groups = useMemo(() => dateGroups(filtered.filter((chat) => !chat.pinned)), [filtered]);
+  const groups = useMemo((): [string, ChatSummary[]][] => {
+    const rest = filtered.filter((chat) => !chat.pinned);
+    if (!projects) return dateGroups(rest);
+    return rest.length ? [["Проекты", [...rest].sort((a, b) => (b.updated || 0) - (a.updated || 0))]] : [];
+  }, [filtered, projects]);
   const rows = (chats: ChatSummary[]) => chats.map((chat) => (
     <ChatRow key={`${chat.id}-${chat.title}-${chat.pinned}`} chat={chat} active={chat.id === state.activeChatId}
       disabled={false} actions={actions} />
   ));
   return (
-    <aside className="sidebar" aria-label="Чаты">
+    <aside className="sidebar" aria-label={projects ? "Проекты" : "Чаты"}>
+      <div className="nav-decor"><Decor corner="bl" /></div>
       <div className="brand">
         <Logo size={29} />
         <div className="brand-copy"><strong>PIVEN</strong></div>
@@ -85,12 +103,12 @@ export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMes
       </div>
 
       <button type="button" className="new-chat" onClick={onNewChat} title="Ctrl+N">
-        <Icon name="compose" size={17} /><span>Новый чат</span>
+        <Icon name="compose" size={17} /><span>{projects ? "Новый проект" : "Новый чат"}</span>
       </button>
 
       <div className="side-search">
         <label className="search-field"><Icon name="search" size={15} />
-          <input ref={searchRef} placeholder="Найти чат" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <input ref={searchRef} placeholder={projects ? "Найти проект" : "Найти чат"} value={query} onChange={(event) => setQuery(event.target.value)} />
           {query && <button type="button" aria-label="Очистить" onClick={() => setQuery("")}><Icon name="close" size={13} /></button>}
         </label>
         <button type="button" className="link-btn" onClick={onSearchMessages}><Icon name="search" size={13} /> Искать в сообщениях</button>
@@ -99,8 +117,7 @@ export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMes
       <nav className="chat-nav">
         {pinned.length > 0 && <><div className="nav-caption">Закреплённые</div>{rows(pinned)}</>}
         {groups.map(([caption, chats]) => <div key={caption} className="nav-group"><div className="nav-caption">{caption}</div>{rows(chats)}</div>)}
-        {!filtered.length && <div className="nav-empty">Ничего не найдено</div>}
-        <div className="nav-decor"><Decor corner="bl" /></div>
+        {!filtered.length && <div className="nav-empty">{query.trim() ? "Ничего не найдено" : projects ? "Проектов пока нет" : "Чатов пока нет"}</div>}
       </nav>
 
       {state.downloads.length > 0 && (

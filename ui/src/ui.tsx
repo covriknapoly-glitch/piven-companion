@@ -182,6 +182,10 @@ export function Toggle({ checked, onChange, label, disabled = false }: { checked
   );
 }
 
+export function AdvancedHead() {
+  return <h5 className="pane-subhead settings-advanced">Для опытных</h5>;
+}
+
 export function Field({ label, hint, error, children }: { label: string; hint?: ReactNode; error?: string; children: ReactNode }) {
   return (
     <div className={`field ${error ? "has-error" : ""}`}>
@@ -232,6 +236,30 @@ function requestLogos(api: WebApi, names: string[], authors: Record<string, stri
   Object.assign(logoQueue.archs, archs);
 }
 
+const MODEL_SOURCES: Record<string, string> = {
+  ollama: "Ollama", lmstudio: "LM Studio", openai: "OpenAI", anthropic: "Anthropic", gemini: "Google Gemini", openrouter: "OpenRouter", custom: "Свой сервер (OpenAI API)",
+};
+
+function modelSource(name: string) {
+  const source = name.split(":", 1)[0];
+  return name.includes(":") && source in MODEL_SOURCES ? source : "";
+}
+
+export function shortModel(name: string) {
+  const source = modelSource(name);
+  return source ? name.slice(source.length + 1) : name;
+}
+
+export function groupModels(names: string[]): [string, string[]][] {
+  const titles = ["Скачанные", ...Object.values(MODEL_SOURCES)];
+  const groups = new Map<string, string[]>();
+  for (const name of names) {
+    const title = MODEL_SOURCES[modelSource(name)] ?? "Скачанные";
+    groups.set(title, [...(groups.get(title) ?? []), name]);
+  }
+  return titles.filter((title) => groups.has(title)).map((title) => [title, groups.get(title)!]);
+}
+
 export function ModelLogo({ api, name, author = "", arch = "", size = 18 }: { api: WebApi | null; name: string; author?: string; arch?: string; size?: number }) {
   const [, redraw] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -273,15 +301,20 @@ ${speedHint(estimate)}`}>
   );
 }
 
-export function MemoryBar({ parts, gpu, label, speed }: { parts: { label: string; bytes: number }[]; gpu: number; label: string; speed?: MemoryEstimate }) {
+export const callMemoryLabel = (context: number) => `Во время звонка с озвучкой (контекст ${Math.round(context / 1024)}K)`;
+
+const MEMORY_PARTS =[["weights", "Веса"], ["kv", "Контекст"], ["other", "Прочее"], ["voice", "Голос"]] as const;
+
+export function MemoryBar({ parts: sizes, gpu, label, speed }: { parts: { weights?: number; kv?: number; other?: number; voice?: number }; gpu: number; label: string; speed?: MemoryEstimate }) {
+  const parts = MEMORY_PARTS.map(([key, name], index) => ({ label: name, color: `seg${index}`, bytes: sizes[key] ?? 0 })).filter((part) => part.bytes > 0);
   const total = parts.reduce((sum, part) => sum + part.bytes, 0);
   const scale = Math.max(gpu, total) || 1;
   const tooBig = gpu > 0 && total > gpu * 0.95;
   return (
     <div className={`mem-bar ${tooBig ? "warn" : ""}`}>
       <div className="mem-bar-head"><span>{label}</span><strong>≈ {gigabytes(total)}{gpu ? ` из ${gigabytes(gpu)}` : ""}{speed?.speed ? <span className={`speed-badge ${speed.measured ? "measured" : ""}`} title={speedHint(speed)}>{speedText(speed)}</span> : null}</strong></div>
-      <div className="mem-bar-track">{parts.map((part, index) => <i key={part.label} className={`seg${index % 4}`} style={{ width: `${(100 * part.bytes) / scale}%` }} title={`${part.label}: ${gigabytes(part.bytes)}`} />)}</div>
-      <div className="mem-bar-legend">{parts.map((part, index) => <span key={part.label}><b className={`seg${index % 4}`} />{part.label} {gigabytes(part.bytes)}</span>)}</div>
+      <div className="mem-bar-track">{parts.map((part) => <i key={part.label} className={part.color} style={{ width: `${(100 * part.bytes) / scale}%` }} title={`${part.label}: ${gigabytes(part.bytes)}`} />)}</div>
+      <div className="mem-bar-legend">{parts.map((part) => <span key={part.label}><b className={part.color} />{part.label} {gigabytes(part.bytes)}</span>)}</div>
     </div>
   );
 }

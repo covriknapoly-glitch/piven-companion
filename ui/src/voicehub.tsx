@@ -32,10 +32,9 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
       void api.voice_search(kind, text, token).then((reply) => {
         if (!live) return;
         setHits(reply.models);
-        const runnable = reply.models.filter((item) => item.engine).length;
         setNote(!reply.ok ? reply.error ?? "Поиск не удался."
-          : reply.models.length ? `${text ? "Нашлось" : "Популярные"}: ${reply.models.length}, из них запустятся ${runnable}. Выбери модель.`
-          : "Ничего не нашлось, попробуй другое название.");
+          : reply.models.length ? `${text ? "Нашлось" : "Популярные"}: ${reply.models.length}. Выбери модель.`
+          : "Подходящих моделей не нашлось, попробуй другое название.");
       });
     }, text ? 450 : 0);
     return () => { live = false; window.clearTimeout(timer); };
@@ -43,7 +42,7 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
 
   useEffect(() => {
     setDetails(null); setFile(null);
-    if (!hit?.engine) return;
+    if (!hit) return;
     let live = true;
     void api.voice_details(kind, hit.id, hit.engine, token).then((reply) => { if (live) { setDetails(reply); setFile(reply.files?.[0] ?? null); } });
     return () => { live = false; };
@@ -63,7 +62,7 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
   const repo = hit?.id ?? "";
   const engine = details?.engine ?? hit?.engine ?? "";
   const bytes = file?.size ?? details?.bytes ?? 0;
-  const canInstall = Boolean(hit?.engine && details?.ok && details.supported && (!details.files || file));
+  const canInstall = Boolean(hit && details?.ok && details.supported && (!details.files || file));
   const memory = engine === "piper" ? 0 : bytes + (RUNTIME_EXTRA[engine] ?? 0);
   const installed = new Set((status?.[kind].models ?? []).map((model) => model.source.replace("huggingface.co/", "")));
   const start = () => {
@@ -99,13 +98,13 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
       {hits && hits.length > 0 && (
         <div className="hub-list">
           {hits.map((item) => (
-            <button key={item.id} type="button" className={`${item.id === repo ? "selected" : ""} ${item.engine ? "" : "unsupported"}`} disabled={running}
-              title={item.engine ? `Запустится через ${item.engineLabel}` : `Не запустится: ${item.reason}`} onClick={() => setHit(item)}>
+            <button key={item.id} type="button" className={item.id === repo ? "selected" : ""} disabled={running}
+              title={`Запустится через ${item.engineLabel}`} onClick={() => setHit(item)}>
               <span className="hub-name"><ModelLogo api={api} name={item.title ?? item.id} author={item.engine === "audiocpp" ? "audio-cpp" : item.id.split("/")[0]} size={20} />
                 <span className="hub-title">{item.title ?? item.id}</span>
                 {installed.has(item.id) && <small className="hub-tag">скачана</small>}
                 {item.nonCommercial && <small className="hub-tag off" title={item.license}>некоммерческая</small>}{item.gated && <Icon name="pin" size={13} />}</span>
-              <span className="hub-stats">{item.engine ? <small className="hub-tag engine">{item.engineLabel}</small> : <small className="hub-tag off">не запустится</small>}
+              <span className="hub-stats"><small className="hub-tag engine">{item.engineLabel}</small>
                 {item.engine !== "audiocpp" && <><Icon name="download" size={13} />{formatCount(item.downloads)}</>}</span>
             </button>
           ))}
@@ -115,8 +114,7 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
       {hit && hit.note && <p className="model-desc">{hit.note}</p>}
       {hit && (
         <div className="hub-form">
-          {!hit.engine ? <p className="pane-note">Эту модель программа не запустит: {hit.reason}.</p>
-            : !details ? <p className="pane-note">{engine === "nemo" ? "Проверка, подойдёт ли этот GGUF для NeMo-Speech…" : "Определение модели…"}</p>
+          {!details ? <p className="pane-note">{engine === "nemo" ? "Проверка, подойдёт ли этот GGUF для NeMo-Speech…" : "Определение модели…"}</p>
             : !details.ok ? <p className="pane-note">{details.error}</p>
             : !details.supported ? <p className="pane-note">{details.reason}</p>
             : <>
@@ -130,12 +128,13 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
               {engine === "piper"
                 ? <p className="pane-note">Работает на процессоре, видеопамять не нужна. Скачается {sizeText(bytes)}.</p>
                 : status && <MemoryBar gpu={status.gpu} label={`При запуске через ${ENGINE_NAMES[engine] ?? engine}`}
-                    parts={[{ label: "Веса", bytes }, { label: "Движок", bytes: memory - bytes }].filter((part) => part.bytes > 0)} />}
+                    parts={{ weights: bytes, other: memory - bytes }} />}
               {details.note && <p className="pane-note">{details.note}</p>}
               {engine !== "qwen" && details.voices && details.voices.length > 0 && <p className="pane-note">Голоса: {details.voices.slice(0, 12).join(", ")}{details.voices.length > 12 ? ` и ещё ${details.voices.length - 12}` : ""}.</p>}
               {engine === "qwen" && <p className="pane-note">{details.mode === "custom" ? `Готовые голоса: ${details.voices?.join(", ") || "—"}.` : "Голос по описанию."}</p>}
               <p className="pane-note">Лицензия: {details.license || hit.license || "не удалось узнать, см. страницу модели"}.</p>
               <p className="pane-note">Движок: {ENGINE_NAMES[engine] ?? engine}. Скачается {sizeText(bytes)}{engine === "piper" ? "." : `, в памяти ≈ ${gigabytes(memory)}.`}</p>
+              {details.engineNote && <p className="pane-note">{details.engineNote}</p>}
             </>}
         </div>
       )}

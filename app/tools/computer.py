@@ -19,7 +19,6 @@ _MOUSEEVENTF_LEFTUP = 0x0004
 _MOUSEEVENTF_RIGHTDOWN = 0x0008
 _MOUSEEVENTF_RIGHTUP = 0x0010
 _MOUSEEVENTF_WHEEL = 0x0800
-_PROJECT_IGNORED_DIRS = {".git", ".hg", ".svn", ".venv", "venv", "node_modules", "__pycache__", "dist", "build", ".next", ".tox", "архив"}
 
 
 def _is_sensitive_project_file(path: Path) -> bool:
@@ -166,7 +165,9 @@ def _file_action(name: str, action: dict, created=None) -> str:
             raise ValueError("Файл не найден.")
         if _is_sensitive_project_file(path):
             raise ValueError("Чтение файлов с ключами и секретами заблокировано.")
-        if path.suffix.lower() not in (".txt", ".md", ".json", ".csv", ".tsv", ".log", ".ini", ".yaml", ".yml", ".xml", ".html", ".htm"):
+        if path.suffix.lower() not in (".txt", ".md", ".json", ".csv", ".tsv", ".log", ".ini", ".yaml", ".yml", ".xml", ".html", ".htm",
+                                       ".py", ".pyw", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".css", ".c", ".h", ".cpp", ".hpp", ".cs", ".java", ".go", ".rs", ".lua", ".gd", ".rb", ".php",
+                                       ".sh", ".bat", ".cmd", ".ps1", ".sql", ".toml", ".cfg"):
             raise ValueError("Навык читает только распространённые текстовые файлы.")
         if path.stat().st_size > 100_000:
             raise ValueError("Для чтения доступны текстовые файлы размером до 100 КБ.")
@@ -257,166 +258,6 @@ def _download_file(action: dict) -> str:
     return f"Файл «{destination.name}» ({destination.stat().st_size:,} байт) скачан в «{destination.parent}»."
 
 
-def execute_project_action(project_root: str | os.PathLike, action: dict) -> str:
-    if not isinstance(action, dict):
-        raise ValueError("Действие проекта должно быть объектом.")
-    root = Path(project_root).expanduser().resolve(strict=True)
-    if not root.is_dir():
-        raise ValueError("Выбранная папка проекта недоступна.")
-
-    def resolve_project_path(raw: str) -> Path:
-        raw = str(raw or ".").strip()
-        candidate = Path(os.path.expandvars(raw)).expanduser()
-        return candidate.resolve() if candidate.is_absolute() else (root / candidate).resolve()
-
-    def display_path(path: Path) -> str:
-        try:
-            return path.relative_to(root).as_posix()
-        except ValueError:
-            return str(path)
-
-    name = str(action.get("project_action", "")).strip().lower()
-    if name == "roots":
-        if os.name == "nt":
-            mask = ctypes.windll.kernel32.GetLogicalDrives()
-            drives = [f"{chr(65 + index)}:/" for index in range(26) if mask & (1 << index)]
-        else:
-            drives = ["/"]
-        return "Доступные диски компьютера:\n" + ("\n".join(drives) or "Не удалось определить диски.")
-    if name == "list":
-        folder = resolve_project_path(action.get("path", "."))
-        if not folder.is_dir():
-            raise ValueError("Папка проекта не найдена.")
-        results = []
-        base_depth = len(folder.parts)
-        for current, dirs, files in os.walk(folder):
-            current_path = Path(current)
-            depth = len(current_path.parts) - base_depth
-            dirs[:] = sorted(d for d in dirs if d.lower() not in _PROJECT_IGNORED_DIRS) if depth < 2 else []
-            for entry in sorted(dirs) + sorted(files):
-                full_path = current_path / entry
-                label = "[папка] " if full_path.is_dir() else ""
-                results.append(label + display_path(full_path))
-                if len(results) >= 240:
-                    break
-            if len(results) >= 240:
-                break
-        return "Файлы проекта:\n" + ("\n".join(results) if results else "Папка пуста.")
-
-    if name == "read":
-        path = resolve_project_path(action.get("path", ""))
-        if not path.is_file():
-            raise ValueError("Файл проекта не найден.")
-        if _is_sensitive_project_file(path):
-            raise ValueError("Файл похож на хранилище секретов; чтение через агента заблокировано.")
-        if path.stat().st_size > 2_000_000:
-            raise ValueError("Для чтения через агента доступны файлы размером до 2 МБ.")
-        data = path.read_bytes()
-        if b"\0" in data[:8192]:
-            raise ValueError("Похоже, это бинарный файл; читать его как код нельзя.")
-        lines = data.decode("utf-8-sig", errors="replace").splitlines()
-        start_line = max(1, min(len(lines) or 1, int(action.get("start_line", 1))))
-        line_count = max(1, min(500, int(action.get("max_lines", 300))))
-        selected = lines[start_line - 1:start_line - 1 + line_count]
-        end_line = start_line + len(selected) - 1
-        return (f"Файл {display_path(path)} · строки {start_line}-{end_line} из {len(lines)}:\n"
-                + "\n".join(selected)[:32_000])
-
-    if name == "write":
-        path = resolve_project_path(action.get("path", ""))
-        if _is_sensitive_project_file(path):
-            raise ValueError("Изменение файла с секретами через агента заблокировано.")
-        content = str(action.get("content", ""))
-        if len(content.encode("utf-8")) > 240_000:
-            raise ValueError("Изменяемый файл ограничен размером 240 КБ.")
-        if not path.parent.is_dir():
-            raise ValueError("Родительская папка должна уже существовать.")
-        if path.exists() and not path.is_file():
-            raise ValueError("Можно изменять только обычные файлы.")
-        temporary = path.with_name(path.name + ".companion-tmp")
-        try:
-            with temporary.open("x", encoding="utf-8", newline="") as file:
-                file.write(content)
-            temporary.replace(path)
-        finally:
-            if temporary.exists():
-                temporary.unlink()
-        return f"Сохранено: {display_path(path)} ({len(content)} символов)."
-
-    if name == "search":
-        query = str(action.get("query", ""))
-        if not query or len(query) > 200:
-            raise ValueError("Поисковая фраза должна содержать от 1 до 200 символов.")
-        search_root = resolve_project_path(action.get("path", "."))
-        if not search_root.is_dir():
-            raise ValueError("Папка для поиска не найдена.")
-        results = []
-        for current, dirs, files in os.walk(search_root):
-            dirs[:] = [directory for directory in dirs if directory.lower() not in _PROJECT_IGNORED_DIRS]
-            for filename in files:
-                file_path = Path(current) / filename
-                try:
-                    if _is_sensitive_project_file(file_path):
-                        continue
-                    if file_path.stat().st_size > 500_000:
-                        continue
-                    content = file_path.read_text(encoding="utf-8-sig")
-                except (OSError, UnicodeError):
-                    continue
-                for line_no, line in enumerate(content.splitlines(), 1):
-                    if query.casefold() in line.casefold():
-                        results.append(f"{display_path(file_path)}:{line_no}: {line[:240]}")
-                        if len(results) >= 80:
-                            break
-                if len(results) >= 80:
-                    break
-            if len(results) >= 80:
-                break
-        return "Совпадения:\n" + ("\n".join(results) if results else "Совпадений нет.")
-
-    if name == "run":
-        argv = action.get("argv")
-        if not isinstance(argv, list) or not argv or len(argv) > 24 or any(not isinstance(part, str) for part in argv):
-            raise ValueError("Команда должна быть списком аргументов, без shell-строки.")
-        executable = Path(argv[0]).name.lower()
-        allowed = {
-            "python", "python.exe", "py", "py.exe", "pytest", "pytest.exe",
-            "node", "node.exe", "git", "git.exe", "ruff", "ruff.exe",
-            "go", "go.exe", "cargo", "cargo.exe", "dotnet", "dotnet.exe", "cmake", "cmake.exe",
-        }
-        if executable not in allowed:
-            raise ValueError("Разрешены только Python, pytest, Node, Git, Ruff, Go, Cargo, .NET и CMake.")
-        command_text = " ".join(argv[1:]).lower()
-        if executable.startswith(("git",)) and not any(command_text.startswith(prefix) for prefix in ("status", "diff", "log", "show", "branch --list", "branch -l", "branch --show-current")):
-            raise ValueError("Для Git разрешены только status, diff, log, show и branch.")
-        if executable.startswith(("python", "py")) and not any(
-                command_text.startswith(prefix) for prefix in (
-                    "-m pytest", "-m unittest", "-m compileall", "-m ruff", "-m mypy", "-m py_compile")):
-            raise ValueError("Python-команда ограничена тестами, проверкой синтаксиса и анализаторами.")
-        if executable.startswith(("go",)) and not any(command_text.startswith(prefix) for prefix in ("test", "vet", "build")):
-            raise ValueError("Для Go разрешены только test, vet и build.")
-        if executable.startswith(("cargo",)) and not any(command_text.startswith(prefix) for prefix in ("test", "check", "build")):
-            raise ValueError("Для Cargo разрешены только test, check и build.")
-        if executable.startswith(("dotnet",)) and not any(command_text.startswith(prefix) for prefix in ("test", "build")):
-            raise ValueError("Для .NET разрешены только test и build.")
-        if executable.startswith(("cmake",)) and not command_text.startswith("--build"):
-            raise ValueError("Для CMake разрешена только команда --build.")
-        cwd = resolve_project_path(action.get("cwd", "."))
-        if not cwd.is_dir():
-            raise ValueError("Рабочая папка команды не найдена.")
-        try:
-            completed = subprocess.run(argv, cwd=str(cwd), shell=False, capture_output=True,
-                                       text=True, encoding="utf-8", errors="replace", timeout=120,
-                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        except subprocess.TimeoutExpired as error:
-            output = (error.stdout or "") + "\nКоманда остановлена: превышен лимит 120 секунд."
-            return output[-12_000:]
-        output = (completed.stdout or "") + (completed.stderr or "")
-        return f"Код завершения: {completed.returncode}\n" + (output[-12_000:] or "Команда выполнена без вывода.")
-
-    raise ValueError("Неизвестное действие проекта.")
-
-
 COMPUTER_ACTIONS = ("list_files", "read_file", "create_file", "write_file", "create_folder", "rename_file", "move_file", "copy_file",
                     "open_path", "search_files", "download_file", "web_search", "open_url", "open_app", "activate_window",
                     "get_active_window", "minimize_window", "maximize_window", "restore_window", "wait", "click",
@@ -462,10 +303,10 @@ def execute_computer_action(action: dict, screenshot_size=None, display_size=Non
         if not app_name or len(app_name) > 100:
             raise ValueError("Укажи короткое название приложения.")
         normalized_app = " ".join(app_name.casefold().replace("ё", "е").split())
-        if normalized_app in {"проводник", "файловый проводник", "file explorer", "explorer", "explorer.exe"}:
+        if normalized_app in {"проводник", "файловый проводник", "file explorer", "explorer", "explorer.exe", "explorador", "explorador de archivos", "资源管理器", "文件资源管理器"}:
             os.startfile("explorer.exe")
             return "Проводник открыт."
-        if normalized_app in {"терминал", "windows terminal", "командная строка", "cmd", "cmd.exe"}:
+        if normalized_app in {"терминал", "terminal", "windows terminal", "командная строка", "cmd", "cmd.exe", "símbolo del sistema", "终端", "命令提示符"}:
             try:
                 subprocess.Popen(["wt.exe"], shell=False)
             except OSError:

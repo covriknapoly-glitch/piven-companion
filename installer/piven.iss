@@ -14,6 +14,7 @@ OutputBaseFilename=PIVEN-Companion-{#AppVersion}-Setup
 SetupIconFile=assets\piven.ico
 UninstallDisplayIcon={app}\assets\piven.ico
 LicenseFile=LICENSE
+InfoBeforeFile=TERMS.txt
 PrivilegesRequired=lowest
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
@@ -30,12 +31,10 @@ WizardStyle=modern
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "en"; MessagesFile: "compiler:Default.isl"
-Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [CustomMessages]
 ru.NoWebView2=Для работы нужен Microsoft Edge WebView2 Runtime, а он не найден. Скачать его с сайта Microsoft после установки?
 en.NoWebView2=The program needs Microsoft Edge WebView2 Runtime, which was not found. Open the Microsoft download page after setup?
-zh.NoWebView2=程序需要 Microsoft Edge WebView2 Runtime，但未找到。安装完成后打开 Microsoft 下载页面吗？
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -46,11 +45,19 @@ Source: "assets\*"; DestDir: "{app}\assets"; Excludes: "piven_logo_2026.png,pive
 Source: "docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs
 Source: "skills\*"; DestDir: "{app}\skills"; Flags: ignoreversion recursesubdirs
 Source: "ui\dist\*"; DestDir: "{app}\ui\dist"; Flags: ignoreversion recursesubdirs
+Source: "ui\src\*"; DestDir: "{app}\ui\src"; Flags: ignoreversion recursesubdirs
+Source: "ui\scripts\*"; DestDir: "{app}\ui\scripts"; Flags: ignoreversion recursesubdirs
+Source: "ui\index.html"; DestDir: "{app}\ui"; Flags: ignoreversion
+Source: "ui\package.json"; DestDir: "{app}\ui"; Flags: ignoreversion
+Source: "ui\tsconfig.json"; DestDir: "{app}\ui"; Flags: ignoreversion
+Source: "ui\README.md"; DestDir: "{app}\ui"; Flags: ignoreversion
+Source: "installer\piven.iss"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "voice-engines\README.md"; DestDir: "{app}\voice-engines"; Flags: ignoreversion
 Source: "voice-engines\model_server.py"; DestDir: "{app}\voice-engines"; Flags: ignoreversion
 Source: "voice-engines\qwen-tts\server.py"; DestDir: "{app}\voice-engines\qwen-tts"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "NOTICE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "TERMS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Запустить PIVEN.cmd"; DestDir: "{app}"; Flags: ignoreversion

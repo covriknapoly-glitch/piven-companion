@@ -9,9 +9,10 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from app import paths
 from app.voice import engines
 
-DATA_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "OllamaCompanion"
+DATA_DIR = paths.DATA_DIR
 SPECS_CACHE = DATA_DIR / f"audiocpp_specs_{engines.AUDIOCPP_VERSION}.json"
 MODELS_DIR = engines.AUDIOCPP_DIR / "models"
 DEFAULT_REPO = "audio-cpp/audio.cpp-gguf"

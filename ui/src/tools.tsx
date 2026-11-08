@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { McpServer, SkillRow, ToolsStatus, WebApi } from "./bridge";
 import { ConfirmDialog } from "./dialogs";
-import { Button, Field, Modal, Switch, Toggle } from "./ui";
+import { AdvancedHead, Button, Field, Modal, Switch, Toggle } from "./ui";
 
-export function ToolsPane({ api }: { api: WebApi }) {
+export function ToolsPane({ api, children }: { api: WebApi; children?: ReactNode }) {
   const [status, setStatus] = useState<ToolsStatus | null>(null);
   const [editing, setEditing] = useState<McpServer | "new" | null>(null);
   const [skill, setSkill] = useState<SkillRow | "new" | null>(null);
@@ -16,21 +16,7 @@ export function ToolsPane({ api }: { api: WebApi }) {
     <Field label="Инструменты в ответах" hint="Модель сама решает, когда открыть сайт во встроенном браузере, найти что-то в интернете, взять навык или вызвать инструмент MCP-сервера. Каждый вызов виден в чате.">
       <Toggle label="Разрешить модели пользоваться инструментами" checked={status.enabled} onChange={(value) => { void api.set_tools_enabled(value).then(load); }} />
     </Field>
-
-    <h5 className="pane-subhead">MCP-серверы</h5>
-    <p className="pane-note">Model Context Protocol подключает инструменты других программ: файлы, базы данных, GitHub, Notion и многое другое. Сервер запускается командой (например <span className="mono">npx -y @modelcontextprotocol/server-filesystem C:\Users\Я\Documents</span>) или доступен по адресу.</p>
-    {status.servers.map((server) => (
-      <section key={server.name} className={`provider-card ${server.enabled ? (server.error ? "warn" : "ok") : ""}`}>
-        <div className="provider-head">
-          <strong>{server.name}</strong>
-          <span className="provider-state">{!server.enabled ? "выключен" : server.error ? server.error : server.tools === null ? "запустится при первом ответе" : `инструментов: ${server.tools}`}</span>
-          <Button kind="ghost" onClick={() => setEditing(server)}>Изменить</Button>
-          <Button kind="ghost" onClick={() => setRemoving({ kind: "server", name: server.name })}>Удалить</Button>
-        </div>
-        <small className="mono provider-line">{server.url || server.command}</small>
-      </section>
-    ))}
-    <Button icon="plus" onClick={() => setEditing("new")}>Добавить MCP-сервер</Button>
+    {children}
 
     <h5 className="pane-subhead">Навыки</h5>
     <p className="pane-note">Навык — инструкция для модели на определённый случай: как писать отчёт, как отвечать клиентам, как оформлять код. Модель видит их список и берёт нужный сама. Можно попросить модель «сохрани это как навык».</p>
@@ -46,6 +32,22 @@ export function ToolsPane({ api }: { api: WebApi }) {
       </section>
     ))}
     <Button icon="plus" onClick={() => setSkill("new")}>Создать навык</Button>
+
+    <AdvancedHead />
+    <h5 className="pane-subhead">MCP-серверы</h5>
+    <p className="pane-note">Model Context Protocol подключает инструменты других программ: файлы, базы данных, GitHub, Notion и многое другое. Сервер запускается командой (например <span className="mono">npx -y @modelcontextprotocol/server-filesystem C:\Users\Я\Documents</span>) или доступен по адресу.</p>
+    {status.servers.map((server) => (
+      <section key={server.name} className={`provider-card ${server.enabled ? (server.error ? "warn" : "ok") : ""}`}>
+        <div className="provider-head">
+          <strong>{server.name}</strong>
+          <span className="provider-state">{!server.enabled ? "выключен" : server.error ? server.error : server.tools === null ? "запустится при первом ответе" : `инструментов: ${server.tools}`}</span>
+          <Button kind="ghost" onClick={() => setEditing(server)}>Изменить</Button>
+          <Button kind="ghost" onClick={() => setRemoving({ kind: "server", name: server.name })}>Удалить</Button>
+        </div>
+        <small className="mono provider-line">{server.url || server.command}</small>
+      </section>
+    ))}
+    <Button icon="plus" onClick={() => setEditing("new")}>Добавить MCP-сервер</Button>
 
     {editing && <ServerDialog api={api} server={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={load} />}
     {skill && <SkillDialog api={api} skill={skill === "new" ? null : skill} onClose={() => setSkill(null)} onSaved={load} />}

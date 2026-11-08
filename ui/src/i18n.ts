@@ -1,12 +1,11 @@
 import strings from "./i18n/strings.json";
 
-export type Language = "ru" | "en" | "zh" | "es";
-export const LANGUAGES: [Language, string][] = [["ru", "Русский"], ["en", "English"], ["zh", "中文（简体）"], ["es", "Español"]];
-const COLUMN: Record<Exclude<Language, "ru">, number> = { en: 0, zh: 1, es: 2 };
+export type Language = "ru" | "en";
+export const LANGUAGES: [Language, string][] = [["ru", "Русский"], ["en", "English"]];
 const ATTRIBUTES = ["placeholder", "title", "aria-label"];
 const CYRILLIC = /[А-Яа-яЁё]/;
 
-const dictionary = strings as unknown as Record<string, [string, string, string]>;
+const dictionary = strings as unknown as Record<string, string>;
 
 const patterns = Object.keys(dictionary).filter((key) => /\{\d\}/.test(key)).sort((a, b) => b.length - a.length).map((key) => ({
   key,
@@ -21,20 +20,19 @@ let observer: MutationObserver | null = null;
 export function translate(text: string): string | null {
   if (current === "ru" || !CYRILLIC.test(text)) return null;
   const clean = text.replace(/\s+/g, " ").trim();
-  const column = COLUMN[current];
   const exact = dictionary[clean];
-  if (exact) return text.replace(clean.length === text.length ? text : text.trim(), exact[column]);
+  if (exact) return text.replace(clean.length === text.length ? text : text.trim(), exact);
   for (const { key, test } of patterns) {
     const match = test.exec(clean);
     if (!match) continue;
-    let result = dictionary[key][column];
+    let result = dictionary[key];
     Object.entries(match.groups ?? {}).forEach(([name, value]) => {
       const word = value.trim();
 
       const inner = word === clean ? null : translate(word);
 
-      const capital: string[] | undefined = inner ? undefined : dictionary[word.charAt(0).toUpperCase() + word.slice(1)];
-      const translated = inner ?? (capital ? capital[column].charAt(0).toLowerCase() + capital[column].slice(1) : value);
+      const capital: string | undefined = inner ? undefined : dictionary[word.charAt(0).toUpperCase() + word.slice(1)];
+      const translated = inner ?? (capital ? capital.charAt(0).toLowerCase() + capital.slice(1) : value);
       result = result.replace(`{${name.slice(1)}}`, translated);
     });
     return text.replace(text.trim(), result);
@@ -87,7 +85,7 @@ function applyTree(root: Node) {
 
 export function setLanguage(language: Language) {
   current = language;
-  document.documentElement.lang = language === "zh" ? "zh-CN" : language;
+  document.documentElement.lang = language;
   applyTree(document.body);
   observer?.takeRecords();
   if (observer) return;

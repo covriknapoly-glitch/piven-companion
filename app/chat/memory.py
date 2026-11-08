@@ -58,7 +58,7 @@ class Memory:
     def add_exchange(self, chat_id, question, answer):
         if len(str(question).strip()) < 4 or not str(answer).strip():
             return None
-        return self.add("exchange", f"Пользователь: {str(question)[:1500]}\nКомпаньон: {str(answer)[:2000]}", chat_id)
+        return self.add("exchange", f"Пользователь: {str(question)[:1500]}\nАссистент: {str(answer)[:2000]}", chat_id)
 
     def facts(self):
         with self._lock:

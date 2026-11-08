@@ -1,4 +1,4 @@
-export type ChatRole = "user" | "assistant" | "system" | "computer" | "poll" | "error";
+export type ChatRole = "user" | "assistant" | "system" | "computer" | "poll" | "error" | "code";
 
 export interface DialogueItem {
   role: ChatRole;
@@ -17,11 +17,14 @@ export interface ChatSummary {
   unread?: boolean;
   model?: string;
   updated?: number;
+  code?: boolean;
+  root?: string;
 }
 
 export interface EngineSettings {
   model: string;
   speechEnabled: boolean;
+  heavyMode: boolean;
   projectRoot: string;
   comfyUrl: string;
   voice: string;
@@ -34,6 +37,10 @@ export interface EngineSettings {
 export interface ListenOptions { mic: boolean; loopback: boolean; screen: boolean; proactive: boolean }
 
 export interface DownloadConfirm { id: string; kind: "download"; url: string; destination: string }
+export interface CommandConfirm { id: string; kind: "command"; command: string; reason: string; canTrust: boolean; folder: string; edit?: boolean }
+export type CodeMode = "ask" | "edits" | "plan" | "free";
+export interface CodeState { on: boolean; root: string; trusted: boolean; mode: CodeMode }
+export interface CodeFile { path: string; size: number }
 
 export interface EngineState {
   version: number;
@@ -42,10 +49,13 @@ export interface EngineState {
   items: DialogueItem[];
   chatTitle: string;
   busy: boolean;
+  queue: { text: string; images: number }[];
   busySince: number;
   listening: { running: boolean; options: ListenOptions };
   call: { speaking: boolean; hearing: boolean; muted: boolean };
-  confirm: DownloadConfirm | null;
+  dictation: { session: number; phase: "" | "starting" | "listening" | "recognizing"; text: string };
+  code: CodeState;
+  confirm: DownloadConfirm | CommandConfirm | null;
   downloads: DownloadRow[];
   browserRequest: { url: string; nonce: number } | null;
   activity: string;
@@ -61,9 +71,9 @@ export type ParamValue = number | string | boolean;
 export interface ModelParams {
   model: string; defaults: Record<string, ParamValue>; limits: Record<string, [number, number]>; choices: Record<string, string[]>;
   presets: Record<string, Record<string, ParamValue>>; serverKeys: string[]; all: Record<string, ParamValue>; own: Record<string, ParamValue>;
-  effective: Record<string, ParamValue>; autoTitles: boolean;
+  effective: Record<string, ParamValue>; autoTitles: boolean; cloud: boolean;
 }
-export interface ProviderRow { id: string; title: string; local: boolean; needsKey: boolean; enabled: boolean; url: string; defaultUrl: string; hasKey: boolean; models: number; error: string; installed: boolean; site: string }
+export interface ProviderRow { errorKind: "" | "key" | "lost"; keyEnd: string; keyBroken: boolean; keyPage: string; id: string; title: string; local: boolean; needsKey: boolean; enabled: boolean; url: string; defaultUrl: string; hasKey: boolean; models: number; error: string; installed: boolean; site: string }
 export interface McpServer { name: string; command: string; url: string; env: Record<string, string>; enabled: boolean; error?: string; tools?: number | null }
 export interface SkillRow { name: string; folder: string; description: string; builtin: boolean; body: string }
 export interface ToolsStatus { enabled: boolean; servers: McpServer[]; skills: SkillRow[] }
@@ -100,6 +110,7 @@ export interface SettingsDetails {
   bargeIn: boolean;
   closeToTray: boolean;
   maxLoadedModels: number;
+  heavyMode: boolean;
   notifications: boolean;
   microphones: string[];
   micError: string;
@@ -107,7 +118,6 @@ export interface SettingsDetails {
   comfyWorkflow: string;
   comfyVideoWorkflow: string;
   projectRoot: string;
-  twitchChannel: string;
   integrations: Record<string, boolean>;
   dataDir: string;
 }
@@ -116,20 +126,19 @@ export type ThinkingValue = string | boolean;
 export interface ThinkingOptions { values: ThinkingValue[]; default: ThinkingValue | null; current: ThinkingValue; error: string }
 export interface SettingsResult { ok: boolean; errors: Record<string, string>; saved: string[] }
 export interface SearchHit { chatId: string; chatTitle: string; index: number; role: ChatRole; excerpt: string }
-export interface TwitchStatus { status: string; channel: string; enabled: boolean; maxChars: number }
 export interface HfModel { id: string; downloads?: number; likes?: number; gated: boolean; arch?: string }
 export interface HfFile { path: string; size?: number }
 export interface BrowserState { url: string; title: string; loading: boolean; canBack: boolean; canForward: boolean; notice: string }
 export type VoiceKind = "asr" | "tts";
-export interface DiskUsage { ok: boolean; error?: string; models: { name: string; bytes: number }[]; voiceModels: number; engines: { label: string; bytes: number }[] }
+export interface DiskUsage { ok: boolean; error?: string; models: { name: string; bytes: number }[]; voiceModels: number; engines: { id: string; label: string; bytes: number; removable: boolean }[] }
 export interface VoiceModel { id: string; title: string; note: string; license: string; source: string; size: string; memory: number; installed: boolean; custom: boolean; engine: string; bytes: number }
-export interface VoiceSearchHit { id: string; title?: string; note?: string; downloads: number; gated: boolean; engine: string; engineLabel: string; reason: string; license?: string; nonCommercial?: boolean }
-export interface VoiceDetails { ok: boolean; error?: string; supported?: boolean; reason?: string; engine?: string; mode?: "custom" | "design"; voices?: string[]; files?: (HfFile & { label?: string })[]; bytes?: number; note?: string; license?: string }
+export interface VoiceSearchHit { id: string; title?: string; note?: string; downloads: number; gated: boolean; engine: string; engineLabel: string; license?: string; nonCommercial?: boolean }
+export interface VoiceDetails { ok: boolean; error?: string; supported?: boolean; reason?: string; engine?: string; mode?: "custom" | "design"; voices?: string[]; files?: (HfFile & { label?: string })[]; bytes?: number; note?: string; license?: string; engineNote?: string }
 export interface MemoryEstimate { total: number; weights: number; kv: number; other: number; speed?: number; measured?: boolean }
 export interface ModelFeatures { vision: boolean; thinking: boolean; context: number }
-export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number; features?: Record<string, ModelFeatures> }
+export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number; voiceCall?: number; features?: Record<string, ModelFeatures> }
 export interface ContextUsage {
-  ok: boolean; error?: string; model: string; cloud: boolean; used: number; limit: number; turns: number; images: number; toolCount: number; serversWaiting: string[];
+  ok: boolean; error?: string; model: string; cloud: boolean; exact: boolean; used: number; limit: number; turns: number; images: number; toolCount: number; serversWaiting: string[];
   parts: { system: number; summary: number; skills: number; tools: number; history: number; images: number };
   historyShare: number; compress: boolean;
 }
@@ -149,6 +158,11 @@ interface WebApi {
   interrupt(): Promise<CommandResult>;
   select_chat(chatId: string): Promise<CommandResult>;
   new_chat(): Promise<CommandResult>;
+  code_mode(on: boolean): Promise<CommandResult>;
+  answer_code_offer(index: number, accept: boolean): Promise<CommandResult>;
+  answer_plan(index: number, accept: boolean): Promise<CommandResult>;
+  cancel_queued(index: number): Promise<CommandResult>;
+  chat_kind(chatId: string, code: boolean): Promise<CommandResult>;
   rename_chat(chatId: string, title: string): Promise<CommandResult>;
   pin_chat(chatId: string, pinned: boolean): Promise<CommandResult>;
   delete_chat(chatId: string): Promise<CommandResult>;
@@ -169,8 +183,18 @@ interface WebApi {
   save_upload(name: string, dataBase64: string): Promise<CommandResult>;
   start_listening(options: ListenOptions): Promise<CommandResult>;
   stop_listening(): Promise<CommandResult>;
+  start_dictation(): Promise<CommandResult & { needsModel?: boolean }>;
+  stop_dictation(): Promise<CommandResult>;
   answer_confirmation(id: string, approved: boolean): Promise<CommandResult>;
-  set_title_theme(dark: boolean): Promise<CommandResult>;
+  answer_command(id: string, answer: "once" | "project" | "no"): Promise<CommandResult>;
+  code_set(values: { on?: boolean; root?: string; mode?: CodeMode }): Promise<CommandResult>;
+  code_pick_folder(): Promise<CommandResult>;
+  code_open_folder(): Promise<CommandResult>;
+  code_files(): Promise<{ root: string; files: CodeFile[] }>;
+  code_read(path: string): Promise<{ ok: boolean; text?: string; full?: string; error?: string }>;
+  code_preview(path: string): Promise<{ ok: boolean; url?: string; error?: string }>;
+  code_undo(index: number): Promise<CommandResult>;
+  set_title_theme(caption: string, text: string, dark: boolean): Promise<CommandResult>;
   settings_details(): Promise<SettingsDetails>;
   update_settings(patch: Record<string, unknown>): Promise<SettingsResult>;
   set_mic_muted(muted: boolean): Promise<CommandResult>;
@@ -178,14 +202,11 @@ interface WebApi {
   set_thinking(model: string, value: ThinkingValue): Promise<CommandResult>;
   pick_path(kind: "folder" | "workflow" | "audio"): Promise<string>;
   open_data_folder(what?: "folder" | "log"): Promise<CommandResult>;
-  twitch_status(): Promise<TwitchStatus>;
-  open_twitch_help(): Promise<CommandResult>;
   open_url(url: string): Promise<CommandResult>;
   browser_place(x: number, y: number, width: number, height: number, visible: boolean): Promise<CommandResult>;
   browser_go(url: string): Promise<CommandResult>;
   browser_command(name: "back" | "forward" | "reload" | "stop"): Promise<CommandResult>;
   browser_state(): Promise<BrowserState>;
-  twitch_send(channel: string, message: string, token: string): Promise<CommandResult & { message?: string; status?: string }>;
   hf_search(query: string, token: string): Promise<{ ok: boolean; error?: string; models: HfModel[] }>;
   hf_files(repoId: string, token: string): Promise<{ ok: boolean; error?: string; files: HfFile[]; tag?: string }>;
   hf_suggest_tag(repoId: string, filePath: string): Promise<string>;
@@ -216,24 +237,25 @@ interface WebApi {
   memory_search_models(query: string): Promise<{ ok: boolean; error?: string; models: { id: string; downloads: number }[] }>;
   memory_model_files(repo: string): Promise<{ ok: boolean; error?: string; files: HfFile[] }>;
   memory_cancel(): Promise<CommandResult>;
-  twitch_poll(channel: string, question: string, choices: string[], seconds: number, token: string): Promise<{ ok: boolean; message?: string; error?: string }>;
-  answer_poll(question: string, choice: string): Promise<CommandResult>;
+  answer_poll(answers: [string, string][]): Promise<CommandResult>;
   presentation_slides(path: string): Promise<{ ok: boolean; slides: Slide[]; error?: string }>;
   set_tools_enabled(enabled: boolean): Promise<CommandResult>;
   save_mcp_server(entry: McpServer, oldName: string): Promise<{ ok: boolean; error?: string; tools?: number }>;
   delete_mcp_server(name: string): Promise<CommandResult>;
   save_skill(name: string, description: string, instructions: string): Promise<{ ok: boolean; error?: string; folder?: string }>;
   delete_skill(folder: string): Promise<CommandResult>;
-  set_provider(provider: string, enabled: boolean | null, url: string | null, key: string | null): Promise<{ ok: boolean; error: string; models: number }>;
+  set_provider(provider: string, enabled: boolean | null, url: string | null, key: string | null): Promise<{ ok: boolean; error: string; models?: number; keySaved?: boolean; rejected?: boolean }>;
+  reconnect_provider(provider: string): Promise<{ ok: boolean; error: string; models?: number }>;
   model_description(repoId: string, token: string): Promise<{ text: string; source: string }>;
   model_logos(names: string[], authors?: Record<string, string>, archs?: Record<string, string>): Promise<Record<string, string>>;
   model_memory(names?: string[]): Promise<ModelMemory>;
-  context_usage(): Promise<ContextUsage>;
-  hf_memory(repoId: string, filePath: string, size: number, token: string): Promise<{ gpu: number; context: number; estimate: MemoryEstimate | null; known: boolean }>;
+  context_usage(draft?: string): Promise<ContextUsage>;
+  hf_memory(repoId: string, filePath: string, size: number, token: string): Promise<{ gpu: number; context: number; estimate: MemoryEstimate | null; known: boolean; voiceCall?: number }>;
   voice_cancel(): Promise<CommandResult>;
   voice_delete(kind: VoiceKind, modelId: string): Promise<{ ok: boolean; error?: string; freed?: number }>;
   delete_model(name: string): Promise<{ ok: boolean; error?: string; freed?: number }>;
   disk_usage(): Promise<DiskUsage>;
+  voice_engine_delete(engine: string): Promise<CommandResult>;
 }
 
 declare global {

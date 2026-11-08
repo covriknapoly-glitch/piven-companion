@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -11,8 +12,9 @@ import time
 import urllib.parse
 import urllib.request
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 
-from app import processes
+from app import paths, processes
 from app.models import download
 from pathlib import Path
 
@@ -142,7 +144,7 @@ def custom_tts_models():
 
 ENGINE_LABELS = {key: info["label"] for key, info in voice_engines.ENGINES.items()}
 CLONING_ENGINES = {"chatterbox", "f5-tts", "coqui", "voxcpm", "omnivoice"}
-REGISTRY_PATH = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "OllamaCompanion" / "voice_models.json"
+REGISTRY_PATH = paths.DATA_DIR / "voice_models.json"
 PIPER_DIR = VOICE_DIR / "piper"
 SNAPSHOT_DIR = VOICE_DIR / "hf-models"
 RUNTIME_EXTRA = {("asr", "nemo"): 400 * 2**20, ("tts", "qwen"): 1200 * 2**20, ("tts", "piper"): 0}
@@ -245,6 +247,13 @@ def tts_catalogue():
 
 def known(kind, model_id):
     return model_id in (asr_catalogue() if kind == "asr" else tts_catalogue())
+
+
+def chosen_model(kind, saved=""):
+    catalogue, installed = (asr_catalogue(), _asr_installed) if kind == "asr" else (tts_catalogue(), _tts_installed)
+    if saved in catalogue and installed(saved):
+        return saved
+    return next((key for key in catalogue if installed(key)), "")
 
 
 def asr_model(model_id):
@@ -370,15 +379,44 @@ def disk_usage():
         models += sum(info.get("bytes") or 0 for key, info in catalogue.items() if installed(key))
     engines = []
     if voice_engines.SHARED_VENV.is_dir():
-        engines.append({"label": "Общие пакеты (PyTorch и др.)", "bytes": _folder_size(voice_engines.SHARED_VENV)})
-    if ASR_DIR.is_dir():
-        engines.append({"label": "NeMo-Speech", "bytes": _folder_size(ASR_DIR)})
+        engines.append({"id": "shared", "label": "Общие пакеты (PyTorch и др.)", "bytes": _folder_size(voice_engines.SHARED_VENV)})
+    archive = VOICE_DIR / NEMO_ZIP
+    nemo_size = (_folder_size(ASR_DIR) if ASR_DIR.is_dir() else 0) + (archive.stat().st_size if archive.is_file() else 0)
+    engines.append({"id": "nemo", "label": "NeMo-Speech", "bytes": nemo_size})
     for folder in sorted(voice_engines.ENGINES_DIR.iterdir()) if voice_engines.ENGINES_DIR.is_dir() else []:
         if folder.is_dir():
             size = _folder_size(folder) - (_folder_size(folder / "models") if folder.name == "audiocpp" else 0)
             label = voice_engines.ENGINES.get(folder.name, {}).get("label", folder.name)
-            engines.append({"label": label, "bytes": size})
-    return {"models": models, "engines": [item for item in engines if item["bytes"]]}
+            engines.append({"id": folder.name, "label": label, "bytes": size})
+    used = _engines_in_use()
+    return {"models": models, "engines": [{**item, "removable": _engine_unused(item["id"], used)} for item in engines if item["bytes"]]}
+
+
+def _engines_in_use():
+    return ({info["engine"] for key, info in asr_catalogue().items() if _asr_installed(key)}
+            | {info["engine"] for key, info in tts_catalogue().items() if _tts_installed(key)})
+
+
+def _engine_unused(engine, used):
+    if engine == "shared":
+        return not used - {"nemo", "audiocpp"}
+    return engine not in used
+
+
+def delete_engine(engine):
+    known_engine = engine == "shared" or engine in voice_engines.ENGINES
+    if not known_engine:
+        raise RuntimeError("Неизвестный движок.")
+    if not _engine_unused(engine, _engines_in_use()):
+        raise RuntimeError("Этот движок нужен скачанной модели.")
+    if engine == "shared":
+        targets = [voice_engines.SHARED_VENV]
+    elif engine == "nemo":
+        targets = [ASR_DIR, VOICE_DIR / NEMO_ZIP, VOICE_DIR / "nemo-speech-extract"]
+    else:
+        folder = voice_engines.ENGINES_DIR / engine
+        targets = [item for item in folder.iterdir() if item.name != "models"] if engine == "audiocpp" and folder.is_dir() else [folder]
+    return sum(_remove(target) for target in targets)
 
 
 def _gigabytes(size):
@@ -391,8 +429,8 @@ def status():
                 "source": f"huggingface.co/{info['repo']}", "size": _gigabytes(info["bytes"]), "engine": ENGINE_LABELS[info["engine"]],
                 "memory": 0 if info["engine"] == "piper" else info["bytes"] + RUNTIME_EXTRA.get((kind, info["engine"]), DEFAULT_EXTRA),
                 "installed": installed, "custom": key not in ASR_MODELS and key not in TTS_MODELS, "bytes": info["bytes"]}
-    asr = [row("asr", key, info, _asr_installed(key)) for key, info in asr_catalogue().items()]
-    tts = [row("tts", key, info, _tts_installed(key)) for key, info in tts_catalogue().items()]
+    asr = [row("asr", key, info, True) for key, info in asr_catalogue().items() if _asr_installed(key)]
+    tts = [row("tts", key, info, True) for key, info in tts_catalogue().items() if _tts_installed(key)]
     return {
         "asr": {"models": asr, "engine": ASR_EXE.is_file(),
                 "engineNote": f"Программа NeMo-Speech ({_gigabytes(NEMO_SIZE)}, GitHub NVIDIA) скачается вместе с первой моделью."},
@@ -419,28 +457,95 @@ def classify(kind, item):
     return engine or None, reason
 
 
+def _has_runnable_files(engine, item):
+    names = [sibling.get("rfilename", "") for sibling in item.get("siblings") or []]
+    if not names:
+        return True
+    if engine == "nemo":
+        return any(name.lower().endswith(".gguf") and "mmproj" not in name.lower() for name in names)
+    if engine == "piper":
+        return any(name.endswith(".onnx") for name in names)
+    if engine == "qwen":
+        return "model.safetensors" in names
+    return any(entry["path"].endswith(WEIGHT_SUFFIXES) for entry in _snapshot_files(engine, [{"path": name} for name in names]))
+
+
+SEARCH_SCAN = 1000
+SEARCH_SHOWN = 100
+POPULAR_MIN_LIKES = 100
+SEARCH_MIN_LIKES = 5
+POPULAR_AT_LEAST = 30
+NOT_SPEECH_MODELS = ("tiny-random", "forced-aligner", "forcedaligner")
+LANGUAGE_FAMILY = re.compile(r"(facebook/mms-tts)-")
+_checked_repos = {}
+
+
+def _worth_showing(item, query):
+    if "/" in query:
+        return True
+    if any(mark in item["id"].lower() for mark in NOT_SPEECH_MODELS) or "generated_from_trainer" in item.get("tags", []):
+        return False
+    return bool(not query or (item.get("likes") or 0) >= SEARCH_MIN_LIKES)
+
+
+def _copies(items):
+    likes = {item["id"]: item.get("likes") or 0 for item in items}
+    found = set()
+    seen_families = set()
+    for item in sorted(items, key=lambda entry: -(entry.get("likes") or 0)):
+        author = item["id"].split("/")[0]
+        bases = [tag.split(":")[-1] for tag in item.get("tags", []) if tag.startswith("base_model:") and "/" in tag]
+        if any(base in likes and base.split("/")[0] != author and likes[base] >= likes[item["id"]] for base in bases):
+            found.add(item["id"])
+        family = LANGUAGE_FAMILY.match(item["id"])
+        if family:
+            if family.group(1) in seen_families:
+                found.add(item["id"])
+            seen_families.add(family.group(1))
+    return found
+
+
+def _opens_in_engine(kind, hit, token):
+    key = (hit["id"], hit["engine"])
+    if key not in _checked_repos:
+        try:
+            _checked_repos[key] = bool(_details(kind, hit["id"], hit["engine"], token).get("supported"))
+        except Exception:
+            return True
+    return _checked_repos[key]
+
+
 def search(kind, query, token=""):
     text = urllib.parse.quote(str(query or "").strip())
     tag = "automatic-speech-recognition" if kind == "asr" else "text-to-speech"
-    items = _hf_json(f"/api/models?search={text}&pipeline_tag={tag}&limit=100&full=true&config=true&sort=downloads&direction=-1", token)
+    items = _hf_json(f"/api/models?search={text}&pipeline_tag={tag}&limit={SEARCH_SCAN}&full=true&config=true&sort=downloads&direction=-1", token)
+    wanted = str(query or "").strip()
+    copies = set() if wanted else _copies(items)
+    items = sorted((item for item in items if item["id"] not in copies and _worth_showing(item, wanted)), key=lambda item: -(item.get("likes") or 0))
     hits = []
     for item in items:
-        if "tiny-random" in item["id"]:
+        likes = item.get("likes") or 0
+        if len(hits) >= SEARCH_SHOWN or (not wanted and likes < POPULAR_MIN_LIKES and len(hits) >= POPULAR_AT_LEAST + 8):
+            break
+        engine, _ = classify(kind, item)
+        if not engine or not _has_runnable_files(engine, item):
             continue
-        engine, reason = classify(kind, item)
         code = license_code(item)
         if code:
             _licenses[item["id"]] = license_text(code)
-        hits.append({"id": item["id"], "downloads": item.get("downloads", 0), "gated": bool(item.get("gated")),
-                     "engine": engine or "", "engineLabel": ENGINE_LABELS.get(engine, ""), "reason": reason,
+        hits.append({"id": item["id"], "downloads": item.get("downloads", 0), "likes": likes, "gated": bool(item.get("gated")),
+                     "engine": engine, "engineLabel": ENGINE_LABELS.get(engine, ""),
                      "license": license_text(code) if code else "", "nonCommercial": non_commercial(code)})
-    hits.sort(key=lambda hit: not hit["engine"])
-    if str(query or "").strip():
-        try:
-            from app.voice import catalog
-            hits += catalog.search(kind, query)
-        except Exception:
-            pass
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        opens = list(pool.map(lambda hit: hit["engine"] not in ("nemo", "qwen") or _opens_in_engine(kind, hit, token), hits))
+    hits = [hit for hit, fits in zip(hits, opens) if fits]
+    if not wanted:
+        hits = [hit for rank, hit in enumerate(hits) if rank < POPULAR_AT_LEAST or hit["likes"] >= POPULAR_MIN_LIKES]
+    try:
+        from app.voice import catalog
+        hits += catalog.search(kind, query)
+    except Exception:
+        pass
     return hits
 
 
@@ -479,8 +584,23 @@ def _weights(files):
     return keep
 
 
+def engine_note(engine):
+    if engine not in voice_engines.ENGINES or voice_engines.ready(engine):
+        return ""
+    label = voice_engines.ENGINES[engine]["label"]
+    if engine == "nemo":
+        return f"Движок {label} ещё не скачан: он поставится вместе с моделью ({_gigabytes(NEMO_SIZE)}, GitHub)."
+    if engine == "audiocpp":
+        size = sum(asset[1] for asset in voice_engines.AUDIOCPP_ASSETS)
+        return f"Движок {label} ещё не скачан: он поставится вместе с моделью ({_gigabytes(size)}, GitHub)."
+    if not voice_engines.shared_ready():
+        return f"Движок {label} ещё не скачан: вместе с моделью поставятся PyTorch и пакеты голоса ({TTS_PACKAGES_SIZE}, PyPI и download.pytorch.org)."
+    return f"Движок {label} ещё не скачан: его пакеты поставятся вместе с моделью (PyPI)."
+
+
 def details(kind, repo, engine, token=""):
     found = _details(kind, repo, engine, token)
+    found["engineNote"] = engine_note(found.get("engine") or engine)
     if "license" not in found:
         source = repo if engine != "audiocpp" else found.get("licenseRepo", "")
         found["license"] = repo_license(source, token) if source else ""

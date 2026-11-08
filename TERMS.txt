@@ -1,0 +1,44 @@
+﻿PIVEN Companion: условия использования
+
+Программа бесплатная и работает на вашем компьютере. У автора нет сервера, он не видит ваших данных и не управляет тем, что вы делаете с программой.
+
+1. Модели, голоса и сервисы выбираете вы. Автор с ними не связан: не создавал их, не размещает и не проверяет. У каждой модели и каждого сервиса свои лицензия и правила, соблюдать их должны вы.
+
+2. За то, что вы создаёте с помощью программы и как это используете, отвечаете вы. Соблюдайте законы своей страны и права других людей.
+
+3. Чужой голос используйте только с согласия его владельца. Если программа слышит других людей, например в созвоне, предупредите их.
+
+4. Если вы подключаете облачный сервис, ваши данные уходят в него и обрабатываются по его правилам.
+
+5. Ответы нейросети могут быть неверными. Не заменяйте ими врача, психолога, юриста и другого специалиста.
+
+6. Программа не забирает прав на созданные вами результаты. Кому они принадлежат и как их можно использовать, зависит от условий модели или сервиса и законов вашей страны.
+
+7. Программа предоставляется "как есть", без каких-либо гарантий. Автор не отвечает за ущерб от её использования в той мере, в какой это допускает закон (GNU GPL, разделы 15 и 16).
+
+Этот текст объясняет распределение ответственности и не ограничивает ваши права по лицензии GNU GPL.
+
+Не всё в установщике распространяется по GPL: файлы NVIDIA и логотипы других сервисов имеют свои условия. Подробности в файле NOTICE.
+
+
+PIVEN Companion: terms of use
+
+The program is free and runs on your computer. The author has no server, cannot see your data and does not control what you do with the program.
+
+1. You choose the models, voices and services. The author is not connected with them: the author did not create, host or check them. Each model and service has its own license and rules, and it is up to you to follow them.
+
+2. You are responsible for what you create with the program and how you use it. Follow the laws of your country and respect the rights of other people.
+
+3. Use another person's voice only with that person's consent. If the program can hear other people, for example on a call, let them know.
+
+4. If you connect a cloud service, your data goes to that service and is handled under its rules.
+
+5. Neural network answers can be wrong. Do not use them in place of a doctor, psychologist, lawyer or other specialist.
+
+6. The program takes no rights in what you create. Who owns the results and how they may be used depends on the terms of the model or service and on the laws of your country.
+
+7. The program is provided "as is", without any warranty. The author is not liable for damage from its use to the extent the law allows (GNU GPL, sections 15 and 16).
+
+This text explains who is responsible for what and does not limit your rights under the GNU GPL.
+
+Not everything in the installer is under the GPL: NVIDIA files and other services' logos have their own terms. See the NOTICE file.

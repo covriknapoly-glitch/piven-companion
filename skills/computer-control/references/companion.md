@@ -1,21 +1,21 @@
-# PIVEN Companion: как устроена программа
+# PIVEN Companion: how the program is organized
 
-## Папки
+## Folders
 
-- `app/chat/engine.py` — движок: настройки, чаты, `ask_model`, управление компьютером, презентации, картинки, озвучка. О результатах сообщает окну через очередь `events`.
-- `app/chat/memory.py` — долговременная память.
-- `app/models/` — `llama.py` (локальные модели через llama-server), `integrations.py` (Ollama, LM Studio, облака), `huggingface.py` (поиск и скачивание моделей).
-- `app/tools/` — `computer.py` (команды компьютера и проекта), `presentation.py`, `toolbox.py` (инструменты и навыки модели), `mcp.py`.
-- `app/voice/` — установка и запуск голосовых моделей.
-- `app/window/main.pyw` — окно. Класс `WebApi` — методы, которые вызывает страница.
-- `ui/src/` — интерфейс на React; после правок пересобрать `ui/scripts/build.cmd`.
-- `skills/` — инструкции для модели; `tests/` — проверки движка.
-- Настройки, чаты и журналы — в `%LOCALAPPDATA%/OllamaCompanion`. Их не трогай без прямой просьбы.
-- `Архив/` — старые версии, ничего оттуда не запускается.
+- `app/chat/engine.py` — the engine: settings, chats, `ask_model`, computer control, presentations, images, speech. It reports results to the window through the `events` queue.
+- `app/chat/memory.py` — long-term memory.
+- `app/models/` — `llama.py` (local models through llama-server), `integrations.py` (Ollama, LM Studio, cloud services), `huggingface.py` (model search and download).
+- `app/tools/` — `computer.py` (computer and project commands), `presentation.py`, `toolbox.py` (the model's tools and skills), `mcp.py`.
+- `app/voice/` — installing and running voice models.
+- `app/window/main.pyw` — the window. The `WebApi` class holds the methods the page calls.
+- `ui/src/` — the React interface; rebuild with `ui/scripts/build.cmd` after changes.
+- `skills/` — instructions for the model; `tests/` — engine checks.
+- Settings, chats and logs are in `%LOCALAPPDATA%/PIVEN`. Do not touch them without a direct request.
+- `Архив/` — old versions; nothing there is run.
 
-## Правила
+## Rules
 
-- Перед правкой найди нужную функцию и прочитай её; эта справка — только карта.
-- Действия на компьютере выполняются только по явной просьбе; скачивание всегда спрашивает подтверждение и не перезаписывает файлы.
-- Не запускай скачанные файлы, не ставь зависимости и не выполняй произвольный shell-код.
-- После правок Python запусти `python -m unittest discover -s tests`. Изменения видны только после перезапуска программы.
+- Before changing anything, find the function and read it; this note is only a map.
+- Computer actions run only on an explicit request; downloads always ask for confirmation and never overwrite files.
+- Do not run downloaded files, install dependencies or execute arbitrary shell code.
+- After Python changes, run `python -m unittest discover -s tests`. Changes take effect only after the program restarts.

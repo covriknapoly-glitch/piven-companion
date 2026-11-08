@@ -7,42 +7,42 @@
 
 # PIVEN Companion
 
-An AI companion that lives on your own computer. No subscription, and your chats stay with you.
+A local AI chat for Windows. It runs models on your own computer.
 
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
 ![llama.cpp](https://img.shields.io/badge/runs%20on-llama.cpp-8A2BE2)
 
-<img src="docs/images/main-window.svg" alt="PIVEN Companion main window" width="900">
+<img src="docs/images/main-window.png" alt="PIVEN Companion main window" width="900">
 
 </div>
 
 ## What it is
 
-I wanted a chat with a neural network that works without the internet, does not send my messages anywhere and can do more than just talk. So here it is.
+I wanted a neural network chat that works offline, keeps my messages on my PC and can use the computer.
 
-You download a model right in the app, and it runs on your graphics card through llama.cpp. Before downloading, the app tells you honestly whether the model fits in your memory and how fast it will be.
+You download a model right in the app, and it runs on your graphics card through llama.cpp. Before you download a model, the app shows whether it fits in your memory and how fast it will run.
 
 ## What it can do
 
-- **Talk.** Type or speak into the microphone. There is a call mode where you just talk and it answers out loud.
-- **Do things on the computer.** Search the web, read pages, run code to check itself, create files and whole projects, open programs and sites. Before anything risky it asks you first.
-- **Make presentations.** Ask for one and you get a PowerPoint file.
-- **Draw.** Pictures and short videos go through ComfyUI, if you have it.
-- **Remember.** It keeps important facts between chats. You can see and delete everything it remembers.
-- **Work with other models.** Ollama, LM Studio, OpenAI, Gemini, OpenRouter, Anthropic and any OpenAI compatible server. MCP servers and your own skills are supported too.
-- **Help on stream.** It can read Twitch chat and run polls.
+- Chat by text or microphone. In call mode you talk and it answers out loud.
+- Search the web, read pages, run code, create files and open programs. It asks before anything risky.
+- Write programs. Turn on the Code button and an agent edits files in a project folder, runs commands and checks web pages in a hidden browser. Every change can be undone. Commands that download, install or delete something ask first, unless you pick the no-questions mode.
+- Make PowerPoint presentations.
+- Generate pictures and short videos through ComfyUI, if you have it.
+- Remember facts between chats. You can see and delete all of them.
+- Use other models: Ollama, LM Studio, OpenAI, Gemini, OpenRouter, Anthropic or any OpenAI compatible server. MCP servers and custom skills work too.
 
-The interface is in English, Russian, Chinese and Spanish, with light and dark themes.
+The interface is in English and Russian, with light and dark themes.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/models.svg" alt="Downloading a model"><br><sub>Picking a model</sub></td>
-<td width="50%"><img src="docs/images/tools.svg" alt="The model using tools"><br><sub>The model searches and runs code by itself</sub></td>
+<td width="50%"><img src="docs/images/tools.png" alt="The model searching the web"><br><sub>The model searches the web by itself</sub></td>
+<td width="50%"><img src="docs/images/models.png" alt="Model settings with a memory and speed estimate"><br><sub>How much memory a model needs and how fast it runs</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/voice.svg" alt="Voice settings"><br><sub>Voice</sub></td>
-<td><img src="docs/images/settings.svg" alt="Settings"><br><sub>Settings</sub></td>
+<td><img src="docs/images/voice.png" alt="Voice settings"><br><sub>What it hears and sees during a call</sub></td>
+<td><img src="docs/images/settings.png" alt="Language and theme settings"><br><sub>Languages and themes</sub></td>
 </tr>
 </table>
 
@@ -62,13 +62,16 @@ You will need:
 
 ## First launch
 
-The app will suggest a model that fits your graphics card. Download it and say hello. Everything else (voice, memory, pictures, cloud models, Twitch) is turned on in Settings when you want it.
+The app will suggest a model that fits your graphics card. Download it and say hello. Everything else (voice, memory, pictures, cloud models) is turned on in Settings when you want it.
 
 ## About your data
 
-- Chats, settings and memory are stored in `%LOCALAPPDATA%\OllamaCompanion` and do not go anywhere.
+- Chats, settings and memory are stored in `%LOCALAPPDATA%\PIVEN`.
 - Nothing is downloaded without your OK. You always see the size and license first.
 - Messages go to the cloud only if you add a cloud provider yourself. Keys are encrypted by Windows.
+- With a cloud model, screenshots and transcribed speech from a call go to that service too. Computer sound includes other people on a call, so let them know.
+- Use voice cloning only with your own voice or the voice of someone who has agreed to it.
+- Generated pictures and videos carry a machine-readable AI mark (IPTC `trainedAlgorithmicMedia`).
 
 ## For developers
 
@@ -98,7 +101,7 @@ What is where:
 app/chat       chats and memory
 app/models     local models, downloads, cloud and other integrations
 app/voice      speech and voice installation
-app/tools      everything the model can do: files, presentations, browser, MCP, Twitch
+app/tools      everything the model can do: files, presentations, browser, MCP
 app/window     the window itself
 ui             the interface
 voice-engines  voice model servers
@@ -108,6 +111,10 @@ installer      installer script
 ```
 
 Models and voice engines are not kept in the repository.
+
+## Terms of use
+
+You choose the models, voices and services, and you are responsible for what you create and how you use it. The author is not connected with them. Read [TERMS.txt](TERMS.txt).
 
 ## License
 

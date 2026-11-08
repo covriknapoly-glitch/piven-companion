@@ -1,21 +1,23 @@
 from __future__ import annotations
 
+import functools
 import json
 import re
 import os
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from app import processes
+from app import paths, processes
 from app.models import integrations
 
 APP_DIR = Path(__file__).resolve().parents[2]
-DATA_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "OllamaCompanion"
+DATA_DIR = paths.DATA_DIR
 SERVER_EXE = APP_DIR / "llama.cpp" / "bin" / "llama-server.exe"
 MODELS_DIR = DATA_DIR / "models"
 HF_MODELS_DIR = DATA_DIR / "huggingface_models"
@@ -113,17 +115,23 @@ def effort_levels(template):
     return levels, default.group(1) if default else ("medium" if "medium" in levels else levels[len(levels) // 2])
 
 
-THINKING_BUDGETS = {"low": 1024, "medium": 4096}
-
-
 def _template(model):
     entry = model_files().get(model)
     return str(gguf_metadata(entry[0]).get("tokenizer.chat_template") or "") if entry else ""
 
 
-def _budget_levels(model):
+def _toggle_only(model):
     template = _template(model)
     return "enable_thinking" in template and "reasoning_effort" not in template and "<|channel|>" not in template
+
+
+def _thinking_prompt(model):
+    """These templates ask for thinking only in their own default system prompt, which ours replaces."""
+    template = _template(model)
+    if "[THINK]" not in template or "enable_thinking" in template or "reasoning_effort" in template:
+        return ""
+    found = re.search(r"set default_system_message = '(.*?)(?<!\\)'", template, re.S)
+    return found.group(1).replace("\\n", "\n").replace("\\'", "'") if found else ""
 
 
 def thinking_modes(model):
@@ -135,9 +143,9 @@ def thinking_modes(model):
     if "reasoning_effort" in template or "<|channel|>" in template:
         levels, default = effort_levels(template)
         return ([False] if "enable_thinking" in template else []) + levels, default
-    if "enable_thinking" in template:
-        return [False, "low", "medium", "high"], "high"
-    if "<think>" in template or "thinking" in template.lower():
+    if "enable_thinking" in template or _thinking_prompt(model):
+        return [True, False], True
+    if "<think>" in template:
         return [], True
     return [], False
 
@@ -378,7 +386,8 @@ class LlamaServer:
         try:
             with urllib.request.urlopen(self.base_url + "/health", timeout=timeout) as response:
                 return response.status == 200
-        except (urllib.error.URLError, OSError, ValueError):
+        except (urllib.error.URLError, OSError, ValueError) as error:
+            self._health_problem = str(error)
             return False
 
     def stop(self):
@@ -428,6 +437,8 @@ class LlamaServer:
             self._model = model
             self._options = options
             deadline = time.monotonic() + 600
+            next_note = time.monotonic() + 30
+            self._health_problem = ""
             while time.monotonic() < deadline:
                 if cancel_event is not None and cancel_event.is_set():
                     self._stop_locked()
@@ -443,6 +454,10 @@ class LlamaServer:
                 if on_status and percent != shown:
                     on_status(f"Загрузка модели {model} · {percent}%")
                     shown = percent
+                if time.monotonic() >= next_note:
+                    next_note = time.monotonic() + 30
+                    with SERVER_LOG.open("a", encoding="utf-8") as note:
+                        note.write(f"[program] still waiting for the server after {time.monotonic() - started:.0f} s: {self._health_problem}\n")
                 time.sleep(0.5)
             self._stop_locked()
             raise RuntimeError("Модель не загрузилась за 10 минут. Подробности в журнале: " + str(SERVER_LOG))
@@ -497,15 +512,70 @@ def _port_busy(port=PORT):
         return probe.connect_ex((HOST, port)) == 0
 
 
+CHARS_PER_TOKEN = 3.0
+WIDE_CHARS_PER_TOKEN = 1.7
+WIDE_CHARS = re.compile(r"[぀-ヿ㐀-鿿가-힯]")
+IMAGE_TOKENS = 500
+TOKENIZE_EXE = SERVER_EXE.with_name("llama-tokenize.exe")
 SERVER = LlamaServer()
 SERVERS = [SERVER]
-EXTRA_PORTS = list(range(47860, 47868))
+EXTRA_PORTS = list(range(47860, 47869))
 max_loaded = [3]
 _pool_lock = threading.Lock()
 
 
 def loaded_models():
     return [server.loaded_model for server in SERVERS if server.loaded_model]
+
+
+def estimate_tokens(text):
+    text = str(text or "")
+    wide = len(WIDE_CHARS.findall(text))
+    return round((len(text) - wide) / CHARS_PER_TOKEN + wide / WIDE_CHARS_PER_TOKEN)
+
+
+@functools.lru_cache(maxsize=8192)
+def _tokenize(base_url, text):
+    request = urllib.request.Request(base_url + "/tokenize", data=json.dumps({"content": text, "add_special": False}).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return len(json.loads(response.read().decode("utf-8"))["tokens"])
+
+
+@functools.lru_cache(maxsize=1024)
+def _tokenize_unloaded(gguf, text):
+    with tempfile.TemporaryDirectory() as folder:
+        source = Path(folder) / "text.txt"
+        source.write_text(text, encoding="utf-8")
+        run = subprocess.run([str(TOKENIZE_EXE), "-m", gguf, "--no-bos", "--show-count", "--log-disable", "-f", str(source)],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    match = re.search(r"Total number of tokens:\s*(\d+)", run.stdout + run.stderr)
+    if not match:
+        raise ValueError("llama-tokenize did not report a count")
+    return int(match.group(1))
+
+
+def counts_exactly(model):
+    return model in loaded_models() or (model in model_files() and TOKENIZE_EXE.exists())
+
+
+def count_tokens(model, text, unloaded=False):
+    text = str(text or "")
+    if not text:
+        return 0
+    server = next((item for item in SERVERS if item.loaded_model == model), None)
+    if server is not None:
+        try:
+            return _tokenize(server.base_url, text)
+        except (urllib.error.URLError, OSError, ValueError, KeyError):
+            pass
+    if unloaded and TOKENIZE_EXE.exists() and model in model_files():
+        try:
+            return _tokenize_unloaded(str(model_files()[model][0]), text)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+    return estimate_tokens(text)
 
 
 def model_in_use(model):
@@ -646,8 +716,17 @@ def split_thinking(text):
     return "".join(thought).strip(), answer.lstrip() if thought else answer
 
 
+def prepare(model, on_status=None, cancel_event=None):
+    server = server_for(model)
+    try:
+        server.ensure(model, on_status=on_status, cancel_event=cancel_event)
+    finally:
+        server.claimed = ""
+    return server
+
+
 def chat(model, messages, think="__auto__", timeout=600, on_status=None, on_thinking=None,
-         cancel_event=None, on_response=None, on_text=None, overrides=None, tools=None, tool_calls=None):
+         cancel_event=None, on_response=None, on_text=None, overrides=None, tools=None, tool_calls=None, on_tool_text=None, info=None):
     if integrations.is_provider_model(model):
         return integrations.chat(model, messages, timeout, on_status, on_thinking, cancel_event, on_response, on_text,
                               overrides, {**sampling_payload(params_for(model)), "max_tokens": params_for(model)["max_tokens"]},
@@ -655,35 +734,38 @@ def chat(model, messages, think="__auto__", timeout=600, on_status=None, on_thin
     if any(message.get("images") for message in messages) and not has_vision(model):
         raise RuntimeError("model does not support images: у этой модели нет файла mmproj рядом с GGUF, "
                            "поэтому она не видит картинки и экран.")
-    server = server_for(model)
-    try:
-        server.ensure(model, on_status=on_status, cancel_event=cancel_event)
-    finally:
-        server.claimed = ""
+    server = prepare(model, on_status, cancel_event)
     server.in_use += 1
     server.last_used = time.monotonic()
     try:
         return _stream(server, model, messages, think, timeout, on_status, on_thinking, cancel_event, on_response, on_text, overrides,
-                       tools, tool_calls)
+                       tools, tool_calls, on_tool_text, info)
     finally:
         server.in_use -= 1
         server.last_used = time.monotonic()
 
 
 def _stream(server, model, messages, think, timeout, on_status, on_thinking, cancel_event, on_response, on_text, overrides,
-            tools=None, tool_calls=None):
-    payload = {"messages": _to_openai(messages), "stream": True, **sampling_payload(params_for(model)), **(overrides or {})}
+            tools=None, tool_calls=None, on_tool_text=None, info=None):
+    payload ={"messages": _to_openai(messages), "stream": True, **sampling_payload(params_for(model)), **(overrides or {})}
     if tools:
         payload["tools"] = tools
     calls = {}
-    if think in (True, False, "true", "false"):
+    thinking_prompt = _thinking_prompt(model)
+    if thinking_prompt:
+        first = payload["messages"][0]
+        if think in (False, "false"):
+            pass
+        elif first.get("role") == "system":
+            payload["messages"] = [{**first, "content": f"{first['content']}\n\n{thinking_prompt}"}, *payload["messages"][1:]]
+        else:
+            payload["messages"] = [{"role": "system", "content": thinking_prompt}, *payload["messages"]]
+    elif think in (True, False, "true", "false"):
         payload["chat_template_kwargs"] = {"enable_thinking": think in (True, "true")}
         if think in (False, "false"):
             payload["reasoning_budget"] = 0
-    elif isinstance(think, str) and think not in ("", "__auto__") and _budget_levels(model):
+    elif isinstance(think, str) and think not in ("", "__auto__") and _toggle_only(model):
         payload["chat_template_kwargs"] = {"enable_thinking": True}
-        if think in THINKING_BUDGETS:
-            payload["thinking_budget_tokens"] = THINKING_BUDGETS[think]
     elif isinstance(think, str) and think not in ("", "__auto__"):
         payload["reasoning_effort"] = think
         payload["chat_template_kwargs"] = {"reasoning_effort": think}
@@ -708,9 +790,16 @@ def _stream(server, model, messages, think, timeout, on_status, on_thinking, can
                     chunk = json.loads(data)
                     if isinstance(chunk.get("timings"), dict):
                         _record_speed(model, chunk["timings"])
+                    progress = chunk.get("prompt_progress")
+                    if isinstance(progress, dict) and on_status and progress.get("total"):
+                        on_status(f"Читает контекст · {min(100, int(100 * progress.get('processed', 0) / progress['total']))}%")
                     choices = chunk.get("choices") or []
                     delta = (choices[0].get("delta") or {}) if choices else {}
+                    if info is not None and choices and choices[0].get("finish_reason"):
+                        info["finish"] = choices[0]["finish_reason"]
                     collect_tool_calls(delta, calls)
+                    if on_tool_text and delta.get("tool_calls"):
+                        on_tool_text(calls)
                     thought = delta.get("reasoning_content") or ""
                     if thought:
                         thinking_parts.append(thought)

@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
-  <rect x="4" y="4" width="1592" height="892" rx="32.0" fill="#8c959f" fill-opacity="0.08" stroke="#8c959f" stroke-width="4.0" stroke-dasharray="24.0 16.0"/>
-  <g transform="translate(736.0 303.33333333333337) scale(5.333333333333333)" fill="none" stroke="#8c959f" stroke-width="1.5" stroke-linejoin="round">
-    <path d="M3 8a2 2 0 0 1 2-2h2.5l1.5-2h6l1.5 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></g>
-  <text x="800.0" y="503.3333333333333" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="58.666666666666664" font-weight="600" fill="#8c959f">Main window</text>
-  <text x="800.0" y="576.6666666666666" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="37.33333333333333" fill="#8c959f">Screenshot coming soon</text>
-</svg>

@@ -10,7 +10,7 @@ PIVEN Companion использует и распространяет вмест�
 |---|---|---|
 | React, React DOM, Scheduler (Meta Platforms) | MIT | встроены в `ui/dist/app.js`; `docs/licenses/react*-MIT.txt`, `scheduler-MIT.txt` |
 | Symbols Nerd Font (Nerd Fonts) | MIT; значки внутри: Codicons (Microsoft) — CC BY 4.0, Material Design Icons — Apache 2.0, Font Awesome — CC BY 4.0 | иконки интерфейса, подмножество `ui/src/assets/fonts/SymbolsNerdFont-Icons.ttf`; `SymbolsNerdFont-MIT.txt` рядом |
-| Lack (Adrien Midzic, Velvetyne), Martian Grotesk Wide (Evil Martians), Cascadia Code (Microsoft), Smiley Sans / 得意黑 (atelierAnchor, без изменений, для китайского интерфейса) | SIL Open Font License 1.1 | `ui/src/assets/fonts` (тексты `*-OFL.txt` рядом) |
+| Lack (Adrien Midzic, Velvetyne), Martian Grotesk Wide (Evil Martians), Cascadia Code (Microsoft) | SIL Open Font License 1.1 | `ui/src/assets/fonts` (тексты `*-OFL.txt` рядом) |
 
 ## В установщике (не в репозитории)
 
@@ -19,7 +19,7 @@ PIVEN Companion использует и распространяет вмест�
 | CPython 3.11 | PSF License (`runtime/Python311/LICENSE.txt`) |
 | llama.cpp / ggml | MIT (`docs/licenses/llama.cpp-MIT.txt`) |
 | LLVM OpenMP (`libomp.dll`, из сборки llama.cpp) | Apache 2.0 with LLVM Exceptions (`llama.cpp/bin/LICENSE-LLVM-OpenMP`) |
-| NVIDIA CUDA Runtime, cuBLAS (`cudart64_13.dll`, `cublas64_13.dll`, `cublasLt64_13.dll`) | NVIDIA CUDA Toolkit EULA — распространяемые компоненты (Attachment A) |
+| NVIDIA CUDA Runtime, cuBLAS (`cudart64_13.dll`, `cublas64_13.dll`, `cublasLt64_13.dll`) | NVIDIA CUDA Toolkit EULA — распространяемые компоненты (Attachment A). Под GPL не подпадают, входят без изменений, только для работы с этой программой, отдельно распространять нельзя |
 | pywebview | BSD-3-Clause |
 | pythonnet, clr_loader | MIT |
 | bottle, proxy_tools | MIT |
@@ -33,11 +33,19 @@ PIVEN Companion использует и распространяет вмест�
 | pycparser | BSD-3-Clause |
 | typing_extensions | PSF-2.0 |
 
+## Исходный код
+
+Полный исходный код этой версии лежит в папке установки: `app`, `ui/src`, `ui/scripts`, `voice-engines`, `installer`. Интерфейс собирается командой `ui\scripts\build.cmd`.
+
 ## Что программа скачивает по просьбе пользователя
 
 Модели нейросетей, голосовые движки (PyTorch, Transformers и другие пакеты из PyPI), ComfyUI и его модели не входят в программу. Они скачиваются только по кнопке, и у каждой модели перед скачиванием видна её лицензия; некоммерческие помечены отдельно. Пользователь сам отвечает за соблюдение лицензий скачанных моделей.
 
 Модели, которые программа предлагает сама: Qwen3-Embedding-0.6B (память, Apache 2.0) и рекомендуемая первая модель чата — у неё своя лицензия, показанная на странице модели. Видео и картинки рисуются через workflow ComfyUI, который выбирает пользователь.
+
+## Логотипы сервисов
+
+Значки OpenAI, Anthropic (Claude), Google Gemini, OpenRouter, Ollama, LM Studio и ComfyUI (`ui/src/assets/integrations`) взяты из LobeHub Icons (`@lobehub/icons-static-svg`, MIT, `docs/licenses/lobe-icons-MIT.txt`). Лицензия распространяется на файлы значков. Сами логотипы и названия — товарные знаки их владельцев, под GPL не подпадают и используются только чтобы обозначить соответствующий сервис. PIVEN Companion с этими компаниями не связан.
 
 ## Логотип
 

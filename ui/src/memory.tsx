@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { HfFile, MemoryStatus, WebApi } from "./bridge";
 import { ConfirmDialog } from "./dialogs";
-import { Button, Field, IconButton, Switch, Toggle } from "./ui";
+import { AdvancedHead, Button, Field, IconButton, Switch, Toggle } from "./ui";
 
 function EmbeddingSearch({ api, onStarted }: { api: WebApi; onStarted: () => void }) {
   const [query, setQuery] = useState("");
@@ -71,17 +71,6 @@ export function MemoryPane({ api }: { api: WebApi }) {
     </Field>
     <p className="pane-note">В памяти: фактов {status.counts.facts}, разговоров {status.counts.exchanges}. Удалённый чат забывается вместе со своими разговорами.</p>
 
-    <Field label="Поиск по смыслу" hint={status.modelReady
-      ? `Включён: память находит связанное по смыслу, а не только по словам (обработано записей: ${status.counts.withMeaning}).`
-      : "Сейчас память ищет по словам. Модель эмбеддингов научит её искать по смыслу: найди любую ниже (рекомендуем Qwen3-Embedding-0.6B, 610 МБ, Apache 2.0). Она работает на процессоре и не занимает видеопамять."}>
-      {status.modelReady && <p className="pane-note">Модель: <span className="mono">{status.modelName}</span></p>}
-      {job?.state === "running"
-        ? <div className="side-download running"><div className="progress-track"><i style={{ width: `${job.percent}%` }} /></div><small>{job.message}</small>
-            <Button kind="ghost" onClick={() => { void api.memory_cancel(); }}>Отменить</Button></div>
-        : <EmbeddingSearch api={api} onStarted={() => { void load(); }} />}
-      {job && job.state !== "running" && job.message && <p className="pane-note">{job.message}</p>}
-    </Field>
-
     <h5 className="pane-subhead">Факты</h5>
     <div className="row grow">
       <input className="input" value={fact} placeholder="Например: я пишу на Python и люблю короткие ответы" onChange={(event) => setFact(event.target.value)}
@@ -97,6 +86,18 @@ export function MemoryPane({ api }: { api: WebApi }) {
         </div>
       ))}
     </div>
+
+    <AdvancedHead />
+    <Field label="Поиск по смыслу" hint={status.modelReady
+      ? `Включён: память находит связанное по смыслу, а не только по словам (обработано записей: ${status.counts.withMeaning}).`
+      : "Сейчас память ищет по словам. Модель эмбеддингов научит её искать по смыслу: найди любую ниже (рекомендуем Qwen3-Embedding-0.6B, 610 МБ, Apache 2.0). Она работает на процессоре и не занимает видеопамять."}>
+      {status.modelReady && <p className="pane-note">Модель: <span className="mono">{status.modelName}</span></p>}
+      {job?.state === "running"
+        ? <div className="side-download running"><div className="progress-track"><i style={{ width: `${job.percent}%` }} /></div><small>{job.message}</small>
+            <Button kind="ghost" onClick={() => { void api.memory_cancel(); }}>Отменить</Button></div>
+        : <EmbeddingSearch api={api} onStarted={() => { void load(); }} />}
+      {job && job.state !== "running" && job.message && <p className="pane-note">{job.message}</p>}
+    </Field>
 
     <h5 className="pane-subhead">Очистка</h5>
     <div className="row">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import type { DownloadConfirm, EngineState, HfFile, HfModel, HfStatus, ListenOptions, SearchHit, TwitchStatus, WebApi, MemoryEstimate } from "./bridge";
+import type { CommandConfirm, DownloadConfirm, EngineState, HfFile, HfModel, HfStatus, ListenOptions, SearchHit, WebApi, MemoryEstimate } from "./bridge";
 import { Icon, type IconName } from "./icons";
-import { Button, Field, IconButton, MemoryBar, Modal, ModelDescription, ModelLogo, Switch, useOutsideClose } from "./ui";
+import { Button, callMemoryLabel, Field, IconButton, MemoryBar, Modal, ModelDescription, ModelLogo, Switch, useOutsideClose } from "./ui";
 
 export function ConfirmDialog({ title, text, confirmLabel, cancelLabel = "Отмена", danger = false, onConfirm, onClose }:
   { title: string; text: string; confirmLabel: string; cancelLabel?: string; danger?: boolean; onConfirm: () => void; onClose: () => void }) {
@@ -18,7 +18,7 @@ export function ConfirmDialog({ title, text, confirmLabel, cancelLabel = "Отм
 export function DownloadDialog({ confirm, api }: { confirm: DownloadConfirm; api: WebApi }) {
   const answer = (approved: boolean) => { void api.answer_confirmation(confirm.id, approved); };
   return (
-    <Modal title="Скачать файл?" subtitle="Компаньон просит разрешения на скачивание." onClose={() => answer(false)} width={520} footer={<>
+    <Modal title="Скачать файл?" subtitle="Программа просит разрешения на скачивание." onClose={() => answer(false)} width={520} footer={<>
       <Button kind="ghost" onClick={() => answer(false)}>Не скачивать</Button>
       <Button kind="primary" icon="download" onClick={() => answer(true)}>Скачать</Button>
     </>}>
@@ -27,6 +27,21 @@ export function DownloadDialog({ confirm, api }: { confirm: DownloadConfirm; api
         <dt>Куда</dt><dd className="mono">{confirm.destination}</dd>
       </dl>
       <p className="dialog-note">Существующий файл не будет перезаписан. Скачанное ничего не запускает.</p>
+    </Modal>
+  );
+}
+
+export function CommandDialog({ confirm, api }: { confirm: CommandConfirm; api: WebApi }) {
+  const answer = (value: "once" | "project" | "no") => { void api.answer_command(confirm.id, value); };
+  return (
+    <Modal title={confirm.edit ? "Изменить файл?" : "Выполнить команду?"} subtitle={confirm.reason || "Агент хочет запустить команду на этом компьютере."} onClose={() => answer("no")} width={560} footer={<>
+      <Button kind="ghost" onClick={() => answer("no")}>Запретить</Button>
+      {confirm.canTrust && <Button onClick={() => answer("project")}>{confirm.edit ? "Принимать правки" : "Разрешать в этом проекте"}</Button>}
+      <Button kind="primary" icon="play" onClick={() => answer("once")}>Разрешить</Button>
+    </>}>
+      <pre className="command-preview" data-i18n-skip>{confirm.command}</pre>
+      <dl className="kv"><dt>Папка</dt><dd className="mono" data-i18n-skip>{confirm.folder}</dd></dl>
+      {confirm.canTrust && !confirm.edit && <p className="dialog-note">«Разрешать в этом проекте»: обычные команды больше не будут спрашивать. Установка, скачивание и удаление всё равно спросят. Чтобы не спрашивали и про это, выбери режим «Без разрешений» рядом с полем ввода.</p>}
     </Modal>
   );
 }
@@ -59,87 +74,6 @@ export function SearchDialog({ api, onOpen, onClose }: { api: WebApi; onOpen: (h
   );
 }
 
-export function TwitchDialog({ api, onClose, poll = null }: { api: WebApi; onClose: () => void; poll?: { question: string; options: string[] } | null }) {
-  const [mode, setMode] = useState<"message" | "poll">(poll ? "poll" : "message");
-  const [question, setQuestion] = useState(poll?.question.slice(0, 60) ?? "");
-  const [choices, setChoices] = useState<string[]>(poll ? poll.options.slice(0, 5).map((item) => item.slice(0, 25)) : ["", ""]);
-  const [seconds, setSeconds] = useState(120);
-  const [status, setStatus] = useState<TwitchStatus | null>(null);
-  const [channel, setChannel] = useState("");
-  const [token, setToken] = useState("");
-  const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  useEffect(() => { void api.twitch_status().then((next) => { setStatus(next); setChannel(next.channel); }); }, [api]);
-  const max = status?.maxChars ?? 300;
-  const filled = choices.filter((item) => item.trim());
-  const ready = Boolean(channel.trim() && token.trim() && !sending && status?.enabled
-    && (mode === "message" ? message.trim() && message.length <= max : question.trim() && filled.length >= 2));
-  const send = () => {
-    setSending(true); setResult(null); setConfirming(false);
-    if (mode === "poll") {
-      void api.twitch_poll(channel, question, filled, seconds, token).then((reply) => {
-        setSending(false);
-        setResult({ ok: reply.ok, text: reply.ok ? reply.message ?? "Опрос запущен." : reply.error ?? "Опрос не запущен." });
-      });
-      return;
-    }
-    void api.twitch_send(channel, message, token).then((reply) => {
-      setSending(false);
-      setResult({ ok: reply.ok, text: reply.ok ? reply.message ?? "Отправлено." : reply.error ?? "Не отправлено." });
-      if (reply.status && status) setStatus({ ...status, status: reply.status });
-      if (reply.ok) setMessage("");
-    });
-  };
-  return (
-    <Modal title={mode === "poll" ? "Опрос в Twitch" : "Сообщение в Twitch"} subtitle={mode === "poll" ? "Опрос для зрителей запускается на твоём канале после подтверждения." : "Отправляется ровно одно сообщение после твоего подтверждения."} onClose={() => { if (!sending) onClose(); }} width={560} footer={<>
-      <span className="foot-note">{status?.status}</span>
-      {confirming
-        ? <><Button kind="ghost" onClick={() => setConfirming(false)}>Назад</Button><Button kind="primary" icon="send" onClick={send}>{mode === "poll" ? `Да, запустить на #${channel.replace(/^#/, "")}` : `Да, отправить в #${channel.replace(/^#/, "")}`}</Button></>
-        : <Button kind="primary" icon="send" disabled={!ready} onClick={() => setConfirming(true)}>{sending ? "Отправка…" : mode === "poll" ? "Запустить опрос" : "Отправить"}</Button>}
-    </>}>
-      {status && !status.enabled && <div className="inline-alert"><Icon name="alert" size={15} /> Интеграция Twitch выключена в настройках.</div>}
-      <div className="segmented dialog-mode">
-        <button type="button" className={mode === "message" ? "on" : ""} onClick={() => setMode("message")}>Сообщение</button>
-        <button type="button" className={mode === "poll" ? "on" : ""} onClick={() => setMode("poll")}>Опрос</button>
-      </div>
-      <Field label="Канал" hint="Без решётки, например twitchdev.">
-        <input className="input mono" value={channel} placeholder="канал" onChange={(event) => setChannel(event.target.value)} />
-      </Field>
-      <Field label="OAuth-токен" hint={<>Нужно разрешение {mode === "poll" ? "channel:manage:polls (токен твоего канала; опросы есть у партнёров и компаньонов Twitch)" : "user:write:chat"}. Хранится только до закрытия окна.{" "}
-        <button type="button" className="inline-link" onClick={() => { void api.open_twitch_help(); }}>Как получить токен</button></>}>
-        <input className="input mono" type="password" value={token} placeholder="токен" autoComplete="off" onChange={(event) => setToken(event.target.value)} />
-      </Field>
-      {mode === "message" ? (
-        <Field label="Сообщение" hint={`${message.length} из ${max} символов`}>
-          <textarea className="textarea" rows={3} value={message} maxLength={max} onChange={(event) => setMessage(event.target.value)} />
-        </Field>
-      ) : <>
-        <Field label="Вопрос" hint={`${question.length} из 60 символов`}>
-          <input className="input" value={question} maxLength={60} onChange={(event) => setQuestion(event.target.value)} />
-        </Field>
-        <Field label="Варианты" hint="От 2 до 5, каждый до 25 символов.">
-          {choices.map((choice, index) => (
-            <div key={index} className="row grow poll-choice">
-              <input className="input" value={choice} maxLength={25} placeholder={`Вариант ${index + 1}`}
-                onChange={(event) => setChoices(choices.map((item, key) => (key === index ? event.target.value : item)))} />
-              {choices.length > 2 && <IconButton icon="close" label="Убрать вариант" size={13} onClick={() => setChoices(choices.filter((_, key) => key !== index))} />}
-            </div>
-          ))}
-          {choices.length < 5 && <Button kind="ghost" icon="plus" onClick={() => setChoices([...choices, ""])}>Добавить вариант</Button>}
-        </Field>
-        <Field label="Длительность">
-          <select className="select" value={seconds} onChange={(event) => setSeconds(Number(event.target.value))}>
-            {[[60, "1 минута"], [120, "2 минуты"], [300, "5 минут"], [600, "10 минут"], [1800, "30 минут"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </Field>
-      </>}
-      {result && <div className={`inline-alert ${result.ok ? "ok" : ""}`}><Icon name={result.ok ? "check" : "alert"} size={15} /> {result.text}</div>}
-    </Modal>
-  );
-}
-
 const formatSize = (size?: number) => (size ? `${(size / 1024 ** 3).toFixed(2)} ГБ` : "");
 const formatCount = (value?: number) => (typeof value === "number" ? value.toLocaleString("ru-RU") : "");
 
@@ -153,7 +87,7 @@ export function HubDialog({ api, onClose, onDone }: { api: WebApi; onClose: () =
   const [tag, setTag] = useState("");
   const [note, setNote] = useState("Начни вводить название модели, например Qwen3 или Gemma.");
   const [progress, setProgress] = useState<HfStatus | null>(null);
-  const [memory, setMemory] = useState<{ gpu: number; context: number; estimate: MemoryEstimate | null; known: boolean } | null>(null);
+  const [memory, setMemory] = useState<{ gpu: number; context: number; estimate: MemoryEstimate | null; known: boolean; voiceCall?: number } | null>(null);
   useEffect(() => {
     setMemory(null);
     if (!repo || !file) return;
@@ -237,8 +171,8 @@ export function HubDialog({ api, onClose, onDone }: { api: WebApi; onClose: () =
             </select>
           </Field>
           {file && (memory?.estimate
-            ? <MemoryBar gpu={memory.gpu} speed={memory.estimate} label={memory.known ? `При запуске (контекст ${Math.round(memory.context / 1024)}K)` : "При запуске, без учёта контекста"}
-                parts={[{ label: "Веса", bytes: memory.estimate.weights }, { label: "Контекст", bytes: memory.estimate.kv }, { label: "Прочее", bytes: memory.estimate.other }].filter((part) => part.bytes > 0)} />
+            ? <MemoryBar gpu={memory.gpu} speed={memory.estimate} label={memory.known ? callMemoryLabel(memory.context) : "Во время звонка с озвучкой, без учёта контекста"}
+                parts={{ ...memory.estimate, voice: memory.voiceCall }} />
             : <p className="pane-note">Расчёт памяти…</p>)}
           {tag && <p className="pane-note">В списке моделей она будет называться «{tag}».</p>}
         </div>
@@ -268,7 +202,7 @@ function ListenOptionList({ options, disabled, onChange }: { options: ListenOpti
       <span className="listen-copy"><strong>{source.label}</strong><small>{source.hint}</small></span>
       <Switch label={source.label} checked={options[source.key]} disabled={disabled} onChange={(value) => onChange({ ...options, [source.key]: value })} />
     </label>
-  ))}</>;
+  ))}<div className="menu-note">Звук компьютера включает голоса других людей в созвоне: предупреди их. С облачной моделью снимки экрана и распознанный текст уходят в этот сервис.</div></>;
 }
 
 export function ListenSettings({ state }: { state: EngineState }) {
@@ -310,7 +244,7 @@ export function CallControl({ api, state, onError }: { api: WebApi; state: Engin
       </button>
       {asking && (
         <div className="menu menu-up-right listen-menu">
-          <div className="menu-title">Что компаньон будет слышать и видеть</div>
+          <div className="menu-title">Что программа будет слышать и видеть</div>
           <ListenOptionList options={options} onChange={setOptions} />
           <div className="listen-foot">
             <small>Потом это можно поменять в настройках, в разделе «Голос и микрофон».</small>

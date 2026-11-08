@@ -15,3 +15,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 This product includes third-party software; see docs/THIRD_PARTY_NOTICES.md.
+
+Not everything in the installer is covered by the GPL:
+
+- cudart64_13.dll, cublas64_13.dll and cublasLt64_13.dll in llama.cpp\bin are
+  NVIDIA software under the NVIDIA CUDA Toolkit End User License Agreement
+  (https://docs.nvidia.com/cuda/eula/). They are included unmodified, are for
+  use by this program only and may not be redistributed separately. llama.cpp
+  runs as a separate program and does not make them part of PIVEN Companion.
+- Logos of other services identify those services only. They are trademarks of
+  their owners, and PIVEN Companion is not affiliated with those owners.
+
+The complete source code of this version is in the install folder: app, ui\src,
+ui\scripts, voice-engines and installer. ui\scripts\build.cmd rebuilds the
+interface.

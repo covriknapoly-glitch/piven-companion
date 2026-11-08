@@ -21,7 +21,6 @@ const glyphs = {
   send: "\u{ec0f}",
   spark: "\u{ec10}",
   stop: "\u{ead7}",
-  twitch: "\u{f1e8}",
   user: "\u{eb99}",
   zoomIn: "\u{eb81}",
   zoomOut: "\u{eb82}",

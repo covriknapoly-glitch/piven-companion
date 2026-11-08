@@ -2,14 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { isUnchanged, waitForEngine, type ChatSummary, type EngineState, type SearchHit, type WebApi } from "./bridge";
 import { Lightbox } from "./cards";
 import { Composer } from "./composer";
-import { ConfirmDialog, DownloadDialog, HubDialog, SearchDialog, TwitchDialog } from "./dialogs";
+import { CommandDialog, ConfirmDialog, DownloadDialog, HubDialog, SearchDialog } from "./dialogs";
 import { VoiceHubDialog } from "./voicehub";
 import { Icon } from "./icons";
 import { CallPanel } from "./call";
+import { ContextRing } from "./context";
 import { LinkContext } from "./markdown";
 import { SettingsDialog, FONT_CHOICES, type FontChoice } from "./settings";
 import { Sidebar, type ChatActions } from "./sidebar";
-import { Transcript, TwitchPollContext } from "./transcript";
+import { Transcript } from "./transcript";
 import { Decor, IconButton } from "./ui";
 import { THEME_IDS, isLightTheme, type ThemeId } from "./themes";
 import { Workspace, type WorkspaceTab } from "./workspace";
@@ -64,7 +65,7 @@ export default function App() {
   const [state, setState] = useState<EngineState | null>(null);
   const [toast, setToast] = useState<{ text: string; kind: "info" | "error" } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 900);
-  const [dialog, setDialog] = useState<"" | "settings" | "search" | "twitch" | "hub" | "voice-asr" | "voice-tts">("");
+  const [dialog, setDialog] = useState<"" | "settings" | "search" | "hub" | "voice-asr" | "voice-tts">("");
   const [deleting, setDeleting] = useState<ChatSummary | null>(null);
   const [lightbox, setLightbox] = useState("");
   const [focusIndex, setFocusIndex] = useState<{ index: number; nonce: number } | null>(null);
@@ -109,8 +110,6 @@ export default function App() {
   const [fontChoice, setFontChoice] = useState<FontChoice>(() => readStored(FONT_KEY, FONT_CHOICES.map(([value]) => value), FONT_CHOICES[0][0]) as FontChoice);
   useEffect(() => { writeStored(FONT_KEY, fontChoice); document.documentElement.dataset.font = fontChoice; }, [fontChoice]);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("browser");
-  const [twitchPoll, setTwitchPoll] = useState<{ question: string; options: string[] } | null>(null);
-  const openTwitchPoll = useCallback((poll: { question: string; options: string[] }) => { setTwitchPoll(poll); setDialog("twitch"); }, []);
   const openLink = useCallback((url: string) => { setBrowserOpen(true); setWorkspaceTab("browser"); setBrowserRequest({ url, nonce: Date.now() }); }, []);
 
   const modelBrowse = state?.browserRequest?.nonce;
@@ -129,7 +128,11 @@ export default function App() {
       void engine.state().then((snapshot) => { versionRef.current = snapshot.version; setState(snapshot); });
     });
   }, []);
-  useEffect(() => { if (api) void api.set_title_theme(resolvedTheme === "dark"); }, [api, resolvedTheme]);
+  useEffect(() => {
+    if (!api) return;
+    const style = getComputedStyle(document.documentElement);
+    void api.set_title_theme(style.getPropertyValue("--panel"), style.getPropertyValue("--text"), resolvedTheme === "dark");
+  }, [api, theme, resolvedTheme]);
 
   const poll = useCallback(async () => {
     if (!api) return;
@@ -170,6 +173,12 @@ export default function App() {
     pin: (chat) => { void api.pin_chat(chat.id, !chat.pinned).then(() => done()); },
     exportChat: (chat, markdown) => { void api.export_chat(chat.id, markdown).then((result) => { if (result.ok) notify(`Сохранено: ${result.path}`, "info"); else if (!result.cancelled) notify(result.error); }); },
     remove: (chat) => setDeleting(chat),
+    project: (chat, action) => {
+      void api.select_chat(chat.id)
+        .then(() => (action === "folder" ? api.code_pick_folder() : api.code_open_folder()))
+        .then((result) => done(result.ok || result.cancelled ? undefined : result.error));
+    },
+    moveToProjects: (chat) => { void api.chat_kind(chat.id, !chat.code).then((result) => done(result.ok ? undefined : result.error)); },
   }, [api, state?.activeChatId, done, notify]);
 
   useEffect(() => {
@@ -190,7 +199,7 @@ export default function App() {
   }, [newChat, stop, state?.busy, dialog, lightbox, deleting]);
 
   if (engineMissing) {
-    return <div className="splash"><Decor corner="br" /><h2>Нет связи с движком</h2><p>Этот интерфейс открывается файлом «Запустить веб-интерфейс» в папке Компаньона.</p></div>;
+    return <div className="splash"><Decor corner="br" /><h2>Нет связи с движком</h2><p>Этот интерфейс открывается файлом «Запустить веб-интерфейс» в папке программы.</p></div>;
   }
   if (!api || !state || !actions) {
     return <div className="splash"><Decor corner="br" /></div>;
@@ -198,7 +207,6 @@ export default function App() {
 
   return (
     <LinkContext.Provider value={openLink}>
-    <TwitchPollContext.Provider value={openTwitchPoll}>
     <div className={`app ${sidebarOpen ? "" : "sidebar-hidden"}`}>
       <Sidebar api={api} state={state} actions={actions} searchRef={searchRef} onNewChat={newChat}
         onSearchMessages={() => setDialog("search")} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
@@ -212,16 +220,25 @@ export default function App() {
           <IconButton icon="workspaceOff" label="Браузер и файлы (Ctrl+D)" onClick={() => setBrowserOpen(true)} />
         </div>}
 
+        <div className={`chat-tools ${!browserOpen && !state.listening.running ? "beside-corner" : ""}`}>
+          <button type="button" className={`code-toggle ${state.code.on ? "on" : ""}`} aria-pressed={state.code.on}
+            title={state.code.on ? "Режим кода включён: слева проекты, агент сам пишет файлы и запускает команды. Нажми, чтобы вернуться к чатам" : "Включить режим кода: слева будут проекты, агент сам пишет файлы и запускает команды"}
+            onClick={() => { void api.code_mode(!state.code.on).then((result) => done(result.ok ? undefined : result.error)); }}>
+            <Icon name="code" size={15} /><span>Код</span>
+          </button>
+          <ContextRing api={api} state={state} onOpen={() => { setWorkspaceTab("context"); setBrowserOpen(true); }} />
+        </div>
+
         {state.busy && <div className="activity-strip"><i /></div>}
 
         <Transcript api={api} state={state} focusIndex={focusIndex}
               onCopy={copy} onView={setLightbox} onStop={stop}
               onRetry={() => { void api.retry_last().then((result) => done(result.ok ? undefined : result.error)); }}
               onEdit={(index, text) => { void api.edit_message(index, text).then((result) => done(result.ok ? undefined : result.error)); }}
-              onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} />
+              onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} onNotice={done} />
 
         <div className="composer-dock" ref={trackDockHeight}>
-          <Composer api={api} state={state} inputRef={inputRef} prefill={prefill} onStop={stop} onError={done} onOpenHub={() => setDialog("hub")} onOpenVoiceHub={() => setDialog("voice-tts")}
+          <Composer api={api} state={state} inputRef={inputRef} prefill={prefill} onStop={stop} onError={done} onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind = "tts") => setDialog(`voice-${kind}`)}
             onSent={(queued) => { if (queued) notify("Отправится после текущего ответа", "info"); void poll(); }} />
         </div>
       </main>
@@ -241,22 +258,21 @@ export default function App() {
       )}
 
       {dialog === "settings" && <SettingsDialog state={state} api={api} theme={theme} setTheme={setTheme} fontChoice={fontChoice} setFontChoice={setFontChoice} language={language} setLanguage={setLanguageChoice} onClose={() => setDialog("")}
-        onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind) => setDialog(`voice-${kind}`)} onOpenTwitch={() => setDialog("twitch")} />}
+        onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind) => setDialog(`voice-${kind}`)} />}
       {dialog === "search" && <SearchDialog api={api} onClose={() => setDialog("")} onOpen={(hit) => {
         if (hit.chatId === state.activeChatId) { setFocusIndex({ index: hit.index, nonce: Date.now() }); }
         else { setPendingFocus(hit); void api.select_chat(hit.chatId).then((result) => done(result.ok ? undefined : result.error)); }
       }} />}
-      {dialog === "twitch" && <TwitchDialog api={api} poll={twitchPoll} onClose={() => { setDialog(""); setTwitchPoll(null); }} />}
       {(dialog === "voice-asr" || dialog === "voice-tts") && <VoiceHubDialog api={api} initialKind={dialog === "voice-asr" ? "asr" : "tts"}
         onClose={() => setDialog("settings")} onDone={() => notify("Голосовая модель скачана", "info")} />}
       {dialog === "hub" && <HubDialog api={api} onClose={() => setDialog("")} onDone={() => { void poll(); notify("Модель скачана", "info"); }} />}
       {deleting && <ConfirmDialog title="Удалить чат?" text={`«${deleting.title}» и вся его история будут удалены. Это нельзя отменить.`} confirmLabel="Удалить" danger
         onClose={() => setDeleting(null)} onConfirm={() => { void api.delete_chat(deleting.id).then((result) => done(result.ok ? undefined : result.error)); }} />}
-      {state.confirm && <DownloadDialog confirm={state.confirm} api={api} />}
+      {state.confirm?.kind === "download" && <DownloadDialog confirm={state.confirm} api={api} />}
+      {state.confirm?.kind === "command" && <CommandDialog confirm={state.confirm} api={api} />}
       {lightbox && <Lightbox api={api} path={lightbox} onClose={() => setLightbox("")} />}
       {toast && <div className={`toast ${toast.kind}`} role="status"><Icon name={toast.kind === "error" ? "alert" : "check"} size={16} />{toast.text}</div>}
     </div>
-    </TwitchPollContext.Provider>
     </LinkContext.Provider>
   );
 }

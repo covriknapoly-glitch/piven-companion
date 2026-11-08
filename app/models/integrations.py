@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import ctypes
 import json
+import re
 import threading
 import time
 import urllib.error
@@ -23,7 +24,27 @@ config = {}
 _models = {}
 _errors = {}
 _reasoning = {}
+_kinds = {}
+_next_try = {}
+_gaps = {}
 _lock = threading.Lock()
+RETRY_WAITS = (1, 3)
+RETRY_STATUSES = (408, 425, 500, 502, 503, 504, 529)
+RECONNECT_FIRST, RECONNECT_LONGEST = 30, 300
+KEY_PAGES = {
+    "openai": "https://platform.openai.com/api-keys",
+    "anthropic": "https://console.anthropic.com/settings/keys",
+    "gemini": "https://aistudio.google.com/apikey",
+    "openrouter": "https://openrouter.ai/settings/keys",
+}
+
+
+class KeyRejected(RuntimeError):
+    """The service refused the key, so asking again will not help."""
+
+
+class _Lost(RuntimeError):
+    """The connection dropped before the service answered anything."""
 
 
 class _Blob(ctypes.Structure):
@@ -53,6 +74,13 @@ def unseal(stored):
         return _dpapi(base64.b64decode(stored), False).decode("utf-8") if stored else ""
     except Exception:
         return ""
+
+
+def clean_key(text):
+    """Keys get pasted with quotes, line breaks, «Bearer» or a whole NAME=value line."""
+    text = re.sub(r"^\s*(?:export\s+)?[A-Za-z_]*KEY\s*[=:]\s*", "", str(text or ""))
+    text = re.sub(r"^\s*(?:authorization\s*:\s*)?bearer\s+", "", text, flags=re.I)
+    return re.sub(r"[^\x21-\x7e]", "", text).strip("\"'`")
 
 
 def settings_of(provider):
@@ -135,32 +163,37 @@ def _start_lmstudio_server(url):
     return ""
 
 
-def fetch_models(provider):
+def fetch_models(provider, key=None, start_server=True):
     options = settings_of(provider)
     info = PROVIDERS[provider]
+    if key is not None:
+        options["key"] = key
     if not options["url"]:
         raise RuntimeError("не указан адрес сервера")
     if info["key"] and not info.get("optional_key") and not options["key"]:
-        raise RuntimeError("нужен API-ключ")
+        raise KeyRejected("сохранённый ключ не расшифровать, введи его заново" if (config.get(provider) or {}).get("key") else "нужен API-ключ")
     local_timeout = 5 if info.get("local") else 15
     try:
         try:
             data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=local_timeout)
         except (urllib.error.URLError, OSError) as error:
-            if provider != "lmstudio" or isinstance(error, urllib.error.HTTPError):
+            if provider != "lmstudio" or not start_server or isinstance(error, urllib.error.HTTPError):
                 raise
             problem = _start_lmstudio_server(options["url"])
             if problem:
                 raise RuntimeError(problem) from error
             data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=local_timeout)
     except urllib.error.HTTPError as error:
-        raise RuntimeError(_http_error(error)) from error
+        message = _http_error(error)
+        if error.code in (401, 403) or (error.code == 400 and re.search(r"api.?key", message, re.I)):
+            raise KeyRejected(message) from error
+        raise RuntimeError(message) from error
     except (urllib.error.URLError, OSError) as error:
         raise RuntimeError("программа не запущена" if info.get("local") else f"нет связи: {getattr(error, 'reason', error)}") from error
     items = data.get("data") if isinstance(data, dict) else data
     ids = [str(item.get("id") or "") for item in items or [] if isinstance(item, dict)]
     if provider == "openrouter":
-        _reasoning[provider] = {str(item.get("id")) for item in items or [] if isinstance(item, dict)
+        _reasoning[provider] = {str(item.get("id")): _openrouter_thinking(item) for item in items or [] if isinstance(item, dict)
                                 and "reasoning" in (item.get("supported_parameters") or [])}
     if info.get("local"):
         ids = [i for i in ids if "embed" not in i.lower()]
@@ -173,24 +206,78 @@ def fetch_models(provider):
     return sorted({i for i in ids if i})
 
 
-def refresh():
-    names = []
-    for provider in PROVIDERS:
-        if not settings_of(provider)["enabled"]:
-            with _lock:
-                _models.pop(provider, None); _errors.pop(provider, None)
-            continue
-        try:
-            found = fetch_models(provider)
-            with _lock:
-                _models[provider] = found; _errors.pop(provider, None)
-        except Exception as error:
-            with _lock:
-                _models[provider] = []; _errors[provider] = str(error)
+def _forget_trouble(provider):
+    for store in (_errors, _kinds, _next_try, _gaps):
+        store.pop(provider, None)
+
+
+def refresh_one(provider, start_server=True):
+    if not settings_of(provider)["enabled"]:
+        with _lock:
+            _models.pop(provider, None)
+            _forget_trouble(provider)
+        return False
+    try:
+        found = fetch_models(provider, start_server=start_server)
+    except Exception as error:
+        rejected = isinstance(error, KeyRejected)
+        with _lock:
+            if rejected:
+                _models[provider] = []
+            else:
+                _models.setdefault(provider, [])
+            _errors[provider], _kinds[provider] = str(error), "key" if rejected else "lost"
+        return False
     with _lock:
-        for provider, ids in _models.items():
-            names += [f"{provider}:{model}" for model in ids]
-    return names
+        _models[provider] = found
+        _forget_trouble(provider)
+    return True
+
+
+def reconnect(provider):
+    """The user asked, so nothing waits for its turn."""
+    with _lock:
+        _next_try.pop(provider, None)
+        _gaps.pop(provider, None)
+    _server_start_tried.pop(provider, None)
+    return refresh_one(provider)
+
+
+def retry_lost():
+    """Brings back services that dropped out. A refused key is left alone: only the user can fix it."""
+    now = time.monotonic()
+    with _lock:
+        due = [provider for provider, kind in _kinds.items() if kind == "lost" and now >= _next_try.get(provider, 0)]
+    healed = False
+    for provider in due:
+        if refresh_one(provider, start_server=False):
+            healed = True
+            continue
+        with _lock:
+            if _kinds.get(provider) == "lost":
+                gap = min(_gaps.get(provider, RECONNECT_FIRST / 2) * 2, RECONNECT_LONGEST)
+                _gaps[provider], _next_try[provider] = gap, time.monotonic() + gap
+    return healed
+
+
+def try_key(provider, key):
+    """What the service said against this key; empty if it works or the service could not be reached to judge it."""
+    try:
+        fetch_models(provider, key=key, start_server=False)
+    except KeyRejected as error:
+        return str(error)
+    except Exception:
+        pass
+    return ""
+
+
+def refresh():
+    workers = [threading.Thread(target=refresh_one, args=(provider,), daemon=True) for provider in PROVIDERS]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    return model_names()
 
 
 def model_names():
@@ -219,11 +306,14 @@ def status():
     rows = []
     for provider, info in PROVIDERS.items():
         options = settings_of(provider)
+        saved = config.get(provider) or {}
         with _lock:
-            count, error = len(_models.get(provider, [])), _errors.get(provider, "")
+            count, error, kind = len(_models.get(provider, [])), _errors.get(provider, ""), _kinds.get(provider, "")
         rows.append({"id": provider, "title": info["title"], "local": bool(info.get("local")), "needsKey": bool(info["key"]),
                      "enabled": options["enabled"], "url": options["url"], "defaultUrl": info["url"],
-                     "hasKey": bool(options["key"]), "models": count, "error": error,
+                     "hasKey": bool(options["key"]), "models": count, "error": error, "errorKind": kind,
+                     "keyEnd": options["key"][-4:] if len(options["key"]) >= 12 else "", "keyBroken": bool(saved.get("key")) and not options["key"],
+                     "keyPage": KEY_PAGES.get(provider, ""),
                      "installed": installed(provider), "site": SITES.get(provider, "")})
     return rows
 
@@ -246,13 +336,58 @@ def _anthropic_messages(messages):
 
 
 EFFORTS = ["low", "medium", "high", "xhigh", "max"]
+EFFORT_ORDER = ["minimal", "low", "medium", "high", "xhigh", "max"]
+THINKING_FIELDS = ("reasoning_effort", "reasoning", "chat_template_kwargs", "output_config")
+LEVEL_WORDS = r"none|minimal|low|medium|high|xhigh|max"
+learned = {}
+on_learned = None
 CLAUDE_BUDGETS = {"low": 2048, "medium": 8192, "high": 24576}
 _capabilities = {}
 
 
+def _openrouter_thinking(item):
+    reasoning = item.get("reasoning") if isinstance(item.get("reasoning"), dict) else {}
+    efforts = [level for level in EFFORT_ORDER if level in (reasoning.get("supported_efforts") or [])]
+    can_stop = not reasoning.get("mandatory")
+    if efforts:
+        return ([False] if can_stop else []) + efforts, reasoning.get("default_effort") or efforts[len(efforts) // 2]
+    return ([True, False], bool(reasoning.get("default_enabled", True))) if can_stop else ([], True)
+
+
+def _openai_thinking(model):
+    if re.match(r"o\d", model) or model.startswith("gpt-oss"):
+        return ["low", "medium", "high"], "medium"
+    match = re.match(r"gpt-(\d+)", model)
+    if not match or int(match.group(1)) < 5:
+        return None
+    if "-pro" in model:
+        return ["medium", "high", "xhigh"], "high"
+    if "codex" in model:
+        return ["low", "medium", "high", "xhigh"], "medium"
+    if model.startswith(("gpt-5-", "gpt-5.0")) or model == "gpt-5":
+        return ["minimal", "low", "medium", "high"], "medium"
+    if model.startswith("gpt-5.1"):
+        return [False, "low", "medium", "high"], False
+    return [False, "low", "medium", "high", "xhigh"], False
+
+
+def _gemini_thinking(model):
+    if any(word in model for word in ("tts", "image", "banana", "embedding", "aqa")):
+        return None
+    match = re.match(r"gemini-(\d+(?:\.\d+)?)", model)
+    generation = float(match.group(1)) if match else 0.0
+    if not model.startswith("gemini-") or (match and generation < 2.5):
+        return None
+    if generation == 2.5 and "pro" not in model:
+        return [False, "low", "medium", "high"], "medium"
+    if generation == 3 and "pro" in model:
+        return ["low", "high"], "high"
+    return ["low", "medium", "high"], "high" if "pro" in model else "medium"
+
+
 def _claude_generation(model):
     import re
-    match = re.match(r"claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d)(?!\d))?", model)
+    match = re.match(r"claude-([a-z]+)-(\d+)(?:-(\d)(?!\d))?", model)
     if match:
         return match.group(1), int(match.group(2)) + int(match.group(3) or 0) / 10
     match = re.match(r"claude-(\d)(?:-(\d)(?!\d))?-(opus|sonnet|haiku)", model)
@@ -302,21 +437,58 @@ def _local_thinking(provider, model):
     return result
 
 
+def levels_from_error(text, known):
+    """What a service's refusal says about a model: the whole list of levels, or one level to drop from what we believed."""
+    text = re.sub(r"\([^)]*\)", "", str(text or ""))
+    listed = re.search(r"(?i)\b(?:valid|supported|allowed|accepted)[\w\s]*?(?:values?|levels?|options?|efforts?|types?)[\w\s]*?(?:are|is|include|:)\s*:?\s*([^.\n]+)", text)
+    if listed:
+        words = [word.lower() for word in re.findall(r"[A-Za-z]+", listed.group(1)) if word.lower() not in ("and", "or")]
+        if len(words) >= 2 and all(re.fullmatch(LEVEL_WORDS, word) for word in words):
+            return ([False] if "none" in words else []) + [level for level in EFFORT_ORDER if level in words]
+    single = re.search(rf"(?i)(?:level|effort|value)\s*:?\s*['\"`]?({LEVEL_WORDS})['\"`]?\.?\s+(?:is\s+)?(?:not supported|unsupported|invalid)", text) \
+        or re.search(rf"(?i)(?:unsupported|invalid)\s+(?:value|level|effort)\s*:?\s*['\"`]?({LEVEL_WORDS})\b", text)
+    if single:
+        word = single.group(1).lower()
+        rejected = False if word == "none" else word
+        if rejected in known:
+            return [value for value in known if value != rejected]
+    return None
+
+
+def _learn(name, think, text):
+    known = thinking_modes(name)[0]
+    values = levels_from_error(text, known) if think not in (None, "__auto__") else None
+    if not values or values == known:
+        return
+    learned[name] = values
+    if on_learned:
+        on_learned(name, values)
+
+
 def thinking_modes(name):
+    values, default = _known_thinking(name)
+    if name not in learned:
+        return values, default
+    values = learned[name]
+    named = [value for value in values if value is not False]
+    return values, default if default in values else ("medium" if "medium" in values else named[len(named) // 2] if named else False)
+
+
+def _known_thinking(name):
     provider, model = split(name)
     lowered = model.lower()
     if provider == "anthropic":
         values, default, _ = _claude_thinking(model)
         return values, default
-    if provider == "openai" and lowered.startswith(("o1", "o3", "o4", "gpt-5", "gpt-oss")):
-        return ["low", "medium", "high"], "medium"
-    if provider == "gemini" and lowered.startswith(("gemini-2.5", "gemini-3")):
-        return ["low", "medium", "high"], "high"
-    if provider == "openrouter" and model in _reasoning.get(provider, ()):
-        return [False, "low", "medium", "high"], "medium"
+    if provider == "openai":
+        return _openai_thinking(lowered) or ([], None)
+    if provider == "gemini":
+        return _gemini_thinking(lowered) or ([], None)
+    if provider == "openrouter":
+        return _reasoning.get(provider, {}).get(model, ([], None))
     if provider in ("ollama", "lmstudio"):
         return _local_thinking(provider, model)
-    return [], None
+    return _openai_thinking(lowered) or _gemini_thinking(lowered) or ([True, False], True)
 
 
 def _apply_thinking(provider, model, payload, think):
@@ -329,7 +501,7 @@ def _apply_thinking(provider, model, payload, think):
     if think not in values:
         return
     if provider == "openrouter":
-        payload["reasoning"] = {"enabled": False} if think is False else {"effort": think}
+        payload["reasoning"] = {"enabled": think} if isinstance(think, bool) else {"effort": think}
     elif provider == "lmstudio":
         payload["reasoning"] = {True: "on", False: "off"}.get(think, think)
         if isinstance(think, bool):
@@ -341,11 +513,36 @@ def _apply_thinking(provider, model, payload, think):
             payload["reasoning_effort"] = "none"
         elif think is not True:
             payload["reasoning_effort"] = think
+    elif provider == "custom" and isinstance(think, bool):
+        payload["chat_template_kwargs"] = {"enable_thinking": think}
+        if think is False:
+            payload["reasoning_effort"] = "none"
+    elif think is False:
+        payload["reasoning_effort"] = "none"
     elif isinstance(think, str):
         payload["reasoning_effort"] = think
 
 
-def chat(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_event=None, on_response=None,
+def _open_stream(url, payload, headers, timeout, name=None, think=None):
+    """A level the service turned out not to accept should not cost the user the answer, and is not offered again."""
+    def send(body):
+        request = urllib.request.Request(url, data=json.dumps(body, ensure_ascii=False).encode("utf-8"), headers=headers)
+        return urllib.request.urlopen(request, timeout=timeout)
+    try:
+        return send(payload)
+    except urllib.error.HTTPError as error:
+        plain = {key: value for key, value in payload.items() if key not in THINKING_FIELDS}
+        if error.code != 400 or len(plain) == len(payload):
+            raise
+        if name:
+            try:
+                _learn(name, think, error.read().decode("utf-8", "replace"))
+            except Exception:
+                pass
+        return send(plain)
+
+
+def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_event=None, on_response=None,
          on_text=None, overrides=None, sampling=None, tools=None, tool_calls=None, think="__auto__"):
     provider, model = split(name)
     options = settings_of(provider)
@@ -399,11 +596,9 @@ def chat(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
         url = options["url"] + "/chat/completions"
     if on_status:
         on_status(f"Запрос к {info['title']}")
-    request = urllib.request.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                                     headers=_headers(provider, options["key"]))
     parts, thoughts, stage, last, calls = [], [], None, 0.0, {}
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with _open_stream(url, payload, _headers(provider, options["key"]), timeout, name, think) as response:
             if on_response:
                 on_response(response)
             try:
@@ -446,15 +641,44 @@ def chat(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
                 if on_response:
                     on_response(None)
     except urllib.error.HTTPError as error:
-        raise RuntimeError(f"{info['title']}: {_http_error(error)}") from error
+        reason = _http_error(error)
+        if error.code == 401:
+            with _lock:
+                _errors[provider], _kinds[provider] = reason, "key"
+        if error.code in RETRY_STATUSES and not (parts or thoughts or calls):
+            raise _Lost(f"{info['title']}: {reason}") from error
+        raise RuntimeError(f"{info['title']}: {reason}") from error
     except urllib.error.URLError as error:
+        if not isinstance(error.reason, TimeoutError) and not (parts or thoughts or calls):
+            raise _Lost(f"{info['title']}: нет связи ({error.reason})") from error
         raise RuntimeError(f"{info['title']}: нет связи ({error.reason})") from error
     except (AttributeError, ValueError, OSError) as error:
         if cancel_event is not None and cancel_event.is_set():
             raise InterruptedError("Запрос прерван пользователем") from error
+        if isinstance(error, OSError) and not isinstance(error, TimeoutError) and not (parts or thoughts or calls):
+            raise _Lost(f"{info['title']}: связь оборвалась ({error})") from error
         raise RuntimeError(f"{info['title']}: связь оборвалась ({error})") from error
     if thoughts and on_thinking:
         on_thinking("".join(thoughts))
     if tool_calls is not None and info["kind"] != "anthropic":
         tool_calls.extend(llama.finished_tool_calls(calls))
     return "".join(parts).strip()
+
+
+def chat(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_event=None, on_response=None,
+         on_text=None, overrides=None, sampling=None, tools=None, tool_calls=None, think="__auto__"):
+    """A dropped connection costs nothing while the service has not answered yet, so it is tried again."""
+    def ask():
+        return _ask(name, messages, timeout, on_status, on_thinking, cancel_event, on_response, on_text,
+                    overrides, sampling, tools, tool_calls, think)
+    for wait in RETRY_WAITS:
+        try:
+            return ask()
+        except _Lost:
+            if on_status:
+                on_status("Связь оборвалась, подключаюсь снова")
+            if cancel_event is None:
+                time.sleep(wait)
+            elif cancel_event.wait(wait):
+                raise InterruptedError("Запрос прерван пользователем")
+    return ask()
