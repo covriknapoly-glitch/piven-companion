@@ -2193,7 +2193,13 @@ def main():
                                                  "Закрой его через значок в трее (правая кнопка → «Выйти») и открой снова.</h3></body>", width=620, height=200)
             webview.start()
             return
-    shutil.rmtree(core.DATA_DIR / "webview" / "EBWebView" / "Default" / "Cache", ignore_errors=True)
+    for cache in ("Cache", "Code Cache"):
+        folder = core.DATA_DIR / "webview" / "EBWebView" / "Default" / cache
+        for attempt in range(5):
+            shutil.rmtree(folder, ignore_errors=True)
+            if not folder.exists():
+                break
+            time.sleep(0.4)
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     app = WebCompanion()
     threading.Thread(target=app.refresh_models, daemon=True).start()
