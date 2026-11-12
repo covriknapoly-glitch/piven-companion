@@ -800,6 +800,8 @@ class CompanionCore:
             "barge_in": bool(saved.get("barge_in", True)),
             "close_to_tray": bool(saved.get("close_to_tray", True)),
             "notifications": bool(saved.get("notifications", True)),
+            "update_check": bool(saved.get("update_check", True)),
+            "update_skipped": str(saved.get("update_skipped", "")),
             "tray_hint_shown": bool(saved.get("tray_hint_shown", False)),
             "project_root": str(saved.get("project_root", "")),
             "code_mode_last": str(saved.get("code_mode_last", "")),

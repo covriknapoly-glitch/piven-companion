@@ -72,6 +72,7 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\runtime\Python311\pythonw.exe
 
 [Run]
 Filename: "{app}\runtime\Python311\pythonw.exe"; Parameters: """{app}\app\window\main.pyw"""; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\runtime\Python311\pythonw.exe"; Parameters: """{app}\app\window\main.pyw"" --restarted"; WorkingDir: "{app}"; Flags: nowait; Check: StartedForUpdate
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\voice-engines"
@@ -79,6 +80,11 @@ Type: filesandordirs; Name: "{app}\app\__pycache__"
 Type: files; Name: "{app}\*.log"
 
 [Code]
+function StartedForUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:update|0}') = '1';
+end;
+
 function WebView2Installed: Boolean;
 var
   Version: String;

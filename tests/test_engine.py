@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import queue
@@ -5,6 +6,7 @@ import re
 import sys
 import tempfile
 import threading
+import time
 import types
 import unittest
 import urllib.error
@@ -696,6 +698,76 @@ class PairedPhones(unittest.TestCase):
         self.api.remote_forget("phone12345")
         self.assertEqual(self.api.remote_devices(), [])
         self.assertEqual(self.api.remote_secrets(), [])
+
+
+class Updates(unittest.TestCase):
+    def setUp(self):
+        from app import update
+        self.update = update
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.folder = Path(temp.name)
+
+    def release(self, tag, assets=None, **extra):
+        return io.BytesIO(json.dumps({"tag_name": tag, "name": tag, "body": "notes", "html_url": "https://github.com/x", "assets": assets or [], **extra}).encode())
+
+    def test_versions_compare_as_numbers(self):
+        self.assertTrue(self.update.is_newer("0.10.0", "0.9.9"))
+        self.assertTrue(self.update.is_newer("v0.2.0", "0.1.0"))
+        self.assertFalse(self.update.is_newer("0.1.0", "0.1.0"))
+        self.assertFalse(self.update.is_newer("", "0.1.0"))
+        self.assertFalse(self.update.is_newer("PIVEN-Companion-0.1.0-Setup", "0.1.0"))
+        self.assertTrue(self.update.is_newer("PIVEN-Companion-0.2.0-Setup", "0.1.0"))
+
+    def test_the_installer_and_its_checksum_are_found(self):
+        assets = [{"name": "notes.txt"}, {"name": "PIVEN-Companion-0.2.0-Setup.exe", "size": 5, "browser_download_url": "https://github.com/a.exe", "digest": "sha256:ABC"}]
+        with mock.patch.object(self.update.urllib.request, "urlopen", return_value=self.release("v0.2.0", assets)):
+            latest = self.update.latest_release()
+        self.assertEqual(latest["version"], "0.2.0")
+        self.assertEqual(latest["installer"]["sha256"], "abc")
+
+    def test_drafts_and_previews_are_ignored(self):
+        with mock.patch.object(self.update.urllib.request, "urlopen", return_value=self.release("v9.0.0", prerelease=True)):
+            self.assertIsNone(self.update.latest_release())
+
+    def test_a_copy_run_from_sources_is_not_updated(self):
+        updater = self.update.Updater(self.folder, self.folder)
+        updater.latest = {"version": "9.0.0", "installer": {"name": "a-Setup.exe", "size": 1, "url": "https://github.com/a", "sha256": ""}}
+        self.assertFalse(updater.status()["canInstall"])
+        self.assertIn("исходник", updater.download()["error"])
+
+    def test_only_github_links_are_downloaded(self):
+        (self.folder / "unins000.exe").write_bytes(b"")
+        updater = self.update.Updater(self.folder, self.folder)
+        updater.latest = {"version": "9.0.0", "installer": {"name": "a-Setup.exe", "size": 1, "url": "https://evil.example/a.exe", "sha256": ""}}
+        self.assertIn("GitHub", updater.download()["error"])
+
+    def test_a_download_that_does_not_match_its_checksum_is_thrown_away(self):
+        (self.folder / "unins000.exe").write_bytes(b"")
+        data = b"installer bytes"
+        updater = self.update.Updater(self.folder, self.folder)
+        for checksum, expected in (("0" * 64, "error"), (hashlib.sha256(data).hexdigest(), "done")):
+            updater.latest = {"version": "9.0.0", "installer": {"name": "PIVEN-Companion-9.0.0-Setup.exe", "size": len(data), "url": "https://github.com/a.exe", "sha256": checksum}}
+            with mock.patch.object(self.update.download, "fetch", side_effect=lambda url, partial, **kw: partial.write_bytes(data)):
+                self.assertTrue(updater.download()["ok"])
+                for _ in range(100):
+                    if updater.job["state"] != "running":
+                        break
+                    time.sleep(0.02)
+            self.assertEqual(updater.job["state"], expected)
+            self.assertEqual(bool(updater.ready), expected == "done")
+
+    def test_old_installers_are_cleaned_but_a_waiting_newer_one_is_kept(self):
+        folder = self.folder / "updates"
+        folder.mkdir()
+        (folder / "PIVEN-Companion-0.1.0-Setup.exe").write_bytes(b"x")
+        (folder / "PIVEN-Companion-9.0.0-Setup.exe").write_bytes(b"x")
+        self.update.Updater(self.folder, self.folder).clean()
+        self.assertEqual([item.name for item in folder.iterdir()], ["PIVEN-Companion-9.0.0-Setup.exe"])
+
+    def test_the_installer_version_matches_the_program(self):
+        script = (ROOT / "installer" / "piven.iss").read_text(encoding="utf-8-sig")
+        self.assertIn(f'#define AppVersion "{self.update.VERSION}"', script)
 
 
 class FakeStream(io.BytesIO):

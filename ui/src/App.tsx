@@ -16,6 +16,7 @@ import { THEME_IDS, isLightTheme, type ThemeId } from "./themes";
 import { Workspace, type WorkspaceTab } from "./workspace";
 import { phoneHost } from "./linkhost";
 import { PhoneBanner, PhoneStart } from "./pairing";
+import { UpdateBanner } from "./update";
 import { LANGUAGES, defaultLanguage, setLanguage, type Language } from "./i18n";
 
 const THEME_KEY = "piven-ui-theme";
@@ -241,6 +242,7 @@ export default function App() {
 
         {state.busy && <div className="activity-strip"><i /></div>}
         {isPhone && <PhoneBanner />}
+        <UpdateBanner api={api} state={state} onError={done} />
 
         <Transcript api={api} state={state} focusIndex={focusIndex}
               onCopy={copy} onView={setLightbox} onStop={stop}

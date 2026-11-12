@@ -1083,3 +1083,11 @@ code, pre, textarea.prompt-input { font-family: var(--mono); }
   .model-menu, .code-menu { width: min(340px, calc(100vw - 16px)); min-width: 0; }
   .toast { bottom: calc(var(--dock-h, 110px) + 12px); }
 }
+
+.update-banner { position: relative; z-index: 34; flex: 0 0 auto; margin: 46px auto -36px; width: min(calc(100% - 32px), 764px); display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 12px; border-radius: 6px; background: var(--element); box-shadow: var(--menu-shadow); font-size: 13px; animation: fade-in .2s var(--ease); }
+.update-banner > .ico { flex: 0 0 auto; color: var(--blue); }
+.update-banner.ready > .ico { color: var(--ok); }
+.update-banner .grow { min-width: 0; flex: 1; }
+.update-row { align-items: center; gap: 12px; margin-top: 8px; }
+.update-row .pane-note { margin: 0; }
+@media (max-width: 700px) { .update-banner { margin: 44px auto -34px; width: calc(100% - 16px); flex-wrap: wrap; } }

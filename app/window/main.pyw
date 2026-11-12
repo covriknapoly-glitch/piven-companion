@@ -32,6 +32,7 @@ from app.models import memory_fit
 from app.tools import mcp
 from app.models import logos
 from app.models import integrations
+from app import update as updates
 from app.tools import toolbox as tools
 from app.voice import install
 
@@ -118,6 +119,23 @@ class WebCompanion(CompanionCore):
         self._hf_cancel = threading.Event()
         self._voice = {"kind": "", "id": "", "state": "idle", "percent": 0, "message": "", "error": ""}
         self._voice_cancel = threading.Event()
+        self.updater = updates.Updater(APP_DIR, DATA_DIR, self._changed)
+
+    def _watch_updates(self):
+        self.updater.clean()
+        time.sleep(20)
+        while True:
+            if self.settings.get("update_check", True):
+                self.updater.check()
+            time.sleep(6 * 3600)
+
+    def _update_banner(self):
+        status = self.updater.status(self.settings.get("update_skipped", ""))
+        job = status["job"]
+        if job["state"] == "idle" and (not status["available"] or status["skipped"]):
+            return None
+        return {"version": status["latest"], "page": status["page"], "canInstall": status["canInstall"], "ready": status["ready"],
+                "state": job["state"], "percent": job["percent"], "message": job["message"]}
 
     def _changed(self):
         self._version += 1
@@ -171,6 +189,7 @@ class WebCompanion(CompanionCore):
                 "notice": self._notice,
                 "models": self._models,
                 "modelsError": self._models_error,
+                "update": self._update_banner(),
                 "queue": [{"text": str(entry[0]), "images": len(entry[3] or [])} for entry in self.pending_text_prompts],
                 "settings": {
                     "model": self.settings.get("model", ""),
@@ -2062,6 +2081,46 @@ class WebApi:
             app._save_settings()
         return {"ok": True}
 
+    def update_status(self):
+        app = self._app
+        return {**app.updater.status(app.settings.get("update_skipped", "")), "auto": bool(app.settings.get("update_check", True))}
+
+    def update_check(self):
+        self._app.updater.check()
+        return self.update_status()
+
+    def update_download(self):
+        return self._app.updater.download()
+
+    def update_cancel(self):
+        return self._app.updater.cancel()
+
+    def update_install(self):
+        app = self._app
+        result = app.updater.launch()
+        if result.get("ok"):
+            def close():
+                app._quitting = True
+                if app.window is not None:
+                    app.window.destroy()
+            threading.Timer(0.5, close).start()
+        return result
+
+    def update_skip(self, version):
+        with self._app._state_lock:
+            self._app.settings["update_skipped"] = str(version or "")[:20]
+            self._app._save_settings()
+        self._app._changed()
+        return {"ok": True}
+
+    def update_set_check(self, enabled):
+        with self._app._state_lock:
+            self._app.settings["update_check"] = bool(enabled)
+            self._app._save_settings()
+        if enabled:
+            threading.Thread(target=self._app.updater.check, daemon=True).start()
+        return {"ok": True}
+
     def copy_text(self, text):
         import subprocess
         subprocess.run(["clip"], input=str(text).encode("utf-16-le"), check=False,
@@ -2139,6 +2198,7 @@ def main():
     app = WebCompanion()
     threading.Thread(target=app.refresh_models, daemon=True).start()
     threading.Thread(target=app._watch_providers, daemon=True).start()
+    threading.Thread(target=app._watch_updates, daemon=True).start()
     window = webview.create_window(WINDOW_TITLE, url=str(UI_INDEX), js_api=WebApi(app),
                                    width=1440, height=900, min_size=(960, 640), background_color="#0a0a0a")
     app.window = window

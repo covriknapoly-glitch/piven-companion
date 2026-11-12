@@ -65,6 +65,13 @@ export interface EngineState {
   models: string[];
   modelsError: string;
   settings: EngineSettings;
+  update: UpdateBanner | null;
+}
+
+export interface UpdateBanner { version: string; page: string; canInstall: boolean; ready: boolean; state: "idle" | "running" | "done" | "error"; percent: number; message: string }
+export interface UpdateStatus {
+  current: string; latest: string; available: boolean; notes: string; page: string; size: number; canInstall: boolean; skipped: boolean;
+  checked: number; error: string; ready: boolean; auto: boolean; job: { state: string; percent: number; message: string };
 }
 
 export type ParamValue = number | string | boolean;
@@ -261,6 +268,13 @@ interface WebApi {
   remote_add(id: string, secret: string, name: string): Promise<CommandResult>;
   remote_update(id: string, name: string | null, seen: boolean): Promise<CommandResult>;
   remote_forget(id: string): Promise<CommandResult>;
+  update_status(): Promise<UpdateStatus>;
+  update_check(): Promise<UpdateStatus>;
+  update_download(): Promise<CommandResult>;
+  update_cancel(): Promise<CommandResult>;
+  update_install(): Promise<CommandResult>;
+  update_skip(version: string): Promise<CommandResult>;
+  update_set_check(enabled: boolean): Promise<CommandResult>;
 }
 
 /** The phone page is served from the web; the PIVEN window loads its files from disk. */

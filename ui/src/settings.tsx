@@ -6,6 +6,7 @@ import { ConfirmDialog, ListenSettings } from "./dialogs";
 import { LANGUAGES, type Language } from "./i18n";
 import { ModelParamsPane, ModelSettingsPage } from "./params";
 import { PhonePane } from "./pairing";
+import { UpdatePane } from "./update";
 import { IntegrationsPane } from "./providers";
 import { ToolsPane } from "./tools";
 import { MemoryPane } from "./memory";
@@ -231,6 +232,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
 
             {section === "phone" && !isPhone && <PhonePane api={api} />}
             {section === "data" && <>
+              <UpdatePane api={api} />
               <Field label="Папка с данными" hint={<span className="mono">{d.dataDir}</span>}>
                 <div className="row">
                   <Button icon="folder" onClick={() => { void api.open_data_folder("folder"); }}>Открыть папку</Button>
