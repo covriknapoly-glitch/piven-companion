@@ -803,6 +803,8 @@ class CompanionCore:
             "tray_hint_shown": bool(saved.get("tray_hint_shown", False)),
             "project_root": str(saved.get("project_root", "")),
             "code_mode_last": str(saved.get("code_mode_last", "")),
+            "remote_devices": [item for item in saved.get("remote_devices", []) if isinstance(item, dict) and isinstance(item.get("id"), str)]
+            if isinstance(saved.get("remote_devices"), list) else [],
             "code_trusted": [str(item) for item in saved.get("code_trusted", []) if isinstance(item, str)] if isinstance(saved.get("code_trusted"), list) else [],
             "canvas_theme": canvas_theme,
             "theme_revision": 2,

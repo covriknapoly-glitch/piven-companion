@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
+import { isPhone } from "./bridge";
 import type { DiskUsage, EngineState, MemoryEstimate, ModelMemory, SettingsDetails, VoiceKind, VoiceModel, VoiceStatus, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
 import { ConfirmDialog, ListenSettings } from "./dialogs";
 import { LANGUAGES, type Language } from "./i18n";
 import { ModelParamsPane, ModelSettingsPage } from "./params";
+import { PhonePane } from "./pairing";
 import { IntegrationsPane } from "./providers";
 import { ToolsPane } from "./tools";
 import { MemoryPane } from "./memory";
 import { AdvancedHead, Button, callMemoryLabel, Decor, Field, gigabytes, groupModels, IconButton, MemoryBar, ModelLogo, shortModel, Switch, TextSetting, Toggle, useOutsideClose } from "./ui";
 import { THEMES, type ThemeId } from "./themes";
-type SectionId = "look" | "model" | "tools" | "memory" | "voice" | "images" | "code" | "integrations" | "data";
+type SectionId = "look" | "model" | "tools" | "memory" | "voice" | "images" | "code" | "integrations" | "phone" | "data";
 const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
   { id: "model", title: "Модель", icon: "box" },
   { id: "look", title: "Оформление и окно", icon: "palette" },
@@ -18,6 +20,7 @@ const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
   { id: "tools", title: "Инструменты и навыки", icon: "code" },
   { id: "integrations", title: "Интеграции", icon: "extension" },
   { id: "images", title: "Картинки и видео", icon: "image" },
+  { id: "phone", title: "Телефон", icon: "plug" },
   { id: "data", title: "Данные", icon: "folder" },
 ];
 
@@ -70,7 +73,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
       <div className="modal settings" role="dialog" aria-modal="true" aria-label="Настройки" ref={ref}>
         <nav className="settings-nav">
           <h3>Настройки</h3>
-          {SECTIONS.map((item) => (
+          {SECTIONS.filter((item) => !(isPhone && item.id === "phone")).map((item) => (
             <button key={item.id} type="button" className={section === item.id ? "on" : ""} onClick={() => { setSection(item.id); setModelPage(null); }}>
               <Icon name={item.icon} size={17} />{item.title}
             </button>
@@ -226,6 +229,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
 
             {section === "integrations" && <IntegrationsPane api={api} d={d} save={save} onChanged={() => setSavedAt(Date.now())} />}
 
+            {section === "phone" && !isPhone && <PhonePane api={api} />}
             {section === "data" && <>
               <Field label="Папка с данными" hint={<span className="mono">{d.dataDir}</span>}>
                 <div className="row">

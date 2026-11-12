@@ -3,6 +3,7 @@ import type { EngineState, ModelFeatures, ModelMemory, ThinkingOptions, Thinking
 import { useImage } from "./cards";
 import { publishDraft } from "./context";
 import { CallControl } from "./dialogs";
+import { isPhone } from "./bridge";
 import { Icon } from "./icons";
 import { FolderChip, ModeChip, nextMode } from "./projects";
 import { IconButton, MemoryBadge, ModelLogo, fileName, groupModels, shortModel, thinkingFixed, thinkingName, useOutsideClose } from "./ui";
@@ -183,6 +184,7 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
     element.style.height = `${Math.min(220, element.scrollHeight)}px`;
   }, [draft, inputRef]);
 
+  const photoRef = useRef<HTMLInputElement>(null);
   const addFiles = async (files: File[]) => {
     for (const file of files.filter((item) => item.type.startsWith("image/"))) {
       const result = await api.save_upload(file.name || "image.png", await readAsBase64(file));
@@ -244,19 +246,20 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
         onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
       <div className="composer-bar">
         <IconButton icon="paperclip" label="Прикрепить картинку (можно вставить Ctrl+V или перетащить)"
-          onClick={() => { void api.pick_images().then((paths) => setImages((current) => [...current, ...paths.filter((path) => !current.includes(path))])); }} />
+          onClick={() => { if (isPhone) { photoRef.current?.click(); return; } void api.pick_images().then((paths) => setImages((current) => [...current, ...paths.filter((path) => !current.includes(path))])); }} />
+        {isPhone && <input ref={photoRef} type="file" accept="image/*" multiple hidden onChange={(event) => { const files = [...(event.target.files ?? [])]; event.target.value = ""; void addFiles(files); }} />}
         <ModelChip state={state} api={api} onDone={onError} onOpenHub={onOpenHub} onOpenVoiceHub={onOpenVoiceHub} />
         <ThinkingChip state={state} api={api} onDone={onError} />
         <span className="composer-spacer" />
         {state.code.on && <FolderChip state={state} api={api} onDone={onError} />}
         {state.code.on && <ModeChip state={state} api={api} onDone={onError} />}
-        {!state.listening.running && !state.settings.heavyMode && (
+        {!isPhone && !state.listening.running && !state.settings.heavyMode && (
           <button type="button" className={`call-btn mic-btn ${phase ? "on" : ""}`} disabled={phase === "recognizing"} aria-pressed={Boolean(phase)} onClick={toggleDictation}
             title={phase === "recognizing" ? "Распознаёт речь" : phase ? "Остановить запись" : "Голосовой ввод"} aria-label={phase ? "Остановить запись" : "Голосовой ввод"}>
             {phase === "recognizing" ? <span className="spinner" /> : <Icon name="mic" size={16} />}
           </button>
         )}
-        {!state.settings.heavyMode && <CallControl api={api} state={state} onError={onError} />}
+        {!isPhone && !state.settings.heavyMode && <CallControl api={api} state={state} onError={onError} />}
         {state.busy && <button type="button" className="send-btn stop" onClick={onStop} title="Остановить (Esc)" aria-label="Остановить"><Icon name="stop" size={15} /></button>}
         {(!state.busy || canSend) && <button type="submit" className="send-btn" disabled={!canSend} title="Отправить (Enter)" aria-label="Отправить"><Icon name="arrowUp" size={18} /></button>}
       </div>

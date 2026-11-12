@@ -256,7 +256,15 @@ interface WebApi {
   delete_model(name: string): Promise<{ ok: boolean; error?: string; freed?: number }>;
   disk_usage(): Promise<DiskUsage>;
   voice_engine_delete(engine: string): Promise<CommandResult>;
+  remote_devices(): Promise<{ id: string; name: string; created: number; seen: number }[]>;
+  remote_secrets(): Promise<{ id: string; secret: string }[]>;
+  remote_add(id: string, secret: string, name: string): Promise<CommandResult>;
+  remote_update(id: string, name: string | null, seen: boolean): Promise<CommandResult>;
+  remote_forget(id: string): Promise<CommandResult>;
 }
+
+/** The phone page is served from the web; the PIVEN window loads its files from disk. */
+export const isPhone = typeof window !== "undefined" && (location.protocol === "https:" || (location.protocol === "http:" && !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)));
 
 declare global {
   interface Window {

@@ -1495,7 +1495,7 @@ class WebApi:
         app = self._app
         if app.any_busy or app.running:
             return {"ok": False, "error": "Сначала дождись конца ответа и заверши звонок."}
-        keep = ("model", "asr_model", "tts_model", "project_root", "tray_hint_shown")
+        keep = ("model", "asr_model", "tts_model", "project_root", "tray_hint_shown", "remote_devices")
         with app._state_lock:
             kept = {key: app.settings[key] for key in keep if key in app.settings}
             core.SETTINGS_PATH.write_text(json.dumps(kept, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -2017,6 +2017,49 @@ class WebApi:
 
     def voice_cancel(self):
         self._app._voice_cancel.set()
+        return {"ok": True}
+
+    def _phones(self):
+        return [item for item in self._app.settings.get("remote_devices", []) if isinstance(item, dict) and isinstance(item.get("id"), str)]
+
+    def remote_devices(self):
+        return [{"id": item["id"], "name": str(item.get("name") or "Телефон"), "created": float(item.get("created") or 0), "seen": float(item.get("seen") or 0)}
+                for item in self._phones()]
+
+    def remote_secrets(self):
+        found = [{"id": item["id"], "secret": integrations.unseal(str(item.get("secret") or ""))} for item in self._phones()]
+        return [item for item in found if item["secret"]]
+
+    def remote_add(self, device_id, secret, name=""):
+        device_id, secret = str(device_id or ""), str(secret or "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", device_id) or len(secret) < 32:
+            return {"ok": False, "error": "Неверные данные телефона."}
+        app = self._app
+        with app._state_lock:
+            phones = [item for item in self._phones() if item["id"] != device_id]
+            phones.append({"id": device_id, "name": str(name or "Телефон")[:60], "secret": integrations.seal(secret), "created": time.time(), "seen": 0})
+            app.settings["remote_devices"] = phones[-10:]
+            app._save_settings()
+        return {"ok": True}
+
+    def remote_update(self, device_id, name=None, seen=False):
+        app = self._app
+        with app._state_lock:
+            for item in self._phones():
+                if item["id"] == str(device_id):
+                    if name:
+                        item["name"] = str(name)[:60]
+                    if seen:
+                        item["seen"] = time.time()
+                    app._save_settings()
+                    return {"ok": True}
+        return {"ok": False, "error": "Такого телефона нет."}
+
+    def remote_forget(self, device_id):
+        app = self._app
+        with app._state_lock:
+            app.settings["remote_devices"] = [item for item in self._phones() if item["id"] != str(device_id)]
+            app._save_settings()
         return {"ok": True}
 
     def copy_text(self, text):

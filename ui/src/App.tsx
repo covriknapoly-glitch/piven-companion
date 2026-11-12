@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { isUnchanged, waitForEngine, type ChatSummary, type EngineState, type SearchHit, type WebApi } from "./bridge";
+import { isPhone, isUnchanged, waitForEngine, type ChatSummary, type EngineState, type SearchHit, type WebApi } from "./bridge";
 import { Lightbox } from "./cards";
 import { Composer } from "./composer";
 import { CommandDialog, ConfirmDialog, DownloadDialog, HubDialog, SearchDialog } from "./dialogs";
@@ -14,6 +14,8 @@ import { Transcript } from "./transcript";
 import { Decor, IconButton } from "./ui";
 import { THEME_IDS, isLightTheme, type ThemeId } from "./themes";
 import { Workspace, type WorkspaceTab } from "./workspace";
+import { phoneHost } from "./linkhost";
+import { PhoneBanner, PhoneStart } from "./pairing";
 import { LANGUAGES, defaultLanguage, setLanguage, type Language } from "./i18n";
 
 const THEME_KEY = "piven-ui-theme";
@@ -110,7 +112,7 @@ export default function App() {
   const [fontChoice, setFontChoice] = useState<FontChoice>(() => readStored(FONT_KEY, FONT_CHOICES.map(([value]) => value), FONT_CHOICES[0][0]) as FontChoice);
   useEffect(() => { writeStored(FONT_KEY, fontChoice); document.documentElement.dataset.font = fontChoice; }, [fontChoice]);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("browser");
-  const openLink = useCallback((url: string) => { setBrowserOpen(true); setWorkspaceTab("browser"); setBrowserRequest({ url, nonce: Date.now() }); }, []);
+  const openLink = useCallback((url: string) => { if (isPhone) { window.open(url, "_blank", "noopener"); return; } setBrowserOpen(true); setWorkspaceTab("browser"); setBrowserRequest({ url, nonce: Date.now() }); }, []);
 
   const modelBrowse = state?.browserRequest?.nonce;
   useEffect(() => { if (modelBrowse && state?.browserRequest) openLink(state.browserRequest.url); }, [modelBrowse]);
@@ -121,7 +123,13 @@ export default function App() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const engineReady = useCallback((engine: WebApi) => {
+    setApi(engine);
+    void engine.state().then((snapshot) => { versionRef.current = snapshot.version; setState(snapshot); });
+  }, []);
+  useEffect(() => { if (api && !isPhone) phoneHost.start(api); }, [api]);
   useEffect(() => {
+    if (isPhone) return;
     void waitForEngine().then((engine) => {
       if (!engine) { setEngineMissing(true); return; }
       setApi(engine);
@@ -168,7 +176,7 @@ export default function App() {
   }, [pendingFocus, state?.activeChatId]);
 
   const actions: ChatActions | null = useMemo(() => api && {
-    select: (chat) => { if (chat.id !== state?.activeChatId) void api.select_chat(chat.id).then((result) => done(result.ok ? undefined : result.error)); },
+    select: (chat) => { if (window.innerWidth <= 900) setSidebarOpen(false); if (chat.id !== state?.activeChatId) void api.select_chat(chat.id).then((result) => done(result.ok ? undefined : result.error)); },
     rename: (chat, title) => { void api.rename_chat(chat.id, title).then((result) => done(result.ok ? undefined : result.error)); },
     pin: (chat) => { void api.pin_chat(chat.id, !chat.pinned).then(() => done()); },
     exportChat: (chat, markdown) => { void api.export_chat(chat.id, markdown).then((result) => { if (result.ok) notify(`Сохранено: ${result.path}`, "info"); else if (!result.cancelled) notify(result.error); }); },
@@ -198,6 +206,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [newChat, stop, state?.busy, dialog, lightbox, deleting]);
 
+  if (isPhone && !api) return <PhoneStart onReady={engineReady} />;
   if (engineMissing) {
     return <div className="splash"><Decor corner="br" /><h2>Нет связи с движком</h2><p>Этот интерфейс открывается файлом «Запустить веб-интерфейс» в папке программы.</p></div>;
   }
@@ -210,26 +219,28 @@ export default function App() {
     <div className={`app ${sidebarOpen ? "" : "sidebar-hidden"}`}>
       <Sidebar api={api} state={state} actions={actions} searchRef={searchRef} onNewChat={newChat}
         onSearchMessages={() => setDialog("search")} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
       <main className="main">
         {!sidebarOpen && <div className="main-corner">
           <IconButton icon="sidebarOpen" label="Показать панель (Ctrl+B)" onClick={() => setSidebarOpen(true)} />
           <IconButton icon="compose" label="Новый чат (Ctrl+N)" onClick={newChat} />
         </div>}
-        {!browserOpen && !state.listening.running && <div className="main-corner main-corner-right">
+        {!isPhone && !browserOpen && !state.listening.running && <div className="main-corner main-corner-right">
           <IconButton icon="workspaceOff" label="Браузер и файлы (Ctrl+D)" onClick={() => setBrowserOpen(true)} />
         </div>}
 
-        <div className={`chat-tools ${!browserOpen && !state.listening.running ? "beside-corner" : ""}`}>
+        <div className={`chat-tools ${!isPhone && !browserOpen && !state.listening.running ? "beside-corner" : ""}`}>
           <button type="button" className={`code-toggle ${state.code.on ? "on" : ""}`} aria-pressed={state.code.on}
             title={state.code.on ? "Режим кода включён: слева проекты, агент сам пишет файлы и запускает команды. Нажми, чтобы вернуться к чатам" : "Включить режим кода: слева будут проекты, агент сам пишет файлы и запускает команды"}
             onClick={() => { void api.code_mode(!state.code.on).then((result) => done(result.ok ? undefined : result.error)); }}>
             <Icon name="code" size={15} /><span>Код</span>
           </button>
-          <ContextRing api={api} state={state} onOpen={() => { setWorkspaceTab("context"); setBrowserOpen(true); }} />
+          <ContextRing api={api} state={state} onOpen={() => { if (isPhone) return; setWorkspaceTab("context"); setBrowserOpen(true); }} />
         </div>
 
         {state.busy && <div className="activity-strip"><i /></div>}
+        {isPhone && <PhoneBanner />}
 
         <Transcript api={api} state={state} focusIndex={focusIndex}
               onCopy={copy} onView={setLightbox} onStop={stop}
@@ -243,7 +254,7 @@ export default function App() {
         </div>
       </main>
 
-      {(workspaceMounted || state.listening.running) && (
+      {!isPhone && (workspaceMounted || state.listening.running) && (
         <aside className={`workspace ${state.listening.running ? "in-call" : ""} ${workspaceClosing ? "closing" : ""}`} aria-label={state.listening.running ? "Звонок" : "Рабочая панель"}
           style={workspaceWidth ? { ["--ws-w" as string]: `${workspaceWidth}px` } : undefined}>
           <div className={`workspace-resize ${resizing ? "dragging" : ""}`} role="separator" aria-orientation="vertical" title="Потяни, чтобы изменить ширину; двойной щелчок — по умолчанию"

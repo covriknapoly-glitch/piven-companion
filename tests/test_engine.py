@@ -657,6 +657,47 @@ class GeneratedFilesAreMarked(unittest.TestCase):
             self.assertTrue(path.with_name(name + ".xmp").exists())
 
 
+class PairedPhones(unittest.TestCase):
+    def setUp(self):
+        import importlib.machinery, importlib.util
+        loader = importlib.machinery.SourceFileLoader("main_window_phones", str(ROOT / "app" / "window" / "main.pyw"))
+        spec = importlib.util.spec_from_loader("main_window_phones", loader)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        self.app = types.SimpleNamespace(settings={}, _state_lock=threading.Lock(), _save_settings=lambda: None)
+        self.api = module.WebApi.__new__(module.WebApi)
+        self.api._app = self.app
+        sealed = mock.patch.object(integrations, "seal", lambda text: "sealed:" + text)
+        opened = mock.patch.object(integrations, "unseal", lambda text: text[7:] if text.startswith("sealed:") else "")
+        sealed.start(); opened.start()
+        self.addCleanup(sealed.stop); self.addCleanup(opened.stop)
+
+    def test_a_phone_is_kept_with_its_secret_sealed(self):
+        secret = "s" * 43
+        self.assertTrue(self.api.remote_add("phone12345", secret, "iPhone")["ok"])
+        stored = self.app.settings["remote_devices"][0]
+        self.assertNotEqual(stored["secret"], secret)
+        self.assertEqual(self.api.remote_secrets(), [{"id": "phone12345", "secret": secret}])
+        self.assertEqual(self.api.remote_devices()[0]["name"], "iPhone")
+        self.assertNotIn("secret", self.api.remote_devices()[0])
+
+    def test_bad_pairing_data_is_refused(self):
+        self.assertFalse(self.api.remote_add("x", "s" * 43)["ok"])
+        self.assertFalse(self.api.remote_add("phone12345", "short")["ok"])
+        self.assertFalse(self.api.remote_add("../../evil", "s" * 43)["ok"])
+        self.assertEqual(self.app.settings.get("remote_devices", []), [])
+
+    def test_a_phone_can_be_seen_renamed_and_forgotten(self):
+        self.api.remote_add("phone12345", "s" * 43)
+        self.assertTrue(self.api.remote_update("phone12345", "Мой iPhone", True)["ok"])
+        device = self.api.remote_devices()[0]
+        self.assertEqual(device["name"], "Мой iPhone")
+        self.assertGreater(device["seen"], 0)
+        self.api.remote_forget("phone12345")
+        self.assertEqual(self.api.remote_devices(), [])
+        self.assertEqual(self.api.remote_secrets(), [])
+
+
 class FakeStream(io.BytesIO):
     pass
 
