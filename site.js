@@ -31,8 +31,11 @@
     document.querySelectorAll("[data-set-lang]").forEach(function (button) {
       button.setAttribute("aria-pressed", String(button.dataset.setLang === lang));
     });
+    // Each picture is taken twice: at normal screen scale and at double scale for sharp screens.
     document.querySelectorAll("img[data-shot]").forEach(function (image) {
-      image.src = "shots/" + lang + "-" + image.dataset.shot + ".webp";
+      var base = "shots/" + lang + "-" + image.dataset.shot;
+      image.srcset = base + ".webp 1x, " + base + "@2x.webp 2x";
+      image.src = base + ".webp";
     });
     showRelease(lang);
   }
@@ -45,12 +48,12 @@
   function choose(chosen) {
     features.forEach(function (feature) {
       var on = feature === chosen;
-      feature.querySelector(".feature-text").setAttribute("aria-pressed", String(on));
-      feature.querySelector(".shot").classList.toggle("on", on);
+      feature.querySelector(".feature-tab").setAttribute("aria-pressed", String(on));
+      feature.classList.toggle("on", on);
     });
   }
   features.forEach(function (feature) {
-    feature.querySelector(".feature-text").addEventListener("click", function () { choose(feature); });
+    feature.querySelector(".feature-tab").addEventListener("click", function () { choose(feature); });
   });
   if (features.length) choose(features[0]);
 
