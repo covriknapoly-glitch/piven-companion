@@ -2,7 +2,7 @@
 // data channel. Everything sent through ntfy is sealed with the pair's secret, so the service sees only noise.
 
 const NTFY = "https://ntfy.sh";
-export const PHONE_URL = "https://covriknapoly-glitch.github.io/piven-companion/";
+export const PHONE_URL = "https://covriknapoly-glitch.github.io/piven-companion/phone/";
 export const ICE_SERVERS: RTCIceServer[] = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }];
 const CHUNK = 3000;
 const FRAME = 60000;
