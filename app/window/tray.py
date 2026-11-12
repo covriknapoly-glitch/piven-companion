@@ -62,6 +62,7 @@ def foreground_title():
 
 class Tray:
     def __init__(self, icon_path, tooltip, on_open, on_quit):
+        self.labels = lambda: ("Открыть PIVEN", "Выйти")
         self.icon_path, self.tooltip = str(icon_path), tooltip
         self.on_open, self.on_quit = on_open, on_quit
         self.hwnd = None
@@ -112,9 +113,10 @@ class Tray:
 
     def _menu(self):
         menu = user32.CreatePopupMenu()
-        user32.AppendMenuW(menu, 0, MENU_OPEN, "Открыть PIVEN")
+        open_label, quit_label = self.labels()
+        user32.AppendMenuW(menu, 0, MENU_OPEN, open_label)
         user32.AppendMenuW(menu, 0x800, 0, None)
-        user32.AppendMenuW(menu, 0, MENU_QUIT, "Выйти")
+        user32.AppendMenuW(menu, 0, MENU_QUIT, quit_label)
         point = wintypes.POINT()
         user32.GetCursorPos(ctypes.byref(point))
         user32.SetForegroundWindow(self.hwnd)

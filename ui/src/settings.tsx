@@ -26,6 +26,7 @@ const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
 ];
 
 let lastSection: SectionId = "model";
+let lastDetails: SettingsDetails | null = null;
 
 export type FontChoice = "lack";
 export const FONT_CHOICES: readonly (readonly [FontChoice, string, string])[] = [["lack", "Lack", "Lack, sans-serif"]];
@@ -38,7 +39,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
   const [section, setSection] = useState<SectionId>(lastSection);
   useEffect(() => { lastSection = section; }, [section]);
   const [modelPage, setModelPage] = useState<string | null>(null);
-  const [details, setDetails] = useState<SettingsDetails | null>(null);
+  const [details, setDetails] = useState<SettingsDetails | null>(lastDetails);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedAt, setSavedAt] = useState(0);
   const [showSaved, setShowSaved] = useState(false);
@@ -48,7 +49,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
   useEffect(() => { void api.model_memory(model ? [model] : []).then(setMemory); }, [api, model]);
   const modelEstimate = memory?.models[model];
 
-  const reload = useCallback(() => api.settings_details().then((next) => { setDetails(next); setPrompt(next.systemPrompt); }), [api]);
+  const reload = useCallback(() => api.settings_details().then((next) => { lastDetails = next; setDetails(next); setPrompt(next.systemPrompt); }), [api]);
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
     if (!savedAt) return;
@@ -84,7 +85,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
         </nav>
         <div className="settings-pane">
           <IconButton icon="close" label="Закрыть (Esc)" className="settings-close" onClick={onClose} />
-          {!d ? <p className="pane-note">Загрузка…</p> : <div className="settings-fields">
+          {!d ? null : <div className="settings-fields">
             {section === "look" && <>
               <Field label="Язык / Language" hint="Модель тоже будет отвечать на нём.">
                 <div className="segmented wrap">
@@ -101,14 +102,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
                 </div>
               </Field>}
               <Field label="Тема">
-                <div className="theme-grid">
-                  {THEMES.map(([value, label, , swatches]) => (
-                    <button key={value} type="button" className={theme === value ? "on" : ""} onClick={() => setTheme(value)}>
-                      <span className="theme-swatches" style={{ background: swatches[0] }}>{swatches.slice(1).map((color) => <i key={color} style={{ background: color }} />)}</span>
-                      <span>{label}</span>
-                    </button>
-                  ))}
-                </div>
+                <ThemeSelect theme={theme} setTheme={setTheme} />
               </Field>
               <Field label="Работа в фоне" hint="Крестик прячет окно в трей (значок у часов), ответы и вопросы модели приходят уведомлениями. Выйти совсем — правой кнопкой по значку → «Выйти».">
                 <Toggle label="Сворачивать в трей при закрытии" checked={d.closeToTray} onChange={(value) => { void save({ closeToTray: value }); }} />
@@ -255,6 +249,34 @@ const VOICE_KINDS: { kind: VoiceKind; title: string; hint: string }[] = [
   { kind: "asr", title: "Распознавание речи", hint: "Переводит твой голос в текст во время звонка." },
   { kind: "tts", title: "Озвучка", hint: "Читает ответы вслух." },
 ];
+
+function ThemeChip({ colors }: { colors: readonly string[] }) {
+  return <span className="theme-chip" style={{ background: colors[0] }}>{colors.slice(1).map((color) => <i key={color} style={{ background: color }} />)}</span>;
+}
+
+function ThemeSelect({ theme, setTheme }: { theme: ThemeId; setTheme: (value: ThemeId) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useOutsideClose(open, () => setOpen(false));
+  const current = THEMES.find(([value]) => value === theme) ?? THEMES[0];
+  return (
+    <div className="menu-anchor theme-select" ref={ref}>
+      <button type="button" className="model-picker-btn" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <ThemeChip colors={current[3]} /><span className="grow">{current[1]}</span><Icon name="chevronDown" size={14} />
+      </button>
+      {open && (
+        <div className="menu menu-left theme-menu" role="listbox">
+          <div className="menu-list">
+            {THEMES.map(([value, label, , colors]) => (
+              <button key={value} type="button" role="option" aria-selected={value === theme} className={value === theme ? "selected" : ""} onClick={() => { setTheme(value); setOpen(false); }}>
+                <ThemeChip colors={colors} /><span className="grow">{label}</span>{value === theme && <Icon name="check" size={14} />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ResetButton({ api, onReset }: { api: WebApi; onReset: () => void }) {
   const [asking, setAsking] = useState(false);

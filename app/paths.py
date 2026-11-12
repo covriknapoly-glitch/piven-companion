@@ -19,6 +19,17 @@ def _has_files(folder):
         return False
 
 
+def inside(path, roots):
+    """Compares paths as written. resolve() would follow Windows redirects: a PIVEN started from an MSIX app
+    (Claude, for example) has its AppData moved into that app's package folder, and then nothing would match."""
+    path = os.path.normcase(os.path.abspath(path))
+    for root in roots:
+        root = os.path.normcase(os.path.abspath(root)).rstrip("\\/")
+        if path != root and path.startswith(root + os.sep):
+            return True
+    return False
+
+
 def current(local=None):
     local = local or _local()
     new, old = local / NAME, local / OLD_NAME

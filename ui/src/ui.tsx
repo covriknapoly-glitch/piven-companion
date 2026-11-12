@@ -183,7 +183,7 @@ export function Toggle({ checked, onChange, label, disabled = false }: { checked
 }
 
 export function AdvancedHead() {
-  return <h5 className="pane-subhead settings-advanced">Для опытных</h5>;
+  return <h5 className="pane-subhead advanced-head">Для опытных</h5>;
 }
 
 export function Field({ label, hint, error, children }: { label: string; hint?: ReactNode; error?: string; children: ReactNode }) {

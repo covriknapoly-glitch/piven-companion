@@ -326,8 +326,7 @@ def ready(kind, model_id):
 
 def _remove(target):
     target = Path(target)
-    roots = [VOICE_DIR.resolve(), (TTS_DIR / "models").resolve()]
-    if not any(root in target.resolve().parents for root in roots):
+    if not paths.inside(target, [VOICE_DIR, TTS_DIR / "models"]):
         raise RuntimeError(f"Путь вне папок озвучки и не будет удалён: {target}")
     if target.is_dir():
         size = _folder_size(target)
@@ -356,7 +355,7 @@ def delete(kind, model_id):
         from app.voice import catalog
         path = Path(info["path"])
         folder = path if path.is_dir() else path.parent
-        inside = catalog.MODELS_DIR.resolve() in folder.resolve().parents
+        inside = paths.inside(folder, [catalog.MODELS_DIR])
         targets = [folder if inside else path]
     elif info.get("path"):
         targets = [Path(info["path"])]

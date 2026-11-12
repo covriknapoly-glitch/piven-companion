@@ -176,15 +176,16 @@ def delete_model(name):
         raise RuntimeError("Такой модели нет в папке моделей.")
     stop_model(name)
     files = _own_files(name, entries)
-    roots = [MODELS_DIR.resolve(), HF_MODELS_DIR.resolve()]
+    roots = [MODELS_DIR, HF_MODELS_DIR]
+    for item in files:
+        if not paths.inside(item, roots):
+            raise RuntimeError(f"Файл лежит вне папки моделей и не будет удалён: {item}")
     freed = 0
     for item in files:
-        if not any(root in item.resolve().parents for root in roots):
-            raise RuntimeError(f"Файл лежит вне папки моделей и не будет удалён: {item}")
         freed += item.stat().st_size
         item.unlink()
     folder = files[0].parent
-    while folder.resolve() not in roots and not any(folder.iterdir()):
+    while paths.inside(folder, roots) and not any(folder.iterdir()):
         folder.rmdir()
         folder = folder.parent
     return freed

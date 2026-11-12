@@ -85,7 +85,6 @@ export function IntegrationsPane({ api, d, save, onChanged }:
       {query && <button type="button" aria-label="Очистить" onClick={() => setQuery("")}><Icon name="close" size={13} /></button>}
     </label>
     {own.length > 0 && <><h5 className="pane-subhead">Встроенные</h5>{own}</>}
-    {rows === null && <p className="pane-note">Загрузка…</p>}
     {local.length > 0 && <><h5 className="pane-subhead">Локальные модели</h5>{local.map(card)}</>}
     {cloud.length > 0 && <><h5 className="pane-subhead">Облачные модели по своему ключу</h5>{cloud.map(card)}</>}
     {nothing && <p className="pane-note">Ничего не найдено</p>}

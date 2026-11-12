@@ -29,7 +29,6 @@ function EmbeddingSearch({ api, onStarted }: { api: WebApi; onStarted: () => voi
     <div className="embed-search">
       <input className="input" value={query} placeholder="Найти модель эмбеддингов, например qwen3 embedding, bge-m3, e5" onChange={(event) => setQuery(event.target.value)} />
       <div className="embed-list">
-        {models === null && <p className="pane-note">Поиск…</p>}
         {models?.length === 0 && <p className="pane-note">Ничего не нашлось.</p>}
         {models?.map((item) => (
           <button key={item.id} type="button" className={item.id === repo ? "selected" : ""} onClick={() => choose(item.id)}>
@@ -50,11 +49,14 @@ function EmbeddingSearch({ api, onStarted }: { api: WebApi; onStarted: () => voi
   );
 }
 
+let lastMemory: MemoryStatus | null = null;
+
 export function MemoryPane({ api }: { api: WebApi }) {
-  const [status, setStatus] = useState<MemoryStatus | null>(null);
+  const [changing, setChanging] = useState(false);
+  const [status, setStatus] = useState<MemoryStatus | null>(lastMemory);
   const [fact, setFact] = useState("");
   const [clearing, setClearing] = useState<"" | "fact" | "exchange" | "all">("");
-  const load = useCallback(() => api.memory_status().then(setStatus), [api]);
+  const load = useCallback(() => api.memory_status().then((next) => { lastMemory = next; setStatus(next); }), [api]);
   useEffect(() => { void load(); }, [load]);
   const job = status?.job;
   useEffect(() => {
@@ -62,7 +64,7 @@ export function MemoryPane({ api }: { api: WebApi }) {
     const timer = window.setInterval(() => { void load(); }, 700);
     return () => window.clearInterval(timer);
   }, [job?.state, load]);
-  if (!status) return <p className="pane-note">Загрузка…</p>;
+  if (!status) return null;
   const add = () => { if (fact.trim()) void api.memory_add_fact(fact).then(() => { setFact(""); void load(); }); };
 
   return <>
@@ -95,7 +97,9 @@ export function MemoryPane({ api }: { api: WebApi }) {
       {job?.state === "running"
         ? <div className="side-download running"><div className="progress-track"><i style={{ width: `${job.percent}%` }} /></div><small>{job.message}</small>
             <Button kind="ghost" onClick={() => { void api.memory_cancel(); }}>Отменить</Button></div>
-        : <EmbeddingSearch api={api} onStarted={() => { void load(); }} />}
+        : status.modelReady && !changing
+          ? <Button kind="ghost" icon="refresh" onClick={() => setChanging(true)}>Сменить модель</Button>
+          : <EmbeddingSearch api={api} onStarted={() => { setChanging(false); void load(); }} />}
       {job && job.state !== "running" && job.message && <p className="pane-note">{job.message}</p>}
     </Field>
 

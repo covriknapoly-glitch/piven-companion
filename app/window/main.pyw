@@ -33,6 +33,7 @@ from app.tools import mcp
 from app.models import logos
 from app.models import integrations
 from app import update as updates
+from app import i18n
 from app.tools import toolbox as tools
 from app.voice import install
 
@@ -250,7 +251,11 @@ class WebCompanion(CompanionCore):
             return
         self._changed()
 
+    def _tr(self, text):
+        return i18n.translate(text, self.settings.get("ui_language", "ru"))
+
     def _notify(self, title, text):
+        title, text = self._tr(title), self._tr(text)
         if not self.tray or not self.settings.get("notifications", True):
             return
         try:
@@ -1120,9 +1125,9 @@ class WebApi:
         if kind == "folder":
             result = window.create_file_dialog(webview.FOLDER_DIALOG)
         elif kind == "audio":
-            result = window.create_file_dialog(webview.OPEN_DIALOG, file_types=("Запись голоса (*.wav)", "Все файлы (*.*)"))
+            result = window.create_file_dialog(webview.OPEN_DIALOG, file_types=(self._app._tr("Запись голоса (*.wav)"), self._app._tr("Все файлы (*.*)")))
         else:
-            result = window.create_file_dialog(webview.OPEN_DIALOG, file_types=("ComfyUI workflow (*.json)", "Все файлы (*.*)"))
+            result = window.create_file_dialog(webview.OPEN_DIALOG, file_types=("ComfyUI workflow (*.json)", self._app._tr("Все файлы (*.*)")))
         return str(result[0]) if result else ""
 
     def open_data_folder(self, what="folder"):
@@ -1590,7 +1595,7 @@ class WebApi:
         suffix = ".md" if markdown else ".txt"
         safe_name = re.sub(r'[<>:"/\\|?*]+', "_", chat.get("title") or "Чат").strip(" .") or "Чат"
         result = app.window.create_file_dialog(webview.SAVE_DIALOG, save_filename=safe_name + suffix,
-                                               file_types=("Markdown (*.md)",) if markdown else ("Текстовый файл (*.txt)",))
+                                               file_types=("Markdown (*.md)",) if markdown else (self._app._tr("Текстовый файл (*.txt)"),))
         target = result if isinstance(result, str) else (result[0] if result else "")
         if not target:
             return {"ok": False, "cancelled": True}
@@ -1655,7 +1660,7 @@ class WebApi:
         if window is None:
             return []
         result = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True,
-                                           file_types=("Изображения (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff)",))
+                                           file_types=(self._app._tr("Изображения (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff)"),))
         paths = [str(path) for path in (result or []) if str(path).lower().endswith(IMAGE_SUFFIXES)]
         with self._app._state_lock:
             self._app._allowed_files.update(paths)
@@ -2227,6 +2232,7 @@ def main():
     try:
         from app.window import tray
         app.tray = tray.Tray(APP_ICON, WINDOW_TITLE, open_window, quit_program)
+        app.tray.labels = lambda: (app._tr("Открыть PIVEN"), app._tr("Выйти"))
     except Exception as error:
         log(f"tray icon error: {error}")
 
@@ -2234,7 +2240,7 @@ def main():
         if app.tray and app.settings.get("close_to_tray", True) and not app._quitting:
             window.hide(); app._hidden = True
             if not app.settings.get("tray_hint_shown"):
-                app.tray.notify("PIVEN работает в фоне", "Значок в трее: щелчок открывает окно, правая кнопка — «Выйти».")
+                app.tray.notify(app._tr("PIVEN работает в фоне"), app._tr("Значок в трее: щелчок открывает окно, правая кнопка — «Выйти»."))
                 with app._state_lock:
                     app.settings["tray_hint_shown"] = True; app._save_settings()
             return False

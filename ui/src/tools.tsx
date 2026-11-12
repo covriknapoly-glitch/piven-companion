@@ -3,14 +3,16 @@ import type { McpServer, SkillRow, ToolsStatus, WebApi } from "./bridge";
 import { ConfirmDialog } from "./dialogs";
 import { AdvancedHead, Button, Field, Modal, Switch, Toggle } from "./ui";
 
+let lastTools: ToolsStatus | null = null;
+
 export function ToolsPane({ api, children }: { api: WebApi; children?: ReactNode }) {
-  const [status, setStatus] = useState<ToolsStatus | null>(null);
+  const [status, setStatus] = useState<ToolsStatus | null>(lastTools);
   const [editing, setEditing] = useState<McpServer | "new" | null>(null);
   const [skill, setSkill] = useState<SkillRow | "new" | null>(null);
   const [removing, setRemoving] = useState<{ kind: "server" | "skill"; name: string } | null>(null);
-  const load = useCallback(() => api.tools_status().then(setStatus), [api]);
+  const load = useCallback(() => api.tools_status().then((next) => { lastTools = next; setStatus(next); }), [api]);
   useEffect(() => { void load(); }, [load]);
-  if (!status) return <p className="pane-note">Загрузка…</p>;
+  if (!status) return null;
 
   return <>
     <Field label="Инструменты в ответах" hint="Модель сама решает, когда открыть сайт во встроенном браузере, найти что-то в интернете, взять навык или вызвать инструмент MCP-сервера. Каждый вызов виден в чате.">

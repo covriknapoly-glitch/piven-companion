@@ -22,12 +22,12 @@ export function publishDraft(text: string) {
   draftListeners.forEach((listener) => listener(text));
 }
 
-const PLACEHOLDER: ContextUsage = {
-  ok: true, model: "-", cloud: false, exact: true, used: 1000, limit: 16384, turns: 0, images: 0, toolCount: 0, serversWaiting: [],
-  parts: { system: 1000, summary: 1000, skills: 1000, tools: 1000, history: 1000, images: 1000 },
+const EMPTY: ContextUsage = {
+  ok: true, model: "-", cloud: false, exact: true, used: 0, limit: 0, turns: 0, images: 0, toolCount: 0, serversWaiting: [],
+  parts: { system: 0, summary: 0, skills: 0, tools: 0, history: 0, images: 0 },
   historyShare: 0.5, compress: true,
 };
-let lastUsage = PLACEHOLDER;
+let lastUsage: ContextUsage | null = null;
 
 const Line = ({ children }: { children: ReactNode }) => <span className="ctx-text">{children}</span>;
 
@@ -101,42 +101,43 @@ export function ContextTab({ api, state }: { api: WebApi; state: EngineState }) 
   if (!state.settings.model || (loaded && !loaded.model)) return <div className="workspace-slot context-tab"><Decor corner="br" /><p className="pane-note">Модель не выбрана</p></div>;
   if (loaded) lastUsage = loaded;
 
-  const usage = loaded ?? lastUsage;
+  const ready = Boolean(loaded ?? lastUsage);
+  const usage = loaded ?? lastUsage ?? EMPTY;
   const limit = usage.limit;
   const share = limit ? usage.used / limit : 0;
   const level = share > 0.9 ? "full" : share > usage.historyShare ? "high" : "";
   const histBudget = Math.round(limit * usage.historyShare);
   return (
-    <div className={`workspace-slot context-tab ${loaded ? "" : "context-loading"}`} aria-hidden={loaded ? undefined : true}>
+    <div className="workspace-slot context-tab" aria-busy={loaded ? undefined : true}>
       <Decor corner="br" />
       <div className="context-total">
-        <strong className={level}><Line>{limit ? `${share < 0.1 ? (share * 100).toFixed(1) : Math.min(999, Math.round(share * 100))}%` : count(usage.used)}</Line></strong>
-        <span><Line>{limit ? <>{count(usage.used)} <small>из</small> {count(limit)} <small>токенов</small></> : <small>токенов в этом чате</small>}</Line></span>
+        <strong className={`${level} ctx-value ${ready ? "" : "waiting"}`}><Line>{limit ? `${share < 0.1 ? (share * 100).toFixed(1) : Math.min(999, Math.round(share * 100))}%` : count(usage.used)}</Line></strong>
+        <span className={`ctx-value ${ready ? "" : "waiting"}`}><Line>{limit ? <>{count(usage.used)} <small>из</small> {count(limit)} <small>токенов</small></> : <small>токенов в этом чате</small>}</Line></span>
       </div>
       <div className="context-bar" role="img" aria-label="Заполненность контекста">
-        {PARTS.map((part) => usage.parts[part.key] > 0 && (
-          <i key={part.key} className={`ctx-${part.key}`} style={{ width: `${(usage.parts[part.key] / Math.max(limit || usage.used, 1)) * 100}%` }} />
+        {PARTS.map((part) => (
+          <i key={part.key} className={`ctx-${part.key} ${usage.parts[part.key] > 0 ? "" : "empty"}`} style={{ width: `${(usage.parts[part.key] / Math.max(limit || usage.used, 1)) * 100}%` }} />
         ))}
         {limit > 0 && <b style={{ left: `${usage.historyShare * 100}%` }} />}
       </div>
       <ul className="context-legend">
         {PARTS.map((part) => (
-          <li key={part.key} className={usage.parts[part.key] ? "" : "zero"}>
+          <li key={part.key} className={!ready || usage.parts[part.key] ? "" : "zero"}>
             <i className={`ctx-${part.key}`} />
             <span><Line>{part.label}{part.key === "history" && usage.turns > 0 && <small> · {usage.turns}</small>}{part.key === "images" && usage.images > 0 && <small> · {usage.images}</small>}{part.key === "tools" && usage.toolCount > 0 && <small> · {usage.toolCount}</small>}</Line></span>
-            <em><Line>{count(usage.parts[part.key])}</Line></em>
+            <em className={`ctx-value ${ready ? "" : "waiting"}`}><Line>{count(usage.parts[part.key])}</Line></em>
           </li>
         ))}
       </ul>
-      {limit > 0 && (
+      {ready && limit > 0 && (
         <p className="pane-note"><Line>{usage.compress
           ? `Окно модели — ${count(limit)} токенов. Когда переписка займёт ${count(histBudget)}, старые сообщения сожмутся в краткое содержание; вторая половина окна остаётся для ответа.`
           : `Окно модели — ${count(limit)} токенов. Когда переписка займёт ${count(histBudget)}, старые сообщения перестанут отправляться модели; вторая половина окна остаётся для ответа.`}</Line></p>
       )}
-      {usage.cloud && <p className="pane-note"><Line>Размер окна у облачной модели задаёт сервис, поэтому здесь только размер чата.</Line></p>}
-      {usage.serversWaiting.length > 0 && <p className="pane-note"><Line>{`Серверы MCP ещё не запущены, их инструменты появятся здесь после первого ответа: ${usage.serversWaiting.join(", ")}`}</Line></p>}
-      <p className="pane-note"><Line>{usage.exact ? "Текст посчитан самой моделью. Инструменты указаны с небольшим запасом: модель получает их в более короткой записи." : usage.cloud ? "Это оценка: облачная модель не сообщает точное число." : "Это оценка: точный подсчёт сейчас недоступен."}</Line></p>
-      <p className="pane-note"><Line>Сведения из долговременной памяти добавляются при каждом ответе и сюда не входят. Навыки и инструменты посчитаны для обычного ответа; при выключенных инструментах они не отправляются.</Line></p>
+      {ready && usage.cloud && <p className="pane-note"><Line>Размер окна у облачной модели задаёт сервис, поэтому здесь только размер чата.</Line></p>}
+      {ready && usage.serversWaiting.length > 0 && <p className="pane-note"><Line>{`Серверы MCP ещё не запущены, их инструменты появятся здесь после первого ответа: ${usage.serversWaiting.join(", ")}`}</Line></p>}
+      {ready && <p className="pane-note"><Line>{usage.exact ? "Текст посчитан самой моделью. Инструменты указаны с небольшим запасом: модель получает их в более короткой записи." : usage.cloud ? "Это оценка: облачная модель не сообщает точное число." : "Это оценка: точный подсчёт сейчас недоступен."}</Line></p>}
+      {ready && <p className="pane-note"><Line>Сведения из долговременной памяти добавляются при каждом ответе и сюда не входят. Навыки и инструменты посчитаны для обычного ответа; при выключенных инструментах они не отправляются.</Line></p>}
     </div>
   );
 }

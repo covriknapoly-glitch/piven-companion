@@ -82,7 +82,7 @@ export function ModelParamsPane({ api, children }: { api: WebApi; children?: Rea
   const [data, setData] = useState<ModelParams | null>(null);
   const load = useCallback(() => api.model_params("").then(setData), [api]);
   useEffect(() => { void load(); }, [load]);
-  if (!data) return <p className="pane-note">Загрузка…</p>;
+  if (!data) return null;
   return <>
     <Field label="Названия чатов">
       <Toggle label="Модель сама называет новые чаты" checked={data.autoTitles} onChange={(next) => { void api.set_auto_titles(next).then(() => load()); }} />
@@ -156,7 +156,7 @@ export function ModelSettingsPage({ api, scope, onBack, onSaved }: { api: WebApi
         </div>
         {changedCount > 0 && <Button kind="ghost" icon="refresh" onClick={() => { void save({}, true); }}>Сбросить</Button>}
       </div>
-      {!data ? <p className="pane-note">Загрузка…</p> : groups.map((group) => {
+      {!data ? null : groups.map((group) => {
         const count = group.params.filter((param) => param.key in changes).length;
         const open = opened[group.title] ?? (Boolean(group.open) || count > 0);
         return (

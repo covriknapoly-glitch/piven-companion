@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { BrowserState, WebApi } from "./bridge";
+import { Icon } from "./icons";
 import { IconButton, RandomDots } from "./ui";
 
 const START_LINKS = [
@@ -117,6 +118,7 @@ export function BrowserPane({ api, openRequest, covered }:
     }, TAB_FOLD_MS);
   };
 
+  const [startQuery, setStartQuery] = useState("");
   const go = useCallback((text: string) => {
     const target = toUrl(text);
     if (!target) return;
@@ -157,9 +159,17 @@ export function BrowserPane({ api, openRequest, covered }:
       <div className="browser-view" ref={viewRef}>
         {!started && (
           <div className="browser-start">
-            {START_LINKS.map((link) => (
-              <button key={link.url} type="button" onClick={() => go(link.url)}><span>{link.title}</span>{link.url.replace(/^https:\/\/(www\.)?/, "")}</button>
-            ))}
+            <form className="start-search" onSubmit={(event) => { event.preventDefault(); go(startQuery); }}>
+              <Icon name="search" size={16} />
+              <input autoFocus value={startQuery} spellCheck={false} placeholder="Поиск или адрес" onChange={(event) => setStartQuery(event.target.value)} />
+            </form>
+            <div className="start-tiles">
+              {START_LINKS.map((link) => (
+                <button key={link.url} type="button" className="start-tile" title={link.url.replace(/^https:\/\/(www\.)?/, "")} onClick={() => go(link.url)}>
+                  <span className="start-icon">{link.title.slice(0, 1)}</span><span className="start-name">{link.title}</span>
+                </button>
+              ))}
+            </div>
             <RandomDots />
           </div>
         )}

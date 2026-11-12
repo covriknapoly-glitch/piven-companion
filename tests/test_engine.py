@@ -770,6 +770,40 @@ class Updates(unittest.TestCase):
         self.assertIn(f'#define AppVersion "{self.update.VERSION}"', script)
 
 
+class NativeTexts(unittest.TestCase):
+    def test_texts_outside_the_window_follow_the_language(self):
+        from app import i18n
+        self.assertEqual(i18n.translate("Открыть PIVEN", "en"), "Open PIVEN")
+        self.assertEqual(i18n.translate("Открыть PIVEN", "ru"), "Открыть PIVEN")
+        self.assertEqual(i18n.translate("Ответ в чате «Рецепт»", "en"), "Reply in chat «Рецепт»")
+        self.assertEqual(i18n.translate("Можно выполнить команду? pip install x", "en"), "May I run a command? pip install x")
+        self.assertEqual(i18n.translate("Some English text", "en"), "Some English text")
+        self.assertEqual(i18n.translate("Совсем неизвестная фраза", "en"), "Совсем неизвестная фраза")
+
+
+class ModelDeletion(unittest.TestCase):
+    def test_deletes_when_windows_redirects_the_data_folder(self):
+        from app import paths
+        with tempfile.TemporaryDirectory() as folder:
+            models = Path(folder) / "models"
+            (models / "repo").mkdir(parents=True)
+            weights = models / "repo" / "tiny.gguf"
+            weights.write_bytes(b"0" * 64)
+            redirected = lambda self, strict=False: Path(folder) / "Packages" / "LocalCache" / self.name
+            with mock.patch.object(llama, "MODELS_DIR", models), mock.patch.object(llama, "HF_MODELS_DIR", Path(folder) / "hf"), \
+                    mock.patch.object(llama, "MIN_MODEL_BYTES", 1), mock.patch.object(llama, "stop_model"), \
+                    mock.patch.object(Path, "resolve", redirected):
+                self.assertEqual(llama.delete_model("tiny"), 64)
+            self.assertFalse(weights.exists())
+            self.assertFalse((models / "repo").exists())
+            self.assertTrue(models.exists())
+        root = r"C:\Users\x\AppData\Local\PIVEN\models"
+        self.assertTrue(paths.inside(r"C:\Users\x\AppData\Local\piven\Models\a\b.gguf", [root]))
+        self.assertFalse(paths.inside(r"C:\Users\x\AppData\Local\PIVEN\models-old\b.gguf", [root]))
+        self.assertFalse(paths.inside(r"C:\Users\x\AppData\Local\PIVEN\models\..\settings.json", [root]))
+        self.assertFalse(paths.inside(root, [root]))
+
+
 class FakeStream(io.BytesIO):
     pass
 
