@@ -161,7 +161,7 @@ export function BrowserPane({ api, openRequest, covered }:
           <div className="browser-start">
             <form className="start-search" onSubmit={(event) => { event.preventDefault(); go(startQuery); }}>
               <Icon name="search" size={16} />
-              <input autoFocus value={startQuery} spellCheck={false} placeholder="Поиск или адрес" onChange={(event) => setStartQuery(event.target.value)} />
+              <input value={startQuery} spellCheck={false} placeholder="Поиск или адрес" onChange={(event) => setStartQuery(event.target.value)} />
             </form>
             <div className="start-tiles">
               {START_LINKS.map((link) => (

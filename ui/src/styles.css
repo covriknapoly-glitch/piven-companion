@@ -730,18 +730,21 @@ body.resizing { cursor: col-resize; user-select: none; }
 .browser-note { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px 20px; color: var(--text-2); overflow-wrap: anywhere; }
 .browser-note p { margin: 0; }
 .browser-note .spinner { display: inline-block; margin-right: 8px; vertical-align: -1px; }
-.browser-start { position: relative; flex: 1; min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 24px 20px 12vh; }
+.browser-start { position: relative; flex: 1; min-width: 0; min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 24px 20px 12vh; overflow: hidden; }
+
+.decor.random-dots { color: var(--decor); background: none; }
+
+.decor.decor-fill { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; -webkit-mask-image: none; mask-image: none; }
 .start-search { width: min(100%, 460px); height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-radius: 22px; background: var(--element); color: var(--muted); }
 .start-search:focus-within { background: var(--element-2); box-shadow: 0 0 0 1px var(--blue-dim); }
 .start-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 14px; }
 .start-search input::placeholder { color: var(--muted); }
-.start-tiles { display: grid; grid-template-columns: repeat(4, 100px); gap: 6px; justify-content: center; }
-.start-tile { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 4px 10px; border-radius: 8px; color: var(--text-2); font-size: 12px; }
+.start-tiles { max-width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.start-tile { width: 96px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 4px 10px; border-radius: 8px; color: var(--text-2); font-size: 12px; }
 .start-tile:hover { background: var(--hover); color: var(--text); }
 .start-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: var(--element-2); color: var(--text); font: 600 17px/1 var(--font-head); transition: transform .2s var(--ease-out); }
 .start-tile:hover .start-icon { transform: translateY(-2px); }
 .start-name { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-@media (max-width: 420px) { .start-tiles { grid-template-columns: repeat(2, 100px); } }
 button.md-link { padding: 0; font: inherit; cursor: pointer; }
 .browser-progress { position: relative; height: 2px; margin-top: -2px; overflow: hidden; }
 .browser-progress i { position: absolute; top: 0; bottom: 0; width: 25%; background: var(--blue); animation: slide 1s linear infinite; }
