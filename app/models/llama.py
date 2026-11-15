@@ -294,9 +294,19 @@ def has_mtp(gguf):
     return bool(gguf_metadata(gguf, (f"{arch}.nextn_predict_layers",)).get(f"{arch}.nextn_predict_layers"))
 
 
+def prompt_cache_mb():
+    """An eighth of the RAM, between 2 and 8 GB (llama-server's own default is 8 GB whatever the computer has)."""
+    from app.models import memory_fit
+    ram = memory_fit.system_ram()
+    return 8192 if not ram else int(min(8192, max(2048, ram / 8 / 2 ** 20)))
+
+
 def _server_options(model, params, projector, gguf=None):
     from app.models import memory_fit
     options = ["-c", str(params["ctx_size"]), "-np", "1", "-fa", params["flash_attn"]]
+    # Models with linear or sliding attention (Qwen3.5, Gemma) get up to 32 saved copies of the context per chat by default.
+    # With 8 copies and a smaller prompt cache the same chats ran at the same speed with about 1.7 GB less RAM.
+    options += ["-ctxcp", "8", "-cram", str(prompt_cache_mb())]
     if params["speculative"] != "off" and gguf is not None:
         kinds = (["draft-mtp"] if has_mtp(gguf) else []) + (["ngram-mod"] if params["speculative"] == "ngram" else [])
         if kinds:

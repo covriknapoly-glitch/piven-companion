@@ -75,6 +75,10 @@ HF_TTS_URL = "http://127.0.0.1:47835"
 VOICE_SERVER_LOG = DATA_DIR / "voice-models.log"
 AUDIOCPP_URLS = {"asr": "http://127.0.0.1:47836", "tts": "http://127.0.0.1:47837"}
 DICTATION_KEEP_SECONDS = 120
+VOICE_IDLE_SECONDS = 600
+# The NVIDIA driver keeps GPU code it compiled for this card in a cache that is too small by default, so voice and model
+# servers compiled it again on every start (the first phrase took 14-18 s instead of 2-3 s). 4 GB is the largest it allows.
+os.environ.setdefault("CUDA_CACHE_MAXSIZE", str(4 * 2 ** 30))
 HEAVY_MODE_NOTE = "Это выключено в режиме для тяжёлых моделей. Выключить его можно в настройках, в разделе «Модель»."
 AUDIOCPP_LOG = DATA_DIR / "audiocpp-server.log"
 ASR_LOG = DATA_DIR / "parakeet-asr.log"
@@ -716,6 +720,8 @@ class CompanionCore:
         self._active_tts_response=None
         self.tts_generation=0
         self.tts_last_ended_at=0.0
+        self.voice_used_at = time.monotonic()
+        threading.Thread(target=self._voice_idle_loop, daemon=True).start()
         self._load_settings(theme_ids)
         self.memory = long_memory.Memory(DATA_DIR, llama.SERVER_EXE)
 
@@ -1371,6 +1377,7 @@ class CompanionCore:
     def _ensure_asr(self, stop=None):
         if self.heavy_mode:
             raise RuntimeError(HEAVY_MODE_NOTE)
+        self.voice_used_at = time.monotonic()
         stop = stop or self.stop_event
         model_id = self.settings.get("asr_model")
         info = install.asr_model(model_id)
@@ -1396,6 +1403,7 @@ class CompanionCore:
     def _ensure_tts(self):
         if self.heavy_mode:
             raise RuntimeError(HEAVY_MODE_NOTE)
+        self.voice_used_at = time.monotonic()
         info=install.tts_model(self.settings.get("tts_model"))
         if info["engine"]=="qwen":
             self._ensure_qwen_tts(); self._tts_url=TTS_URL; self._tts_key=("qwen",info["repo"]); return
@@ -1472,6 +1480,7 @@ class CompanionCore:
     def _synthesize(self,text):
         body=json.dumps(self._tts_request(text),ensure_ascii=False).encode("utf-8")
         req=urllib.request.Request(getattr(self,"_tts_url",TTS_URL)+"/v1/audio/speech",data=body,headers={"Content-Type":"application/json"})
+        self.voice_used_at=time.monotonic()
         try:
             with urllib.request.urlopen(req,timeout=360) as r:
                 self._active_tts_response=r
@@ -3124,6 +3133,34 @@ class CompanionCore:
                 joined = f"{self.dictation['text']} {words}".strip()
                 self.dictation = {**self.dictation, "text": joined}
                 self.events.put(("dictation", None))
+
+    def _voice_idle_loop(self):
+        while True:
+            time.sleep(60)
+            try:
+                self._release_idle_voice()
+            except Exception as error:
+                log(f"voice idle release error: {error}")
+
+    def _release_idle_voice(self, now=None):
+        """Voice models stayed in video memory until PIVEN closed (the small MOSS voice alone held 1.2 GB).
+        Ten minutes after the last phrase, outside a call or dictation, they are unloaded; the next phrase starts them in a few seconds."""
+        now = time.monotonic() if now is None else now
+        if now - self.voice_used_at < VOICE_IDLE_SECONDS or self.running or self.dictation.get("phase"):
+            return False
+        stopped = []
+        for attribute, lock, label in (("tts_process", self.tts_lock, "озвучка"), ("asr_process", self.asr_lock, "распознавание речи")):
+            if getattr(self, attribute) is None or not lock.acquire(blocking=False):
+                continue
+            try:
+                if getattr(self, attribute) is not None:
+                    self._stop_owned_model_process(attribute, label)
+                    stopped.append(label)
+            finally:
+                lock.release()
+        if stopped:
+            log(f"voice models unloaded after {VOICE_IDLE_SECONDS // 60} idle minutes: {', '.join(stopped)}")
+        return bool(stopped)
 
     def _dictation_release(self, session):
         if self.running or self.dictation["phase"] or self.dictation["session"] != session:

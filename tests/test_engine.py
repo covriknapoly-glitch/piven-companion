@@ -804,6 +804,56 @@ class ModelDeletion(unittest.TestCase):
         self.assertFalse(paths.inside(root, [root]))
 
 
+class MemorySavings(unittest.TestCase):
+    def test_server_keeps_fewer_context_copies_and_a_smaller_prompt_cache(self):
+        gb = 2 ** 30
+        for ram, expected in ((32 * gb, 4096), (8 * gb, 2048), (128 * gb, 8192), (0, 8192)):
+            with mock.patch("app.models.memory_fit.system_ram", return_value=ram):
+                self.assertEqual(llama.prompt_cache_mb(), expected)
+        with mock.patch("app.models.memory_fit.system_ram", return_value=32 * gb), mock.patch("app.models.memory_fit.gpu_memory", return_value=0):
+            options = llama._server_options("m", llama.params_for("m"), None)
+        self.assertEqual(options[options.index("-ctxcp") + 1], "8")
+        self.assertEqual(options[options.index("-cram") + 1], "4096")
+
+    def test_idle_voice_is_unloaded_only_outside_calls_and_dictation(self):
+        class Process:
+            def __init__(self):
+                self.stopped = False
+            def poll(self):
+                return 0 if self.stopped else None
+            def terminate(self):
+                self.stopped = True
+            def wait(self, timeout=None):
+                return 0
+
+        def make():
+            companion = object.__new__(core.CompanionCore)
+            companion.tts_lock, companion.asr_lock = threading.Lock(), threading.Lock()
+            companion.tts_process, companion.asr_process = Process(), Process()
+            companion.running, companion.dictation, companion.voice_used_at = False, {"phase": ""}, 0.0
+            return companion
+
+        companion = make()
+        self.assertFalse(companion._release_idle_voice(now=core.VOICE_IDLE_SECONDS - 1))
+        companion.running = True
+        self.assertFalse(companion._release_idle_voice(now=core.VOICE_IDLE_SECONDS + 1))
+        companion.running, companion.dictation = False, {"phase": "listening"}
+        self.assertFalse(companion._release_idle_voice(now=core.VOICE_IDLE_SECONDS + 1))
+        companion.dictation = {"phase": ""}
+        with companion.tts_lock:
+            tts = companion.tts_process
+            self.assertTrue(companion._release_idle_voice(now=core.VOICE_IDLE_SECONDS + 1))
+        self.assertIs(companion.tts_process, tts, "speech in progress keeps its server")
+        self.assertIsNone(companion.asr_process)
+        self.assertTrue(companion._release_idle_voice(now=core.VOICE_IDLE_SECONDS + 1))
+        self.assertTrue(tts.stopped)
+        self.assertIsNone(companion.tts_process)
+        self.assertFalse(companion._release_idle_voice(now=core.VOICE_IDLE_SECONDS + 1))
+
+    def test_driver_cache_is_big_enough_for_child_processes(self):
+        self.assertGreaterEqual(int(core.os.environ["CUDA_CACHE_MAXSIZE"]), 2 ** 30)
+
+
 class FakeStream(io.BytesIO):
     pass
 

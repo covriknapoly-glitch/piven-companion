@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import io
 import struct
 import subprocess
@@ -235,6 +236,22 @@ def _gpu_info():
 
 def gpu_memory():
     return _gpu_info()[0]
+
+
+class _MemoryStatus(ctypes.Structure):
+    _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong), ("total", ctypes.c_ulonglong), ("available", ctypes.c_ulonglong),
+                ("page_total", ctypes.c_ulonglong), ("page_available", ctypes.c_ulonglong), ("virtual_total", ctypes.c_ulonglong),
+                ("virtual_available", ctypes.c_ulonglong), ("extended_available", ctypes.c_ulonglong)]
+
+
+def system_ram():
+    """Total RAM in bytes, or 0 when Windows doesn't say."""
+    status = _MemoryStatus()
+    status.length = ctypes.sizeof(_MemoryStatus)
+    try:
+        return int(status.total) if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)) else 0
+    except (AttributeError, OSError):
+        return 0
 
 
 def gpu_name():
