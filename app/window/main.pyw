@@ -135,7 +135,7 @@ class WebCompanion(CompanionCore):
         job = status["job"]
         if job["state"] == "idle" and (not status["available"] or status["skipped"]):
             return None
-        return {"version": status["latest"], "page": status["page"], "canInstall": status["canInstall"], "ready": status["ready"],
+        return {"version": status["latest"], "page": status["page"], "canInstall": status["canInstall"], "ready": status["ready"], "fromSources": status["fromSources"],
                 "state": job["state"], "percent": job["percent"], "message": job["message"]}
 
     def _changed(self):

@@ -730,11 +730,14 @@ class Updates(unittest.TestCase):
         with mock.patch.object(self.update.urllib.request, "urlopen", return_value=self.release("v9.0.0", prerelease=True)):
             self.assertIsNone(self.update.latest_release())
 
-    def test_a_copy_run_from_sources_is_not_updated(self):
+    def test_a_copy_run_from_sources_downloads_the_installer_too(self):
         updater = self.update.Updater(self.folder, self.folder)
-        updater.latest = {"version": "9.0.0", "installer": {"name": "a-Setup.exe", "size": 1, "url": "https://github.com/a", "sha256": ""}}
-        self.assertFalse(updater.status()["canInstall"])
-        self.assertIn("исходник", updater.download()["error"])
+        updater.latest = {"version": "9.0.0", "notes": "x" * 20000, "installer": {"name": "a-Setup.exe", "size": 1, "url": "https://evil.example/a", "sha256": ""}}
+        status = updater.status()
+        self.assertTrue(status["canInstall"])
+        self.assertTrue(status["fromSources"])
+        self.assertEqual(len(status["notes"]), 20000)
+        self.assertIn("GitHub", updater.download()["error"], "the link check still applies")
 
     def test_only_github_links_are_downloaded(self):
         (self.folder / "unins000.exe").write_bytes(b"")

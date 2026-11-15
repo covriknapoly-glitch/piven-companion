@@ -47,12 +47,13 @@ def latest_release(timeout=15):
     if data.get("draft") or data.get("prerelease"):
         return None
     tag = str(data.get("tag_name") or "")
-    return {"version": tag.lstrip("vV"), "tag": tag, "name": str(data.get("name") or tag), "notes": str(data.get("body") or "")[:4000],
+    return {"version": tag.lstrip("vV"), "tag": tag, "name": str(data.get("name") or tag), "notes": str(data.get("body") or "")[:30000],
             "page": str(data.get("html_url") or ""), "installer": _installer(data.get("assets"))}
 
 
 def installed_copy(app_dir):
-    """Only a copy put there by the installer can be updated by it; a copy run from the sources is left alone."""
+    """A copy put there by the installer. A copy run from the sources can still update: the installer then puts the
+    release version in its usual folder and opens it instead."""
     return (Path(app_dir) / "unins000.exe").is_file()
 
 
@@ -80,7 +81,7 @@ class Updater:
         available = is_newer(latest.get("version"))
         return {"current": VERSION, "latest": latest.get("version", ""), "available": available, "notes": latest.get("notes", ""),
                 "page": latest.get("page", ""), "size": (latest.get("installer") or {}).get("size", 0),
-                "canInstall": installed_copy(self.app_dir) and bool(latest.get("installer")), "skipped": available and latest.get("version") == skipped,
+                "canInstall": bool(latest.get("installer")), "fromSources": not installed_copy(self.app_dir), "skipped": available and latest.get("version") == skipped,
                 "checked": self.checked, "error": self.error, "job": dict(self.job), "ready": bool(self.ready)}
 
     def check(self):
@@ -104,8 +105,6 @@ class Updater:
         installer = (self.latest or {}).get("installer")
         if not installer or not is_newer((self.latest or {}).get("version")):
             return {"ok": False, "error": "Новой версии нет."}
-        if not installed_copy(self.app_dir):
-            return {"ok": False, "error": "Эта копия запущена из исходников, обновлять её нужно через git."}
         if urlparse(installer["url"]).scheme != "https" or urlparse(installer["url"]).hostname not in TRUSTED_HOSTS:
             return {"ok": False, "error": "Ссылка на установщик ведёт не на GitHub."}
         with self._lock:

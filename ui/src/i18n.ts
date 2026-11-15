@@ -83,6 +83,10 @@ function applyTree(root: Node) {
   }
 }
 
+export function currentLanguage(): Language {
+  return current;
+}
+
 export function setLanguage(language: Language) {
   current = language;
   document.documentElement.lang = language;

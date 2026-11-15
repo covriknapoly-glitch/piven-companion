@@ -1446,5 +1446,12 @@
 "Напиши что нарисовать после команды": "Write what to draw after the command",
 "Напиши новое название после команды": "Write the new name after the command",
 "с размышлением": "with thinking",
-"без размышления": "no thinking"
+"без размышления": "no thinking",
+"Что нового в {0}": "What's new in {0}",
+"Страница релиза": "Release page",
+"Описания у этой версии нет.": "This version has no description.",
+"Версия {0} скачана. Эта копия запущена из исходников, поэтому установится обычная версия программы и откроется вместо неё.": "Version {0} is downloaded. This copy runs from the sources, so the regular version of the program will be installed and open instead.",
+"Установить": "Install",
+"Открыть релиз": "Open the release",
+"Версия {0}. Новые версии берутся из релизов на GitHub, скачиваются и ставятся только по кнопке.": "Version {0}. New versions come from GitHub releases and are downloaded and installed only when you press the button."
 }

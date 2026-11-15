@@ -68,9 +68,9 @@ export interface EngineState {
   update: UpdateBanner | null;
 }
 
-export interface UpdateBanner { version: string; page: string; canInstall: boolean; ready: boolean; state: "idle" | "running" | "done" | "error"; percent: number; message: string }
+export interface UpdateBanner { version: string; page: string; canInstall: boolean; ready: boolean; fromSources: boolean; state: "idle" | "running" | "done" | "error"; percent: number; message: string }
 export interface UpdateStatus {
-  current: string; latest: string; available: boolean; notes: string; page: string; size: number; canInstall: boolean; skipped: boolean;
+  current: string; latest: string; available: boolean; notes: string; page: string; size: number; canInstall: boolean; fromSources: boolean; skipped: boolean;
   checked: number; error: string; ready: boolean; auto: boolean; job: { state: string; percent: number; message: string };
 }
 

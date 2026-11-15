@@ -42,7 +42,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "app\*"; DestDir: "{app}\app"; Excludes: "__pycache__,*.pyc,*.log"; Flags: ignoreversion recursesubdirs
 Source: "assets\*"; DestDir: "{app}\assets"; Excludes: "piven_logo_2026.png,piven_logo.png"; Flags: ignoreversion recursesubdirs
-Source: "docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs
+Source: "docs\*"; DestDir: "{app}\docs"; Excludes: "releases"; Flags: ignoreversion recursesubdirs
 Source: "skills\*"; DestDir: "{app}\skills"; Flags: ignoreversion recursesubdirs
 Source: "ui\dist\*"; DestDir: "{app}\ui\dist"; Flags: ignoreversion recursesubdirs
 Source: "ui\src\*"; DestDir: "{app}\ui\src"; Flags: ignoreversion recursesubdirs
