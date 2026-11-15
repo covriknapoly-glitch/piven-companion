@@ -15,7 +15,7 @@ export const THEMES: readonly (readonly [ThemeId, string, boolean, readonly stri
   ["nord", "Nord", false, ["#2e3440", "#272c36", "#eceff4", "#88c0d0"]],
   ["catppuccin", "Catppuccin", false, ["#1e1e2e", "#181825", "#cdd6f4", "#cba6f7"]],
   ["rosepine", "Rosé Pine", false, ["#191724", "#1f1d2e", "#e0def4", "#c4a7e7"]],
-  ["onedark", "One Dark", false, ["#282c34", "#21252b", "#abb2bf", "#61afef"]],
+  ["onedark", "One Dark", false, ["#282c34", "#21252b", "#d7dae0", "#61afef"]],
 ];
 
 export const THEME_IDS = THEMES.map(([id]) => id);

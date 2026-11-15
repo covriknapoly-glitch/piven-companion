@@ -105,8 +105,8 @@ export function MemoryPane({ api }: { api: WebApi }) {
 
     <h5 className="pane-subhead">Очистка</h5>
     <div className="row">
-      <Button kind="ghost" onClick={() => setClearing("exchange")}>Забыть разговоры</Button>
-      <Button kind="ghost" onClick={() => setClearing("fact")}>Забыть факты</Button>
+      <Button kind="secondary" onClick={() => setClearing("exchange")}>Забыть разговоры</Button>
+      <Button kind="secondary" onClick={() => setClearing("fact")}>Забыть факты</Button>
       <Button kind="danger" onClick={() => setClearing("all")}>Очистить всю память</Button>
     </div>
     {clearing && <ConfirmDialog title="Очистить память?" danger confirmLabel="Очистить"

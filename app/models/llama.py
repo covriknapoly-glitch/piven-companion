@@ -652,7 +652,8 @@ def _to_openai(messages):
             item = {"role": message.get("role", "user"), "content": content}
         if message.get("tool_calls"):
             item["tool_calls"] = [{"id": call["id"], "type": "function",
-                                   "function": {"name": call["name"], "arguments": json.dumps(call["arguments"], ensure_ascii=False)}}
+                                   "function": {"name": call["name"], "arguments": json.dumps(call["arguments"], ensure_ascii=False)},
+                                   **({"extra_content": call["extra"]} if call.get("extra") else {})}
                                   for call in message["tool_calls"]]
         if message.get("role") == "tool":
             item["tool_call_id"] = message.get("tool_call_id", "")
@@ -666,6 +667,9 @@ def collect_tool_calls(delta, calls):
         function = fragment.get("function") or {}
         slot["name"] += function.get("name") or ""
         slot["arguments"] += function.get("arguments") or ""
+        if fragment.get("extra_content"):
+            # Gemini signs each tool call with its thinking and refuses the next step if the signature isn't sent back.
+            slot["extra"] = fragment["extra_content"]
 
 
 def finished_tool_calls(calls):
@@ -677,6 +681,8 @@ def finished_tool_calls(calls):
         except ValueError:
             arguments = {"_raw": call["arguments"]}
         result.append({"id": call["id"] or f"call_{index}", "name": call["name"], "arguments": arguments if isinstance(arguments, dict) else {}})
+        if call.get("extra"):
+            result[-1]["extra"] = call["extra"]
     return [call for call in result if call["name"]]
 
 

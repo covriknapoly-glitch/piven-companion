@@ -854,6 +854,59 @@ class MemorySavings(unittest.TestCase):
         self.assertGreaterEqual(int(core.os.environ["CUDA_CACHE_MAXSIZE"]), 2 ** 30)
 
 
+class PolishFixes(unittest.TestCase):
+    def test_gemini_thought_signature_goes_back_with_the_tool_call(self):
+        calls = {}
+        llama.collect_tool_calls({"tool_calls": [{"index": 0, "id": "a", "function": {"name": "list_files", "arguments": "{}"},
+                                                  "extra_content": {"google": {"thought_signature": "sig"}}}]}, calls)
+        finished = llama.finished_tool_calls(calls)
+        self.assertEqual(finished[0]["extra"], {"google": {"thought_signature": "sig"}})
+        wire = llama._to_openai([{"role": "assistant", "content": "", "tool_calls": finished}])
+        self.assertEqual(wire[0]["tool_calls"][0]["extra_content"]["google"]["thought_signature"], "sig")
+        plain = llama._to_openai([{"role": "assistant", "content": "", "tool_calls": [{"id": "b", "name": "x", "arguments": {}}]}])
+        self.assertNotIn("extra_content", plain[0]["tool_calls"][0])
+
+    def test_thinking_brake_waits_like_the_cancel_event(self):
+        from app.chat.coding import ThinkingBrake
+        cancel = threading.Event()
+        brake = ThinkingBrake(cancel, 16384, True)
+        self.assertFalse(brake.wait(0.01))
+        cancel.set()
+        self.assertTrue(brake.wait(0.01))
+
+    def test_model_icon_comes_from_the_hugging_face_repo(self):
+        from app.models import logos
+        with mock.patch.object(logos, "_base_model", return_value="DavidAU/Some-Finetune"):
+            self.assertEqual(logos.repo_owner("mradermacher/Some-Finetune-GGUF"), "DavidAU")
+        self.assertEqual(logos.repo_owner("DavidAU/Own-GGUF"), "DavidAU")
+        with mock.patch.object(logos, "_base_model", return_value=None):
+            self.assertEqual(logos.repo_owner("bartowski/X-GGUF"), "", "a failed lookup is asked again later")
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(logos, "CACHE_PATH", Path(folder) / "logos.json"), \
+                mock.patch.object(logos, "_cache", {"DavidAU": "https://a/david.png", "Qwen": "https://a/qwen.png"}), \
+                mock.patch.object(logos, "repo_owner", return_value="DavidAU"):
+            found = logos.logos(["Qwen3.5-9B-Finetune"], {}, {"Qwen3.5-9B-Finetune": "qwen35"}, {"Qwen3.5-9B-Finetune": "mradermacher/Qwen3.5-9B-Finetune-GGUF"})
+            self.assertEqual(found["Qwen3.5-9B-Finetune"], "https://a/david.png")
+            self.assertEqual(logos.logos(["qwen-other"], {}, {"qwen-other": "qwen35"})["qwen-other"], "https://a/qwen.png")
+
+    def test_llama_switch_leaves_connected_services_and_comfyui_always_on(self):
+        self.assertEqual(core.CompanionCore._load_integrations({"models": False, "comfyui": False}), {"models": False, "comfyui": True})
+        companion = object.__new__(core.CompanionCore)
+        companion.settings = {"integrations_enabled": {"models": False}}
+        with mock.patch.object(core.integrations, "is_provider_model", side_effect=lambda name: name.startswith("gemini:")):
+            self.assertTrue(companion._local_blocked("Qwen3.5-9B"))
+            self.assertFalse(companion._local_blocked("gemini:gemini-2.5-flash"))
+        companion.settings = {"integrations_enabled": {"models": True}}
+        self.assertFalse(companion._local_blocked("Qwen3.5-9B"))
+
+    def test_update_rate_limit_is_explained(self):
+        from app import update
+        updater = update.Updater(ROOT, tempfile.gettempdir())
+        error = urllib.error.HTTPError(update.LATEST, 403, "rate limit exceeded", {}, None)
+        with mock.patch.object(update, "latest_release", side_effect=error):
+            updater.check()
+        self.assertIn("временно ограничил", updater.error)
+
+
 class FakeStream(io.BytesIO):
     pass
 

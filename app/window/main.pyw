@@ -419,11 +419,9 @@ class WebCompanion(CompanionCore):
             self._notice = ""
             if route == "audio":
                 return {"ok": False, "error": "Генерация музыки и звуков пока не поддерживается."}
-            if route in ("image", "video") and not self._integration_enabled("comfyui"):
-                return {"ok": False, "error": "Интеграция ComfyUI выключена. Включи её в настройках."}
-            if route not in ("image", "video") and not self._integration_enabled("models"):
-                return {"ok": False, "error": "Локальная модель выключена. Включи её в настройках."}
             model = self.settings.get("model", "").strip()
+            if route not in ("image", "video") and self._local_blocked(model):
+                return {"ok": False, "error": core.LLAMA_OFF_NOTE}
             if route not in ("image", "video") and not model:
                 return {"ok": False, "error": "Сначала выбери модель."}
             if self.busy:
@@ -489,7 +487,7 @@ class WebCompanion(CompanionCore):
         except Exception as exc:
             log(f"providers refresh error: {exc}")
         try:
-            names = list_models()
+            names = list_models(self._integration_enabled("models"))
             error = backend_problem()
         except Exception as exc:
             names, error = [], f"Не удалось прочитать папку моделей: {exc}"
@@ -501,9 +499,9 @@ class WebCompanion(CompanionCore):
             self._changed()
 
     def _send_with_images(self, text, image_paths):
-        if not self._integration_enabled("models"):
-            return {"ok": False, "error": "Локальная модель выключена. Включи её в настройках."}
         model = self.settings.get("model", "").strip()
+        if self._local_blocked(model):
+            return {"ok": False, "error": core.LLAMA_OFF_NOTE}
         if not model:
             return {"ok": False, "error": "Сначала выбери модель."}
         if not text:
@@ -1076,10 +1074,20 @@ class WebApi:
                 app.messages[0]["content"] = app._effective_system_prompt(app.settings["system_prompt"])
                 if "heavy_mode" in changes or "max_loaded_models" in changes:
                     app.apply_heavy_mode()
-                if "integrations_enabled" in changes and not changes["integrations_enabled"].get("models", True):
-                    app.pending_text_prompts.clear()
-                    if app.busy:
-                        app.action_cancel.set()
+                if "integrations_enabled" in changes:
+                    llama_off = not changes["integrations_enabled"].get("models", True)
+                    if llama_off and app._local_blocked(app.settings.get("model")):
+                        app.pending_text_prompts.clear()
+                        if app.busy:
+                            app.action_cancel.set()
+
+                    def apply_llama_switch(off=llama_off):
+                        if off:
+                            for server in list(llama.SERVERS):
+                                if server.loaded_model and not server.in_use:
+                                    server.stop()
+                        app.refresh_models(False)
+                    threading.Thread(target=apply_llama_switch, daemon=True).start()
                 app._save_settings()
                 app._changed()
         return {"ok": not errors, "errors": errors, "saved": sorted(changes)}
@@ -2026,15 +2034,23 @@ class WebApi:
     def model_logos(self, names, authors=None, architectures=None):
         names = [str(name) for name in names or []][:200]
         architectures = dict(architectures) if isinstance(architectures, dict) else {}
+        repos = {}
         try:
             local = llama.model_files()
             for name in names:
-                if name in local and name not in architectures:
+                if name not in local:
+                    continue
+                if name not in architectures:
                     architectures[name] = llama.gguf_metadata(local[name][0], ("general.architecture",)).get("general.architecture", "")
+                folder = local[name][0].parent
+                while folder.parent not in (llama.MODELS_DIR, llama.HF_MODELS_DIR) and folder.parent != folder:
+                    folder = folder.parent
+                if "--" in folder.name:
+                    repos[name] = folder.name.replace("--", "/", 1)
         except Exception as error:
             log(f"model architecture error: {error}")
         try:
-            return logos.logos(names, authors if isinstance(authors, dict) else {}, architectures)
+            return logos.logos(names, authors if isinstance(authors, dict) else {}, architectures, repos)
         except Exception as error:
             log(f"model logos error: {error}")
             return {}

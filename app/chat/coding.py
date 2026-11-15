@@ -201,6 +201,10 @@ class ThinkingBrake:
     def is_set(self):
         return self.tripped or self.cancel.is_set()
 
+    def wait(self, timeout=None):
+        """Retries pause with cancel.wait(); the brake stands in for the cancel event, so it has to wait the same way."""
+        return self.tripped or self.cancel.wait(timeout)
+
     def check(self, text):
         if self.think is not False and len(text) > self.limit:
             self.tripped = True

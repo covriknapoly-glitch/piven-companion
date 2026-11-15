@@ -1,5 +1,5 @@
-import { useMemo, useState, type RefObject } from "react";
-import type { ChatSummary, EngineState, WebApi } from "./bridge";
+import { useEffect, useMemo, useState, type RefObject } from "react";
+import type { ChatSummary, EngineState, SearchHit, WebApi } from "./bridge";
 import { Icon } from "./icons";
 import { Decor, IconButton, Logo, MenuButton } from "./ui";
 
@@ -73,16 +73,30 @@ function dateGroups(chats: ChatSummary[]): [string, ChatSummary[]][] {
   return bounds.map(([caption]) => [caption, groups.get(caption) ?? []] as [string, ChatSummary[]]).filter(([, list]) => list.length > 0);
 }
 
-export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMessages, onSettings, onHide }:
+export function Sidebar({ api, state, actions, searchRef, onNewChat, onOpenHit, onSettings, onHide }:
   { api: WebApi; state: EngineState; actions: ChatActions; searchRef: RefObject<HTMLInputElement | null>; onNewChat: () => void;
-    onSearchMessages: () => void; onSettings: () => void; onHide: () => void }) {
+    onOpenHit: (hit: SearchHit) => void; onSettings: () => void; onHide: () => void }) {
   const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [hidden, setHidden] = useState<string[]>([]);
   const projects = state.code.on;
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const kind = state.chats.filter((chat) => Boolean(chat.code) === projects);
     return needle ? kind.filter((chat) => chat.title.toLowerCase().includes(needle) || chat.preview.toLowerCase().includes(needle) || (chat.root ?? "").toLowerCase().includes(needle)) : kind;
   }, [state.chats, query, projects]);
+  // One search box: chat titles above, matching messages from these chats below.
+  useEffect(() => {
+    const text = query.trim();
+    if (text.length < 2) { setHits([]); return; }
+    let live = true;
+    const timer = window.setTimeout(() => { void api.search_messages(text).then((found) => { if (live) setHits(found); }); }, 200);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [api, query]);
+  const kindIds = useMemo(() => new Set(state.chats.filter((chat) => Boolean(chat.code) === projects).map((chat) => chat.id)), [state.chats, projects]);
+  const messageHits = hits.filter((hit) => kindIds.has(hit.chatId)).slice(0, 12);
+  const doneKey = (row: EngineState["downloads"][number]) => `${row.kind}:${row.title}:${row.state}`;
+  const downloads = state.downloads.filter((row) => row.state === "running" || !hidden.includes(doneKey(row)));
   const pinned = filtered.filter((chat) => chat.pinned);
   const groups = useMemo((): [string, ChatSummary[]][] => {
     const rest = filtered.filter((chat) => !chat.pinned);
@@ -108,28 +122,39 @@ export function Sidebar({ api, state, actions, searchRef, onNewChat, onSearchMes
 
       <div className="side-search">
         <label className="search-field"><Icon name="search" size={15} />
-          <input ref={searchRef} placeholder={projects ? "Найти проект" : "Найти чат"} value={query} onChange={(event) => setQuery(event.target.value)} />
+          <input ref={searchRef} placeholder="Поиск" title={projects ? "Ищет по названиям проектов и по сообщениям в них" : "Ищет по названиям чатов и по сообщениям в них"}
+            value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setQuery(""); }} />
           {query && <button type="button" aria-label="Очистить" onClick={() => setQuery("")}><Icon name="close" size={13} /></button>}
         </label>
-        <button type="button" className="link-btn" onClick={onSearchMessages}><Icon name="search" size={13} /> Искать в сообщениях</button>
       </div>
 
       <nav className="chat-nav">
         {pinned.length > 0 && <><div className="nav-caption">Закреплённые</div>{rows(pinned)}</>}
         {groups.map(([caption, chats]) => <div key={caption} className="nav-group"><div className="nav-caption">{caption}</div>{rows(chats)}</div>)}
-        {!filtered.length && <div className="nav-empty">{query.trim() ? "Ничего не найдено" : projects ? "Проектов пока нет" : "Чатов пока нет"}</div>}
+        {!filtered.length && !messageHits.length && <div className="nav-empty">{query.trim() ? "Ничего не найдено" : projects ? "Проектов пока нет" : "Чатов пока нет"}</div>}
+        {messageHits.length > 0 && (
+          <div className="nav-group">
+            <div className="nav-caption">В сообщениях</div>
+            {messageHits.map((hit) => (
+              <button key={`${hit.chatId}-${hit.index}`} type="button" className="nav-hit" onClick={() => onOpenHit(hit)}>
+                <strong>{hit.chatTitle}</strong><span>{hit.excerpt}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
 
-      {state.downloads.length > 0 && (
+      {downloads.length > 0 && (
         <div className="side-downloads" aria-label="Загрузки">
-          {state.downloads.map((row) => (
+          {downloads.map((row) => (
             <div key={row.kind} className={`side-download ${row.state}`}>
               <div className="side-download-head">
                 <Icon name={row.state === "error" ? "alert" : row.state === "done" ? "check" : "download"} size={14} />
                 <span className="side-download-title" title={row.title}>{row.title || (row.kind === "model" ? "Модель" : "Голосовая модель")}</span>
                 <span className="side-download-pct">{row.state === "running" ? `${row.percent}%` : row.state === "done" ? "готово" : row.state === "cancelled" ? "отменено" : "ошибка"}</span>
-                {row.state === "running" && <IconButton icon="close" label="Отменить загрузку" size={13}
-                  onClick={() => { void (row.kind === "model" ? api.hf_cancel() : api.voice_cancel()); }} />}
+                {row.state === "running"
+                  ? <IconButton icon="close" label="Отменить загрузку" size={13} onClick={() => { void (row.kind === "model" ? api.hf_cancel() : api.voice_cancel()); }} />
+                  : <IconButton icon="close" label="Убрать" size={13} onClick={() => setHidden((list) => [...list, doneKey(row)])} />}
               </div>
               <div className="progress-track"><i style={{ width: `${row.percent}%` }} /></div>
               {row.message && <small title={row.message}>{row.message}</small>}

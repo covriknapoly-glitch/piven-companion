@@ -7,6 +7,7 @@ import re
 import subprocess
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
@@ -86,6 +87,9 @@ class Updater:
         try:
             self.latest = latest_release()
             self.error = ""
+        except urllib.error.HTTPError as error:
+            self.error = ("GitHub временно ограничил проверки с этого компьютера. PIVEN попробует снова позже."
+                          if error.code in (403, 429) else f"Не удалось проверить обновления: GitHub ответил {error.code}.")
         except Exception as error:
             self.error = f"Не удалось проверить обновления: {error}"
         self.checked = time.time()

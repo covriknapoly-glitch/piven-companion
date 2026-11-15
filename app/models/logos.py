@@ -38,6 +38,11 @@ SHARED_ARCHITECTURES = {
               (r"granite", "ibm-granite"), (r"exaone", "LGAI-EXAONE"), (r"internlm", "internlm")],
 }
 
+# Accounts that only republish other people's models as GGUF; for them the icon comes from the model they converted.
+REPUBLISHERS = {"mradermacher", "bartowski", "lmstudio-community", "thebloke", "quantfactory", "second-state", "ggml-org", "mungert",
+                "devquasar", "tensorblock", "noctrex", "bullerwins", "richarderkhov", "maziyarpanahi", "gaianet", "nexaai", "featherless-ai-quants",
+                "quantized", "legraphista", "afrideva", "duyntnet"}
+
 _lock = threading.Lock()
 _cache: dict[str, str] | None = None
 _misses: set[str] = set()
@@ -91,18 +96,70 @@ def _fetch(org):
     return ""
 
 
-def logos(names, authors=None, architectures=None):
-    authors, architectures = authors or {}, architectures or {}
-    wanted = {name: organisation(name, authors.get(name, ""), architectures.get(name, "")) for name in names}
+def _get_json(url):
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": USER_AGENT}), timeout=8) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _base_model(repo):
+    """The model a GGUF copy was made from, as written in its Hugging Face card; None when Hugging Face didn't answer."""
+    try:
+        info = _get_json(f"https://huggingface.co/api/models/{urllib.parse.quote(repo, safe='/')}")
+    except Exception:
+        return None
+    base = (info.get("cardData") or {}).get("base_model")
+    if isinstance(base, list):
+        base = base[0] if base else ""
+    if not base:
+        tags = [str(tag)[len("base_model:"):] for tag in info.get("tags") or [] if str(tag).startswith("base_model:")]
+        base = next((tag.rsplit(":", 1)[-1] for tag in tags if "/" in tag), "")
+    return str(base or "") if "/" in str(base or "") else ""
+
+
+def repo_owner(repo):
+    """Whose icon to show for a downloaded repo: its owner, or for a plain GGUF copy, the owner of the original model.
+    An empty answer means "ask again later", so a network hiccup isn't remembered as the copier's icon."""
+    owner = repo.split("/", 1)[0]
+    seen = {repo.lower()}
+    while owner.lower() in REPUBLISHERS:
+        base = _base_model(repo)
+        if base is None:
+            return ""
+        if not base or base.lower() in seen:
+            break
+        seen.add(base.lower())
+        repo, owner = base, base.split("/", 1)[0]
+    return owner
+
+
+def logos(names, authors=None, architectures=None, repos=None):
+    authors, architectures, repos = authors or {}, architectures or {}, repos or {}
+    with _lock:
+        cache = _load()
+        unknown = sorted({repo for repo in repos.values() if repo and f"repo:{repo}" not in cache})
+    if unknown:
+        # A model downloaded from Hugging Face gets the icon of whoever made it there, not a guess from its architecture:
+        # fine-tunes keep the base model's architecture, so they all used to show the Qwen or Llama logo.
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            owners = dict(zip(unknown, pool.map(repo_owner, unknown)))
+        with _lock:
+            cache.update({f"repo:{repo}": owner for repo, owner in owners.items() if owner})
+    with _lock:
+        owner_of = {name: cache.get(f"repo:{repos[name]}", "") for name in names if repos.get(name)}
+    wanted = {name: owner_of.get(name) or organisation(name, authors.get(name, ""), architectures.get(name, "")) for name in names}
     with _lock:
         cache = _load()
         missing = sorted({org for org in wanted.values() if org and org not in cache and org not in _misses})
+        changed = bool(unknown)
     if missing:
         with ThreadPoolExecutor(max_workers=8) as pool:
             found = dict(zip(missing, pool.map(_fetch, missing)))
         with _lock:
             cache.update({org: url for org, url in found.items() if url})
             _misses.update(org for org, url in found.items() if not url)
+        changed = True
+    if changed:
+        with _lock:
             try:
                 CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
             except OSError:

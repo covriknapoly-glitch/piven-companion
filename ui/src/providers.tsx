@@ -66,11 +66,9 @@ export function IntegrationsPane({ api, d, save, onChanged }:
   };
 
   const own = [
-    matches("Модели (llama.cpp и подключённые сервисы)", "Ответы, код и презентации. Если выключить, текущий ответ остановится.", "llama.cpp") && (
-      <IntegrationCard key="models" id="models" title="Модели (llama.cpp и подключённые сервисы)" hint="Ответы, код и презентации. Если выключить, текущий ответ остановится."
+    matches("llama.cpp", "Скачанные модели GGUF. Если выключить, они выгрузятся из памяти, а подключённые сервисы продолжат работать.") && (
+      <IntegrationCard key="models" id="models" title="llama.cpp" hint="Скачанные модели GGUF. Если выключить, они выгрузятся из памяти, а подключённые сервисы продолжат работать."
         enabled={on("models")} onToggle={toggle("models")} />),
-    matches("ComfyUI", "Рисование картинок и видео.") && (
-      <IntegrationCard key="comfyui" id="comfyui" title="ComfyUI" hint="Рисование картинок и видео." enabled={on("comfyui")} onToggle={toggle("comfyui")} />),
   ].filter(Boolean);
 
   const shown = (rows ?? []).filter((row) => matches(row.title, HINTS[row.id] ?? "", row.id));

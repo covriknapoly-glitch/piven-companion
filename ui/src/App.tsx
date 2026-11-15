@@ -165,6 +165,12 @@ export default function App() {
   useEffect(() => { if (state?.notice) notify(state.notice); }, [state?.notice, notify]);
 
   const done = useCallback((error?: string) => { notify(error); void poll(); }, [notify, poll]);
+  const openHit = useCallback((hit: SearchHit) => {
+    if (!api || !state) return;
+    if (hit.chatId === state.activeChatId) { setFocusIndex({ index: hit.index, nonce: Date.now() }); return; }
+    setPendingFocus(hit);
+    void api.select_chat(hit.chatId).then((result) => done(result.ok ? undefined : result.error));
+  }, [api, done, state?.activeChatId]);
   const copy = useCallback((text: string) => { if (api) void api.copy_text(text).then(() => notify("Скопировано", "info")); }, [api, notify]);
   const newChat = useCallback(() => { if (api) void api.new_chat().then((result) => { done(result.ok ? undefined : result.error); inputRef.current?.focus(); }); }, [api, done]);
   const stop = useCallback(() => { if (api) void api.interrupt().then(() => done()); }, [api, done]);
@@ -195,7 +201,7 @@ export default function App() {
       const mod = event.ctrlKey || event.metaKey;
 
       const key = event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : event.key.toLowerCase();
-      if (mod && event.shiftKey && key === "f") { event.preventDefault(); setDialog("search"); }
+      if (mod && event.shiftKey && key === "f") { event.preventDefault(); setSidebarOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }
       else if (mod && key === "k") { event.preventDefault(); setSidebarOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }
       else if (mod && key === "n") { event.preventDefault(); newChat(); }
       else if (mod && (event.code === "Comma" || event.key === ",")) { event.preventDefault(); setDialog("settings"); }
@@ -219,7 +225,7 @@ export default function App() {
     <LinkContext.Provider value={openLink}>
     <div className={`app ${sidebarOpen ? "" : "sidebar-hidden"}`}>
       <Sidebar api={api} state={state} actions={actions} searchRef={searchRef} onNewChat={newChat}
-        onSearchMessages={() => setDialog("search")} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
+        onOpenHit={openHit} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
       <main className="main">
@@ -272,10 +278,7 @@ export default function App() {
 
       {dialog === "settings" && <SettingsDialog state={state} api={api} theme={theme} setTheme={setTheme} fontChoice={fontChoice} setFontChoice={setFontChoice} language={language} setLanguage={setLanguageChoice} onClose={() => setDialog("")}
         onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind) => setDialog(`voice-${kind}`)} />}
-      {dialog === "search" && <SearchDialog api={api} onClose={() => setDialog("")} onOpen={(hit) => {
-        if (hit.chatId === state.activeChatId) { setFocusIndex({ index: hit.index, nonce: Date.now() }); }
-        else { setPendingFocus(hit); void api.select_chat(hit.chatId).then((result) => done(result.ok ? undefined : result.error)); }
-      }} />}
+      {dialog === "search" && <SearchDialog api={api} onClose={() => setDialog("")} onOpen={openHit} />}
       {(dialog === "voice-asr" || dialog === "voice-tts") && <VoiceHubDialog api={api} initialKind={dialog === "voice-asr" ? "asr" : "tts"}
         onClose={() => setDialog("settings")} onDone={() => notify("Голосовая модель скачана", "info")} />}
       {dialog === "hub" && <HubDialog api={api} onClose={() => setDialog("")} onDone={() => { void poll(); notify("Модель скачана", "info"); }} />}

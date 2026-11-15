@@ -105,20 +105,11 @@ function ThinkingChip({ state, api, onDone }: { state: EngineState; api: WebApi;
   };
 
   const effective = options.current === "__auto__" ? options.default ?? options.values[0] : options.current;
-
-  if (options.values.every((value) => typeof value === "boolean")) {
-    const next = !effective;
-    return (
-      <button type="button" className={`chip-btn ${effective ? "" : "off"}`} aria-pressed={Boolean(effective)} title="Размышление: нажми, чтобы переключить"
-        onClick={() => choose(next === options.default ? "__auto__" : next)}>
-        <Icon name="spark" size={14} /><span className="chip-text">{effective ? "С размышлением" : "Без размышления"}</span>
-      </button>
-    );
-  }
-  const label = typeof effective === "boolean" ? (effective ? "С размышлением" : "Без размышления") : thinkingName(effective ?? null);
+  const nameOf = (value: ThinkingValue | null) => (typeof value === "boolean" ? (value ? "С размышлением" : "Без размышления") : thinkingName(value));
+  const label = nameOf(effective ?? null);
   return (
     <div className="menu-anchor" ref={ref}>
-      <button type="button" className="chip-btn" onClick={() => setOpen((value) => !value)} title="Размышление">
+      <button type="button" className={`chip-btn ${effective === false || effective === "none" ? "off" : ""}`} onClick={() => setOpen((value) => !value)} title="Размышление">
         <Icon name="spark" size={14} /><span className="chip-text">{label}</span><Icon name="chevronDown" size={14} />
       </button>
       {open && (
@@ -127,7 +118,7 @@ function ThinkingChip({ state, api, onDone }: { state: EngineState; api: WebApi;
           {options.values.map((value) => (
             <button key={String(value)} type="button" className={String(value) === String(effective) ? "selected" : ""}
               onClick={() => choose(String(value) === String(options.default) ? "__auto__" : value)}>
-              <span className="grow">{thinkingName(value)}{String(value) === String(options.default) && <small className="menu-hint"> · по умолчанию</small>}</span>
+              <span className="grow">{nameOf(value)}{String(value) === String(options.default) && <small className="menu-hint"> · по умолчанию</small>}</span>
               {String(value) === String(effective) && <Icon name="check" size={15} />}
             </button>
           ))}

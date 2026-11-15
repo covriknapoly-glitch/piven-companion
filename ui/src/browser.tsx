@@ -2,12 +2,16 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { BrowserState, WebApi } from "./bridge";
 import { Icon } from "./icons";
 import { IconButton, RandomDots } from "./ui";
+import braveIcon from "./assets/sites/brave.png";
+import huggingfaceIcon from "./assets/sites/huggingface.png";
+import wikipediaIcon from "./assets/sites/wikipedia.png";
+import youtubeIcon from "./assets/sites/youtube.png";
 
 const START_LINKS = [
-  { title: "Brave Search", url: "https://search.brave.com/" },
-  { title: "YouTube", url: "https://www.youtube.com/" },
-  { title: "Википедия", url: "https://ru.wikipedia.org/" },
-  { title: "Hugging Face", url: "https://huggingface.co/models" },
+  { title: "Brave Search", url: "https://search.brave.com/", icon: braveIcon },
+  { title: "YouTube", url: "https://www.youtube.com/", icon: youtubeIcon },
+  { title: "Wikipedia", url: "https://www.wikipedia.org/", icon: wikipediaIcon },
+  { title: "Hugging Face", url: "https://huggingface.co/models", icon: huggingfaceIcon },
 ];
 
 function toUrl(text: string) {
@@ -166,7 +170,7 @@ export function BrowserPane({ api, openRequest, covered }:
             <div className="start-tiles">
               {START_LINKS.map((link) => (
                 <button key={link.url} type="button" className="start-tile" title={link.url.replace(/^https:\/\/(www\.)?/, "")} onClick={() => go(link.url)}>
-                  <span className="start-icon">{link.title.slice(0, 1)}</span><span className="start-name">{link.title}</span>
+                  <span className="start-icon"><img src={link.icon} alt="" width={26} height={26} draggable={false} /></span><span className="start-name">{link.title}</span>
                 </button>
               ))}
             </div>

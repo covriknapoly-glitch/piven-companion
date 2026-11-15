@@ -76,6 +76,7 @@ VOICE_SERVER_LOG = DATA_DIR / "voice-models.log"
 AUDIOCPP_URLS = {"asr": "http://127.0.0.1:47836", "tts": "http://127.0.0.1:47837"}
 DICTATION_KEEP_SECONDS = 120
 VOICE_IDLE_SECONDS = 600
+LLAMA_OFF_NOTE = "llama.cpp выключен. Включи его в Настройки → Интеграции или выбери подключённую модель."
 # The NVIDIA driver keeps GPU code it compiled for this card in a cache that is too small by default, so voice and model
 # servers compiled it again on every start (the first phrase took 14-18 s instead of 2-3 s). 4 GB is the largest it allows.
 os.environ.setdefault("CUDA_CACHE_MAXSIZE", str(4 * 2 ** 30))
@@ -159,8 +160,8 @@ def log(message):
         pass
 
 
-def list_models():
-    return llama.list_models() + integrations.model_names()
+def list_models(local=True):
+    return (llama.list_models() if local else []) + integrations.model_names()
 
 
 def backend_problem():
@@ -1004,8 +1005,8 @@ class CompanionCore:
         if self.heavy_mode:
             return HEAVY_MODE_NOTE
         self.stop_dictation()
-        if not self._integration_enabled("models"):
-            return "Локальная модель выключена. Включи её в настройках."
+        if self._local_blocked(model):
+            return LLAMA_OFF_NOTE
         if self.capture_thread and self.capture_thread.is_alive():
             return "Завершается предыдущий аудиоблок, попробуй через пару секунд."
         if not model:
@@ -1240,12 +1241,17 @@ class CompanionCore:
     def _integration_enabled(self, name):
         return bool(self.settings.get("integrations_enabled", {}).get(name, True))
 
+    def _local_blocked(self, model):
+        """The "models" switch now turns off only llama.cpp; connected services keep working."""
+        return not self._integration_enabled("models") and not integrations.is_provider_model(model or "")
+
     @staticmethod
     def _load_integrations(saved):
         saved = saved if isinstance(saved, dict) else {}
         if "models" not in saved and "ollama" in saved:
             saved = {**saved, "models": saved["ollama"]}
-        return {key: bool(saved.get(key, True)) for key in ("models", "comfyui")}
+        # ComfyUI no longer has its own switch: pictures need it anyway, and a switch left off had no way back.
+        return {"models": bool(saved.get("models", True)), "comfyui": True}
 
     def _save_conversation(self):
         try:

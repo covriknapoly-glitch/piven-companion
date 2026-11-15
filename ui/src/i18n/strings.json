@@ -1374,5 +1374,14 @@
 "В очереди": "Queued",
 "Убрать из очереди": "Remove from the queue",
 "Картинок: {0}": "Images: {0}",
-"Продолжить": "Continue"
+"Продолжить": "Continue",
+"Поиск": "Search",
+"Ищет по названиям чатов и по сообщениям в них": "Searches chat titles and the messages in them",
+"Ищет по названиям проектов и по сообщениям в них": "Searches project titles and the messages in them",
+"В сообщениях": "In messages",
+"Убрать": "Dismiss",
+"Скачанные модели GGUF. Если выключить, они выгрузятся из памяти, а подключённые сервисы продолжат работать.": "Downloaded GGUF models. Turning it off unloads them from memory; connected services keep working.",
+"llama.cpp выключен. Включи его в Настройки → Интеграции или выбери подключённую модель.": "llama.cpp is off. Turn it on in Settings → Integrations or pick a connected model.",
+"GitHub временно ограничил проверки с этого компьютера. PIVEN попробует снова позже.": "GitHub is temporarily limiting checks from this computer. PIVEN will try again later.",
+"Не удалось проверить обновления: GitHub ответил {0}.": "Couldn't check for updates: GitHub answered {0}."
 }
