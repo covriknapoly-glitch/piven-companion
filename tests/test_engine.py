@@ -907,6 +907,67 @@ class PolishFixes(unittest.TestCase):
         self.assertIn("временно ограничил", updater.error)
 
 
+class CloudModels(unittest.TestCase):
+    def http_error(self, code, body, headers=None):
+        return urllib.error.HTTPError("https://x", code, "error", headers or {}, io.BytesIO(body.encode("utf-8")))
+
+    def test_rate_limits_are_told_apart(self):
+        minute = '{"error": {"message": "Quota exceeded for metric: generate_content_free_tier_requests, limit: 5", "details": [{"quotaId": "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"}, {"retryDelay": "37s"}]}}'
+        day = '{"error": {"message": "Quota exceeded", "details": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}}'
+        self.assertEqual(integrations.retry_delay(self.http_error(429, minute), minute), 37.0)
+        self.assertEqual(integrations.retry_delay(self.http_error(429, "{}", {"Retry-After": "12"}), "{}"), 12.0)
+        self.assertIsNone(integrations.retry_delay(self.http_error(429, day), day))
+        self.assertIn("подожди минуту", integrations._http_error(self.http_error(429, minute)))
+        self.assertIn("дневной лимит", integrations._http_error(self.http_error(429, day)))
+        self.assertIn("закончились деньги", integrations._http_error(self.http_error(429, '{"error": {"message": "insufficient credits"}}')))
+
+    def test_chat_waits_when_the_service_asks_and_retries_a_dropped_stream(self):
+        statuses, waits = [], []
+
+        class Cancel:
+            def wait(self, seconds):
+                waits.append(seconds)
+                return False
+
+            def is_set(self):
+                return False
+
+        replies = [integrations._Busy("Google Gemini: слишком много запросов", 37.0), integrations._Lost("Google Gemini: сервер оборвал ответ"), "готово"]
+
+        def ask(*args, **kwargs):
+            reply = replies.pop(0)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+        with mock.patch.object(integrations, "_ask", side_effect=ask):
+            self.assertEqual(integrations.chat("gemini:gemini-2.5-flash", [], on_status=statuses.append, cancel_event=Cancel()), "готово")
+        self.assertEqual(waits, [38.0, integrations.RETRY_WAITS[0]])
+        self.assertIn("Google Gemini просит подождать 37 с", statuses)
+
+        replies[:] = [integrations._Busy("x", 5.0)] * 5
+        with mock.patch.object(integrations, "_ask", side_effect=ask):
+            with self.assertRaises(RuntimeError):
+                integrations.chat("gemini:gemini-2.5-flash", [], cancel_event=Cancel())
+
+    def test_stream_closed_by_the_server_counts_as_a_lost_connection(self):
+        class Dropped:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def __iter__(self):
+                raise AttributeError("'NoneType' object has no attribute 'peek'")
+
+        with mock.patch.object(integrations, "settings_of", return_value={"url": "http://127.0.0.1:1/v1", "key": ""}), \
+                mock.patch.object(integrations, "_open_stream", return_value=Dropped()):
+            with self.assertRaises(integrations._Lost) as caught:
+                integrations._ask("openrouter:some/model", [{"role": "user", "content": "hi"}])
+        self.assertIn("сервер оборвал ответ", str(caught.exception))
+
+
 class FakeStream(io.BytesIO):
     pass
 

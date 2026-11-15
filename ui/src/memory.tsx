@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { HfFile, MemoryStatus, WebApi } from "./bridge";
 import { ConfirmDialog } from "./dialogs";
-import { AdvancedHead, Button, Field, IconButton, Switch, Toggle } from "./ui";
+import { AdvancedHead, Button, Field, IconButton, Switch, Toggle, useShared } from "./ui";
 
 function EmbeddingSearch({ api, onStarted }: { api: WebApi; onStarted: () => void }) {
   const [query, setQuery] = useState("");
@@ -49,15 +49,11 @@ function EmbeddingSearch({ api, onStarted }: { api: WebApi; onStarted: () => voi
   );
 }
 
-let lastMemory: MemoryStatus | null = null;
-
 export function MemoryPane({ api }: { api: WebApi }) {
   const [changing, setChanging] = useState(false);
-  const [status, setStatus] = useState<MemoryStatus | null>(lastMemory);
+  const [status, load] = useShared<MemoryStatus>("memory", () => api.memory_status());
   const [fact, setFact] = useState("");
   const [clearing, setClearing] = useState<"" | "fact" | "exchange" | "all">("");
-  const load = useCallback(() => api.memory_status().then((next) => { lastMemory = next; setStatus(next); }), [api]);
-  useEffect(() => { void load(); }, [load]);
   const job = status?.job;
   useEffect(() => {
     if (job?.state !== "running") return;

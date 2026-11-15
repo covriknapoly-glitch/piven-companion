@@ -47,6 +47,17 @@ class _Lost(RuntimeError):
     """The connection dropped before the service answered anything."""
 
 
+class _Busy(RuntimeError):
+    """The service asked to wait a little (free tiers allow a few requests a minute) before answering anything."""
+
+    def __init__(self, message, delay):
+        super().__init__(message)
+        self.delay = delay
+
+
+LONGEST_WAIT = 90
+
+
 class _Blob(ctypes.Structure):
     _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
 
@@ -115,9 +126,28 @@ def _get(url, headers, timeout=15):
         return json.loads(response.read().decode("utf-8"))
 
 
-def _http_error(error):
+def _error_text(error):
     try:
-        text = error.read().decode("utf-8", "replace")
+        return error.read().decode("utf-8", "replace")
+    except Exception:
+        return ""
+
+
+def retry_delay(error, text):
+    """Seconds the service asked to wait: the Retry-After header, or Gemini's retryDelay in the body. None if it didn't say."""
+    try:
+        header = error.headers.get("Retry-After") if error.headers else None
+        if header:
+            return float(header)
+    except (TypeError, ValueError):
+        pass
+    found = re.search(r'"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"', text) or re.search(r"retry in (\d+(?:\.\d+)?)\s*s", text, re.I)
+    return float(found.group(1)) if found else None
+
+
+def _http_error(error, text=None):
+    text = _error_text(error) if text is None else text
+    try:
         try:
             body = json.loads(text)
             body = body[0] if isinstance(body, list) and body else body
@@ -130,7 +160,14 @@ def _http_error(error):
     if error.code in (401, 403):
         return f"ключ не подошёл ({error.code}){': ' + str(detail) if detail else ''}"
     if error.code == 429:
-        return "превышен лимит запросов или закончились деньги на счёте" + (f" ({detail})" if detail else "")
+        extra = f" ({detail})" if detail else ""
+        if re.search(r"per ?day|PerDay|daily", text, re.I):
+            return "дневной лимит запросов исчерпан, он обновится завтра" + extra
+        if re.search(r"per ?minute|PerMinute|rate.?limit|too many requests", text, re.I):
+            return "слишком много запросов подряд, подожди минуту" + extra
+        if re.search(r"billing|credit|balance|insufficient|payment", text, re.I):
+            return "закончились деньги на счёте или лимит тарифа" + extra
+        return "превышен лимит запросов" + extra
     return f"HTTP {error.code}{': ' + str(detail) if detail else ''}"
 
 
@@ -641,7 +678,11 @@ def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
                 if on_response:
                     on_response(None)
     except urllib.error.HTTPError as error:
-        reason = _http_error(error)
+        text = _error_text(error)
+        reason = _http_error(error, text)
+        delay = retry_delay(error, text) if error.code == 429 else None
+        if delay is not None and delay <= LONGEST_WAIT and not re.search(r"per ?day|PerDay|daily", text, re.I) and not (parts or thoughts or calls):
+            raise _Busy(f"{info['title']}: {reason}", delay) from error
         if error.code == 401:
             with _lock:
                 _errors[provider], _kinds[provider] = reason, "key"
@@ -655,9 +696,12 @@ def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
     except (AttributeError, ValueError, OSError) as error:
         if cancel_event is not None and cancel_event.is_set():
             raise InterruptedError("Запрос прерван пользователем") from error
-        if isinstance(error, OSError) and not isinstance(error, TimeoutError) and not (parts or thoughts or calls):
-            raise _Lost(f"{info['title']}: связь оборвалась ({error})") from error
-        raise RuntimeError(f"{info['title']}: связь оборвалась ({error})") from error
+        # http.client reports a server that closed the stream halfway as "'NoneType' object has no attribute ...".
+        dropped = isinstance(error, AttributeError) and "NoneType" in str(error)
+        reason = "сервер оборвал ответ" if dropped else f"связь оборвалась ({error})"
+        if (dropped or (isinstance(error, OSError) and not isinstance(error, TimeoutError))) and not (parts or thoughts or calls):
+            raise _Lost(f"{info['title']}: {reason}") from error
+        raise RuntimeError(f"{info['title']}: {reason}") from error
     if thoughts and on_thinking:
         on_thinking("".join(thoughts))
     if tool_calls is not None and info["kind"] != "anthropic":
@@ -671,14 +715,27 @@ def chat(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
     def ask():
         return _ask(name, messages, timeout, on_status, on_thinking, cancel_event, on_response, on_text,
                     overrides, sampling, tools, tool_calls, think)
-    for wait in RETRY_WAITS:
+    def pause(seconds):
+        if cancel_event is None:
+            time.sleep(seconds)
+        elif cancel_event.wait(seconds):
+            raise InterruptedError("Запрос прерван пользователем")
+
+    lost = busy = 0
+    while True:
         try:
             return ask()
-        except _Lost:
+        except _Lost as error:
+            if lost >= len(RETRY_WAITS):
+                raise RuntimeError(str(error)) from error
             if on_status:
                 on_status("Связь оборвалась, подключаюсь снова")
-            if cancel_event is None:
-                time.sleep(wait)
-            elif cancel_event.wait(wait):
-                raise InterruptedError("Запрос прерван пользователем")
-    return ask()
+            pause(RETRY_WAITS[lost])
+            lost += 1
+        except _Busy as error:
+            if busy >= 3:
+                raise RuntimeError(str(error)) from error
+            if on_status:
+                on_status(f"{PROVIDERS[split(name)[0]]['title']} просит подождать {round(error.delay)} с")
+            pause(error.delay + 1)
+            busy += 1

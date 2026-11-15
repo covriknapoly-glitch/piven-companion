@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { ModelParams, ParamValue, WebApi } from "./bridge";
 import { Icon } from "./icons";
-import { AdvancedHead, Button, Field, IconButton, ModelLogo, shortModel, Switch, Toggle } from "./ui";
+import { AdvancedHead, Button, Field, IconButton, ModelLogo, shortModel, Switch, Toggle, useShared } from "./ui";
 
 type Kind = "int" | "float" | "choice" | "bool" | "context";
 interface Param { key: string; label: string; hint: string; kind: Kind; step?: number; unit?: string; names?: Record<string, string> }
@@ -79,9 +79,7 @@ const REMOTE_PARAMS = new Set(["ctx_size", "compress_context", "temperature", "m
 const contextName = (value: number) => (value >= CONTEXT_MAX ? "1M" : value >= 1024 ? `${Math.round(value / 1024)}K` : String(value));
 
 export function ModelParamsPane({ api, children }: { api: WebApi; children?: ReactNode }) {
-  const [data, setData] = useState<ModelParams | null>(null);
-  const load = useCallback(() => api.model_params("").then(setData), [api]);
-  useEffect(() => { void load(); }, [load]);
+  const [data, load] = useShared<ModelParams>("params:", () => api.model_params(""));
   if (!data) return null;
   return <>
     <Field label="Названия чатов">
@@ -94,11 +92,9 @@ export function ModelParamsPane({ api, children }: { api: WebApi; children?: Rea
 
 /** One model, or the common settings when scope is "*". */
 export function ModelSettingsPage({ api, scope, onBack, onSaved }: { api: WebApi; scope: string; onBack: () => void; onSaved: () => void }) {
-  const [data, setData] = useState<ModelParams | null>(null);
+  const [data, load] = useShared<ModelParams>(`params:${scope}`, () => api.model_params(scope));
   const [opened, setOpened] = useState<Record<string, boolean>>({});
   const head = useRef<HTMLDivElement>(null);
-  const load = useCallback(() => api.model_params(scope).then(setData), [api, scope]);
-  useEffect(() => { void load(); }, [load]);
   useEffect(() => { head.current?.closest(".settings-fields")?.scrollTo(0, 0); }, [scope]);
 
   const common = scope === "*";

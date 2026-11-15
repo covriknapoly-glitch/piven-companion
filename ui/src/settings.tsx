@@ -10,7 +10,7 @@ import { UpdatePane } from "./update";
 import { IntegrationsPane } from "./providers";
 import { ToolsPane } from "./tools";
 import { MemoryPane } from "./memory";
-import { AdvancedHead, Button, callMemoryLabel, Decor, Field, gigabytes, groupModels, IconButton, MemoryBar, ModelLogo, shortModel, Switch, TextSetting, Toggle, useOutsideClose } from "./ui";
+import { AdvancedHead, Button, callMemoryLabel, Decor, Field, gigabytes, groupModels, IconButton, MemoryBar, ModelLogo, prefetchShared, shortModel, Switch, TextSetting, Toggle, useOutsideClose, useShared } from "./ui";
 import { THEMES, type ThemeId } from "./themes";
 type SectionId = "look" | "model" | "tools" | "memory" | "voice" | "images" | "code" | "integrations" | "phone" | "data";
 const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
@@ -27,6 +27,21 @@ const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
 
 let lastSection: SectionId = "model";
 let lastDetails: SettingsDetails | null = null;
+
+/** Fetches what every settings tab shows, so tabs open filled. Called once after start and whenever settings open. */
+export function prefetchSettings(api: WebApi, model: string) {
+  void api.settings_details().then((next) => { lastDetails = next; }).catch(() => {});
+  prefetchShared([
+    [`model_memory:${model}`, () => api.model_memory(model ? [model] : [])],
+    ["disk", () => api.disk_usage()],
+    ["voice", () => api.voice_status()],
+    ["memory", () => api.memory_status()],
+    ["tools", () => api.tools_status()],
+    ["providers", () => api.providers_status().then((reply) => reply.providers)],
+    ["params:", () => api.model_params("")],
+    ["update", () => api.update_status()],
+  ]);
+}
 
 export type FontChoice = "lack";
 export const FONT_CHOICES: readonly (readonly [FontChoice, string, string])[] = [["lack", "Lack", "Lack, sans-serif"]];
@@ -45,8 +60,8 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
   const [showSaved, setShowSaved] = useState(false);
   const [prompt, setPrompt] = useState("");
   const model = state.settings.model;
-  const [memory, setMemory] = useState<ModelMemory | null>(null);
-  useEffect(() => { void api.model_memory(model ? [model] : []).then(setMemory); }, [api, model]);
+  const [memory] = useShared<ModelMemory>(`model_memory:${model}`, () => api.model_memory(model ? [model] : []));
+  useEffect(() => { prefetchSettings(api, model); }, [api]);
   const modelEstimate = memory?.models[model];
 
   const reload = useCallback(() => api.settings_details().then((next) => { lastDetails = next; setDetails(next); setPrompt(next.systemPrompt); }), [api]);
@@ -308,12 +323,9 @@ function DeleteButton({ onDelete, disabled = false, compact = false }: { onDelet
 }
 
 function useDiskUsage(api: WebApi, revision: unknown) {
-  const [usage, setUsage] = useState<DiskUsage | null>(null);
-  useEffect(() => {
-    let live = true;
-    void api.disk_usage().then((reply) => { if (live) setUsage(reply); });
-    return () => { live = false; };
-  }, [api, revision]);
+  const [usage, reload] = useShared<DiskUsage>("disk", () => api.disk_usage());
+  const first = useState(revision)[0];
+  useEffect(() => { if (revision !== first) void reload(); }, [revision]);
   return usage;
 }
 
@@ -361,13 +373,11 @@ function ModelList({ api, models, current, onPick, onTune, onOpenHub }: { api: W
 }
 
 function VoiceModels({ api, onOpenHub, chatMemory, context, onChanged }: { api: WebApi; onOpenHub: (kind: VoiceKind) => void; chatMemory?: MemoryEstimate | null; context: number; onChanged: () => void }) {
-  const [status, setStatus] = useState<VoiceStatus | null>(null);
+  const [status, load] = useShared<VoiceStatus>("voice", () => api.voice_status());
   const [error, setError] = useState("");
   const [restartFor, setRestartFor] = useState<VoiceKind | null>(null);
   const [revision, setRevision] = useState(0);
   const usage = useDiskUsage(api, `${revision}-${status?.job.state}`);
-  const load = useCallback(() => api.voice_status().then(setStatus), [api]);
-  useEffect(() => { void load(); }, [load]);
   const running = status?.job.state === "running";
   useEffect(() => {
     if (!running) return;

@@ -73,10 +73,11 @@ function dateGroups(chats: ChatSummary[]): [string, ChatSummary[]][] {
   return bounds.map(([caption]) => [caption, groups.get(caption) ?? []] as [string, ChatSummary[]]).filter(([, list]) => list.length > 0);
 }
 
-export function Sidebar({ api, state, actions, searchRef, onNewChat, onOpenHit, onSettings, onHide }:
+export function Sidebar({ api, state, actions, searchRef, onNewChat, onOpenHit, searchPreset, onSettings, onHide }:
   { api: WebApi; state: EngineState; actions: ChatActions; searchRef: RefObject<HTMLInputElement | null>; onNewChat: () => void;
-    onOpenHit: (hit: SearchHit) => void; onSettings: () => void; onHide: () => void }) {
+    onOpenHit: (hit: SearchHit) => void; searchPreset?: { text: string; nonce: number } | null; onSettings: () => void; onHide: () => void }) {
   const [query, setQuery] = useState("");
+  useEffect(() => { if (searchPreset) setQuery(searchPreset.text); }, [searchPreset]);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [hidden, setHidden] = useState<string[]>([]);
   const projects = state.code.on;

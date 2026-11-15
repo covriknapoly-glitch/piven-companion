@@ -360,7 +360,10 @@ export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, on
   useLayoutEffect(() => {
     stickToBottom.current = true;
     const element = scrollRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+    // An opened chat fades in as a whole; only messages that arrive after that rise one by one.
+    element.querySelectorAll(".msg").forEach((message) => message.classList.add("settled"));
   }, [state.activeChatId]);
   useEffect(() => {
     if (!focusIndex) return;
@@ -417,7 +420,7 @@ export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, on
   return (
     <div className="transcript" ref={scrollRef}
       onScroll={(event) => { const el = event.currentTarget; stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
-      <div className="transcript-inner">{body}</div>
+      <div className="transcript-inner" key={state.activeChatId}>{body}</div>
     </div>
   );
 }

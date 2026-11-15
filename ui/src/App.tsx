@@ -8,11 +8,13 @@ import { Icon } from "./icons";
 import { CallPanel } from "./call";
 import { ContextRing } from "./context";
 import { LinkContext } from "./markdown";
-import { SettingsDialog, FONT_CHOICES, type FontChoice } from "./settings";
+import { SettingsDialog, FONT_CHOICES, prefetchSettings, type FontChoice } from "./settings";
+import { HelpDialog, type SlashCommand } from "./commands";
+import { translate } from "./i18n";
 import { Sidebar, type ChatActions } from "./sidebar";
 import { Transcript } from "./transcript";
-import { Decor, IconButton } from "./ui";
-import { THEME_IDS, isLightTheme, type ThemeId } from "./themes";
+import { Decor, IconButton, shortModel, thinkingName } from "./ui";
+import { THEME_IDS, THEMES, isLightTheme, type ThemeId } from "./themes";
 import { Workspace, type WorkspaceTab } from "./workspace";
 import { phoneHost } from "./linkhost";
 import { PhoneBanner, PhoneStart } from "./pairing";
@@ -68,7 +70,7 @@ export default function App() {
   const [state, setState] = useState<EngineState | null>(null);
   const [toast, setToast] = useState<{ text: string; kind: "info" | "error" } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 900);
-  const [dialog, setDialog] = useState<"" | "settings" | "search" | "hub" | "voice-asr" | "voice-tts">("");
+  const [dialog, setDialog] = useState<"" | "settings" | "search" | "hub" | "voice-asr" | "voice-tts" | "help">("");
   const [deleting, setDeleting] = useState<ChatSummary | null>(null);
   const [lightbox, setLightbox] = useState("");
   const [focusIndex, setFocusIndex] = useState<{ index: number; nonce: number } | null>(null);
@@ -196,6 +198,85 @@ export default function App() {
     moveToProjects: (chat) => { void api.chat_kind(chat.id, !chat.code).then((result) => done(result.ok ? undefined : result.error)); },
   }, [api, state?.activeChatId, done, notify]);
 
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const [searchPreset, setSearchPreset] = useState<{ text: string; nonce: number } | null>(null);
+  const prefetched = useRef(false);
+  useEffect(() => {
+    if (!api || !state || prefetched.current) return;
+    prefetched.current = true;
+    window.setTimeout(() => prefetchSettings(api, state.settings.model), 2500);
+  }, [api, state]);
+
+  const chatOrder = useCallback(() => {
+    const current = stateRef.current;
+    if (!current) return [];
+    const kind = current.chats.filter((chat) => Boolean(chat.code) === current.code.on);
+    const byDate = (a: ChatSummary, b: ChatSummary) => (b.updated || 0) - (a.updated || 0);
+    return [...kind.filter((chat) => chat.pinned).sort(byDate), ...kind.filter((chat) => !chat.pinned).sort(byDate)];
+  }, []);
+  const lastAnswer = useCallback(() => {
+    const items = stateRef.current?.items ?? [];
+    return [...items].reverse().find((item) => item.role === "assistant" && item.text.trim())?.text ?? "";
+  }, []);
+  const newProject = useCallback(() => {
+    if (!api) return;
+    void (stateRef.current?.code.on ? Promise.resolve({ ok: true } as { ok: boolean; error?: string }) : api.code_mode(true)).then((result) => { if (result.ok) newChat(); else done(result.error); });
+  }, [api, newChat, done]);
+
+  const commands: SlashCommand[] = useMemo(() => {
+    if (!api || !actions) return [];
+    const chat = () => stateRef.current?.chats.find((item) => item.id === stateRef.current?.activeChatId);
+    const needArg = (arg: string, what: string) => { if (!arg) notify(`Напиши ${what} после команды`); return Boolean(arg); };
+    const reply = (result: { ok: boolean; error?: string }) => done(result.ok ? undefined : result.error);
+    return [
+      { name: "new", hint: "Новый чат", run: () => newChat() },
+      { name: "project", hint: "Новый проект", run: () => newProject() },
+      { name: "model", args: "название", hint: "Сменить модель", run: (arg) => {
+        const models = stateRef.current?.models ?? [];
+        const needle = arg.toLowerCase();
+        const found = models.find((name) => name.toLowerCase() === needle) ?? models.find((name) => shortModel(name).toLowerCase().includes(needle) || name.toLowerCase().includes(needle));
+        if (!arg) { window.dispatchEvent(new Event("piven:model-menu")); return; }
+        if (!found) { notify(`Модель «${arg}» не найдена`); return; }
+        void api.set_model(found).then(reply);
+      } },
+      { name: "think", args: "уровень", hint: "Размышление: выкл, низкий, средний, высокий…", run: (arg) => {
+        const model = stateRef.current?.settings.model ?? "";
+        void api.thinking_options(model).then((options) => {
+          if (!options.values.length) { notify("Эта модель не даёт выбрать размышление"); return; }
+          const needle = arg.toLowerCase();
+          const off = /^(выкл|нет|без|off|no|none)/.test(needle), on = /^(вкл|да|on|yes)/.test(needle);
+          const label = (value: unknown) => (value === true ? "с размышлением" : value === false ? "без размышления" : thinkingName(value as never).toLowerCase());
+          const value = options.values.find((item) => (off && (item === false || item === "none")) || (on && item === true)
+            || String(item).toLowerCase() === needle || (needle && (label(item).startsWith(needle) || (translate(label(item)) ?? "").toLowerCase().startsWith(needle))));
+          if (value === undefined) { notify(`Можно: ${options.values.map((item) => label(item)).join(", ")}`); return; }
+          void api.set_thinking(model, value).then(reply);
+        });
+      } },
+      { name: "search", args: "текст", hint: "Найти в чатах и сообщениях", run: (arg) => { setSidebarOpen(true); setSearchPreset({ text: arg, nonce: Date.now() }); window.setTimeout(() => searchRef.current?.focus(), 0); } },
+      { name: "web", args: "запрос", hint: "Найти в интернете во встроенном браузере", run: (arg) => {
+        if (!arg) { setBrowserOpen(true); return; }
+        openLink(`https://search.brave.com/search?q=${encodeURIComponent(arg)}`);
+      } },
+      { name: "image", args: "описание", hint: "Нарисовать картинку", run: (arg) => { if (needArg(arg, "что нарисовать")) void api.send_message(`${language === "en" ? "Draw" : "Нарисуй"} ${arg}`, []).then(reply); } },
+      { name: "rename", args: "название", hint: "Переименовать чат", run: (arg) => { const current = chat(); if (current && needArg(arg, "новое название")) actions.rename(current, arg); } },
+      { name: "pin", hint: "Закрепить или открепить чат", run: () => { const current = chat(); if (current) actions.pin(current); } },
+      { name: "export", hint: "Сохранить чат в файл Markdown", run: () => { const current = chat(); if (current) actions.exportChat(current, true); } },
+      { name: "delete", hint: "Удалить чат", run: () => { const current = chat(); if (current) actions.remove(current); } },
+      { name: "copy", hint: "Скопировать последний ответ", run: () => { const text = lastAnswer(); if (text) copy(text); else notify("Ответов пока нет"); } },
+      { name: "theme", args: "название", hint: "Сменить тему оформления", run: (arg) => {
+        const needle = arg.toLowerCase();
+        const found = THEMES.find(([id, label]) => id === needle || label.toLowerCase().startsWith(needle) || (translate(label) ?? "").toLowerCase().startsWith(needle));
+        if (!arg || !found) { notify(`Темы: ${THEMES.map(([, label]) => label).join(", ")}`); return; }
+        setTheme(found[0]);
+      } },
+      { name: "browser", hint: "Показать или скрыть браузер", run: () => setBrowserOpen((open) => !open) },
+      { name: "settings", hint: "Открыть настройки", run: () => setDialog("settings") },
+      { name: "stop", hint: "Остановить ответ", run: () => stop() },
+      { name: "help", hint: "Все команды и сочетания клавиш", run: () => setDialog("help") },
+    ];
+  }, [api, actions, newChat, newProject, notify, done, openLink, copy, lastAnswer, setTheme, stop, language]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const mod = event.ctrlKey || event.metaKey;
@@ -203,7 +284,19 @@ export default function App() {
       const key = event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : event.key.toLowerCase();
       if (mod && event.shiftKey && key === "f") { event.preventDefault(); setSidebarOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }
       else if (mod && key === "k") { event.preventDefault(); setSidebarOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }
+      else if (mod && event.shiftKey && key === "n") { event.preventDefault(); newProject(); }
+      else if (mod && event.shiftKey && key === "c") { event.preventDefault(); const text = lastAnswer(); if (text) copy(text); }
       else if (mod && key === "n") { event.preventDefault(); newChat(); }
+      else if (mod && key === "l") { event.preventDefault(); inputRef.current?.focus(); }
+      else if (mod && key === "m") { event.preventDefault(); window.dispatchEvent(new Event("piven:model-menu")); }
+      else if (mod && (event.code === "Slash" || event.key === "/")) { event.preventDefault(); setDialog((open) => (open === "help" ? "" : "help")); }
+      else if (event.altKey && !mod && (event.key === "ArrowUp" || event.key === "ArrowDown") && api) {
+        event.preventDefault();
+        const order = chatOrder();
+        const at = order.findIndex((chat) => chat.id === stateRef.current?.activeChatId);
+        const next = order[at + (event.key === "ArrowUp" ? -1 : 1)];
+        if (next) void api.select_chat(next.id).then((result) => done(result.ok ? undefined : result.error));
+      }
       else if (mod && (event.code === "Comma" || event.key === ",")) { event.preventDefault(); setDialog("settings"); }
       else if (mod && key === "b") { event.preventDefault(); setSidebarOpen((open) => !open); }
       else if (mod && key === "d") { event.preventDefault(); setBrowserOpen((open) => !open); }
@@ -211,7 +304,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newChat, stop, state?.busy, dialog, lightbox, deleting]);
+  }, [newChat, newProject, stop, copy, lastAnswer, chatOrder, api, done, state?.busy, dialog, lightbox, deleting]);
 
   if (isPhone && !api) return <PhoneStart onReady={engineReady} />;
   if (engineMissing) {
@@ -225,7 +318,7 @@ export default function App() {
     <LinkContext.Provider value={openLink}>
     <div className={`app ${sidebarOpen ? "" : "sidebar-hidden"}`}>
       <Sidebar api={api} state={state} actions={actions} searchRef={searchRef} onNewChat={newChat}
-        onOpenHit={openHit} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
+        onOpenHit={openHit} searchPreset={searchPreset} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
       <main className="main">
@@ -257,7 +350,7 @@ export default function App() {
               onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} onNotice={done} />
 
         <div className="composer-dock" ref={trackDockHeight}>
-          <Composer api={api} state={state} inputRef={inputRef} prefill={prefill} onStop={stop} onError={done} onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind = "tts") => setDialog(`voice-${kind}`)}
+          <Composer api={api} state={state} inputRef={inputRef} prefill={prefill} commands={commands} onStop={stop} onError={done} onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind = "tts") => setDialog(`voice-${kind}`)}
             onSent={(queued) => { if (queued) notify("Отправится после текущего ответа", "info"); void poll(); }} />
         </div>
       </main>
@@ -279,6 +372,7 @@ export default function App() {
       {dialog === "settings" && <SettingsDialog state={state} api={api} theme={theme} setTheme={setTheme} fontChoice={fontChoice} setFontChoice={setFontChoice} language={language} setLanguage={setLanguageChoice} onClose={() => setDialog("")}
         onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind) => setDialog(`voice-${kind}`)} />}
       {dialog === "search" && <SearchDialog api={api} onClose={() => setDialog("")} onOpen={openHit} />}
+      {dialog === "help" && <HelpDialog commands={commands} onClose={() => setDialog("")} />}
       {(dialog === "voice-asr" || dialog === "voice-tts") && <VoiceHubDialog api={api} initialKind={dialog === "voice-asr" ? "asr" : "tts"}
         onClose={() => setDialog("settings")} onDone={() => notify("Голосовая модель скачана", "info")} />}
       {dialog === "hub" && <HubDialog api={api} onClose={() => setDialog("")} onDone={() => { void poll(); notify("Модель скачана", "info"); }} />}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { EngineState, UpdateStatus, WebApi } from "./bridge";
 import { Icon } from "./icons";
-import { Button, Field, IconButton, Toggle } from "./ui";
+import { Button, Field, IconButton, Toggle, useShared } from "./ui";
 
 /** A line at the top of the chat when a new version is out. Nothing is installed until the user presses the button. */
 export function UpdateBanner({ api, state, onError }: { api: WebApi; state: EngineState; onError: (error?: string) => void }) {
@@ -40,9 +40,8 @@ export function UpdateBanner({ api, state, onError }: { api: WebApi; state: Engi
 
 /** Settings → Data: the version, the check switch and a check button. */
 export function UpdatePane({ api }: { api: WebApi }) {
-  const [status, setStatus] = useState<UpdateStatus | null>(null);
+  const [status, , setStatus] = useShared<UpdateStatus>("update", () => api.update_status());
   const [checking, setChecking] = useState(false);
-  useEffect(() => { void api.update_status().then(setStatus); }, [api]);
   if (!status) return null;
   const check = () => { setChecking(true); void api.update_check().then((next) => { setStatus(next); setChecking(false); }); };
   const line = checking ? "Проверяю…" : status.error ? status.error : !status.checked ? "Ещё не проверялось."

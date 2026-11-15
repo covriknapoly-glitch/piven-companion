@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import type { EngineState, ModelFeatures, ModelMemory, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
 import { useImage } from "./cards";
+import { SlashMenu, slashCommand, slashMatches, type SlashCommand } from "./commands";
 import { publishDraft } from "./context";
 import { CallControl } from "./dialogs";
 import { isPhone } from "./bridge";
@@ -39,6 +40,11 @@ function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: E
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const close = useCallback(() => { setOpen(false); setQuery(""); }, []);
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener("piven:model-menu", show);
+    return () => window.removeEventListener("piven:model-menu", show);
+  }, []);
   const ref = useOutsideClose(open, close);
   const model = state.settings.model;
   const [memory, setMemory] = useState<ModelMemory | null>(null);
@@ -128,9 +134,9 @@ function ThinkingChip({ state, api, onDone }: { state: EngineState; api: WebApi;
   );
 }
 
-export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpenVoiceHub, inputRef, prefill }:
+export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpenVoiceHub, inputRef, prefill, commands = [] }:
   { api: WebApi; state: EngineState; onSent: (queued: boolean) => void; onStop: () => void; onError: (message?: string) => void; onOpenHub: () => void; onOpenVoiceHub: (kind?: "asr" | "tts") => void;
-    inputRef: RefObject<HTMLTextAreaElement | null>; prefill?: { text: string; nonce: number } | null }) {
+    inputRef: RefObject<HTMLTextAreaElement | null>; prefill?: { text: string; nonce: number } | null; commands?: SlashCommand[] }) {
   const [draft, setDraft] = useState("");
   useEffect(() => { publishDraft(draft); }, [draft]);
   useEffect(() => { if (prefill) { setDraft(prefill.text); inputRef.current?.focus(); } }, [prefill, inputRef]);
@@ -184,10 +190,28 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
     }
   };
 
+  const matches = slashMatches(draft, commands);
+  const [slashActive, setSlashActive] = useState(0);
+  const [slashHidden, setSlashHidden] = useState("");
+  useEffect(() => { setSlashActive(0); }, [matches.length, draft.split(" ")[0]]);
+  const slashOpen = matches.length > 0 && slashHidden !== draft;
+  const runCommand = (command: SlashCommand, arg: string) => {
+    history.current = [...history.current.filter((item) => item !== draft.trim()), draft.trim()].slice(-100);
+    historyIndex.current = null;
+    setDraft("");
+    command.run(arg);
+  };
+  const pickCommand = (command: SlashCommand) => {
+    if (command.args) { setDraft(`/${command.name} `); inputRef.current?.focus(); }
+    else runCommand(command, "");
+  };
+
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     const text = draft.trim();
     if (!text && !images.length) return;
+    const asked = images.length ? null : slashCommand(text, commands);
+    if (asked) { runCommand(asked.command, asked.arg); return; }
     if (phase) void api.stop_dictation();
     void api.send_message(text, images).then((result) => {
       if (result.ok) {
@@ -200,6 +224,16 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
   };
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (slashOpen) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        setSlashActive((index) => (index + (event.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length);
+        return;
+      }
+      if (event.key === "Tab" && !event.shiftKey) { event.preventDefault(); setDraft(`/${matches[slashActive].name}${matches[slashActive].args ? " " : ""}`); return; }
+      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); pickCommand(matches[slashActive]); return; }
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setSlashHidden(draft); return; }
+    }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); return; }
     if (event.key === "Tab" && event.shiftKey && state.code.on) { event.preventDefault(); void api.code_set({ mode: nextMode(state.code.mode) }).then((result) => onError(result.ok ? undefined : result.error)); return; }
     const caretAtStart = event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0;
@@ -232,8 +266,9 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
           {images.map((path) => <AttachmentChip key={path} api={api} path={path} onRemove={() => setImages((current) => current.filter((item) => item !== path))} />)}
         </div>
       )}
+      {slashOpen && <SlashMenu matches={matches} active={slashActive} onPick={pickCommand} />}
       <textarea ref={inputRef} rows={1} aria-label="Сообщение" value={draft} spellCheck
-        placeholder={phase === "listening" ? "Говори, текст появится здесь" : phase === "starting" ? "Запускает распознавание" : state.busy ? "Можно дописать: сообщение учтётся в работе" : "Сообщение"}
+        placeholder={phase === "listening" ? "Говори, текст появится здесь" : phase === "starting" ? "Запускает распознавание" : state.busy ? "Можно дописать: сообщение учтётся в работе" : "Сообщение или / для команд"}
         onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
       <div className="composer-bar">
         <IconButton icon="paperclip" label="Прикрепить картинку (можно вставить Ctrl+V или перетащить)"

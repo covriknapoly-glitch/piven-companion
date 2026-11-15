@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { ProviderRow, SettingsDetails, WebApi } from "./bridge";
 import { translate } from "./i18n";
 import { Icon } from "./icons";
-import { Button, Field, IconButton, Switch } from "./ui";
+import { Button, Field, IconButton, Switch, useShared } from "./ui";
 import claudeLogo from "./assets/integrations/claude-color.svg";
 import comfyuiLogo from "./assets/integrations/comfyui-color.svg";
 import geminiLogo from "./assets/integrations/gemini-color.svg";
@@ -48,11 +48,9 @@ const HINTS: Record<string, string> = {
 
 export function IntegrationsPane({ api, d, save, onChanged }:
   { api: WebApi; d: SettingsDetails; save: (patch: Record<string, unknown>) => Promise<unknown>; onChanged: () => void }) {
-  const [rows, setRows] = useState<ProviderRow[] | null>(null);
+  const [rows, load] = useShared<ProviderRow[]>("providers", () => api.providers_status().then((reply) => reply.providers));
   const [query, setQuery] = useState("");
-  const load = useCallback(() => api.providers_status().then((reply) => setRows(reply.providers)), [api]);
   useEffect(() => {
-    void load();
     const timer = window.setInterval(() => { void load(); }, 5000);
     return () => window.clearInterval(timer);
   }, [load]);

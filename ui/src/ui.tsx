@@ -3,6 +3,24 @@ import type { MemoryEstimate, ThinkingOptions, ThinkingValue, WebApi } from "./b
 import { Icon, type IconName } from "./icons";
 import logoSvg from "./assets/piven_logo.svg";
 
+const shared = new Map<string, unknown>();
+
+/** Data a settings tab shows. It is kept between openings and fetched ahead of time, so a tab opens filled
+ *  instead of staying empty and popping in; the tab still refreshes it in the background. */
+export function useShared<T>(key: string, load: () => Promise<T>): [T | null, () => Promise<void>, (value: T) => void] {
+  const [value, setValue] = useState<T | null>(() => (shared.get(key) as T | undefined) ?? null);
+  const loader = useRef(load);
+  loader.current = load;
+  const put = useCallback((next: T) => { shared.set(key, next); setValue(next); }, [key]);
+  const reload = useCallback(() => loader.current().then(put), [put]);
+  useEffect(() => { setValue((shared.get(key) as T | undefined) ?? null); void reload().catch(() => {}); }, [key, reload]);
+  return [value, reload, put];
+}
+
+export function prefetchShared(entries: [string, () => Promise<unknown>][]) {
+  for (const [key, load] of entries) void load().then((value) => { shared.set(key, value); }).catch(() => {});
+}
+
 export const THINKING_NAMES: Record<string, string> = { none: "Без размышления", minimal: "Минимальный", low: "Низкий", medium: "Средний",
   high: "Высокий", xhigh: "Очень высокий", max: "Максимальный", true: "Включено", false: "Выключено" };
 export const thinkingName = (value: ThinkingValue | null) => (value === null ? "" : THINKING_NAMES[String(value)] ?? String(value));
