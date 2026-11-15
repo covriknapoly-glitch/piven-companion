@@ -705,7 +705,8 @@ button:active:not(:disabled) { transform: scale(.97); transition: transform .08s
 
 .msg { animation: rise-in .32s var(--ease-out) both; }
 .msg.settled { animation: none; }
-.transcript-inner { animation: fade-in .24s var(--ease) both; }
+/* No fill mode on purpose: an animation that stays applied turns each block into its own layer, and the next block then covers its open menus. */
+.transcript-inner { animation: fade-in .24s var(--ease); }
 .msg-error { animation: rise-in .32s var(--ease-out) both; }
 .menu { transform-origin: top; animation: drop-in .16s var(--ease-out); }
 .menu-up, .menu-up-right { transform-origin: bottom; animation-name: lift-in; }
@@ -720,7 +721,7 @@ button:active:not(:disabled) { transform: scale(.97); transition: transform .08s
 .workspace-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background-color .16s var(--ease); }
 .workspace-resize:hover::after, .workspace-resize.dragging::after { background: var(--blue); }
 body.resizing { cursor: col-resize; user-select: none; }
-.settings-pane > *, .settings-fields > * { animation: fade-in .2s var(--ease) both; }
+.settings-pane > *, .settings-fields > * { animation: fade-in .2s var(--ease); }
 .toast { animation: toast-in .24s var(--ease-out); }
 .splash > *, .intro > *:not(.decor) { animation: rise-in .45s var(--ease-out) both; }
 .intro > *:nth-child(2) { animation-delay: .05s; }
