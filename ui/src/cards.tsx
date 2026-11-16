@@ -42,10 +42,11 @@ export function Attachment({ api, path, onView }: { api: WebApi; path: string; o
   }
   if (/\.(mp4|webm|mkv)$/i.test(path)) return <VideoAttachment api={api} path={path} />;
   const isDeck = /\.pptx$/i.test(path);
+  const kind = isDeck ? "Презентация PowerPoint" : /\.pdf$/i.test(path) ? "Документ PDF" : /\.docx$/i.test(path) ? "Документ Word" : "Файл";
   return (
     <div className="attachment-file">
       <span className="attachment-icon"><Icon name={isDeck ? "presentation" : "file"} size={20} /></span>
-      <span className="attachment-copy"><strong>{fileName(path)}</strong><small>{isDeck ? "Презентация PowerPoint" : "Файл"}</small></span>
+      <span className="attachment-copy"><strong data-i18n-skip>{fileName(path)}</strong><small>{kind}</small></span>
       <span className="attachment-actions">
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => { void api.open_file(path); }}>Открыть</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => { void api.save_copy(path); }}>Сохранить копию</button>

@@ -13,7 +13,8 @@ import { HelpDialog, type SlashCommand } from "./commands";
 import { translate } from "./i18n";
 import { Sidebar, type ChatActions } from "./sidebar";
 import { Transcript } from "./transcript";
-import { Decor, IconButton, shortModel, thinkingName } from "./ui";
+import { Decor, IconButton, groupModels, shortModel, thinkingName } from "./ui";
+import { MODES } from "./projects";
 import { THEME_IDS, THEMES, isLightTheme, type ThemeId } from "./themes";
 import { Workspace, type WorkspaceTab } from "./workspace";
 import { phoneHost } from "./linkhost";
@@ -200,6 +201,8 @@ export default function App() {
 
   const stateRef = useRef(state);
   stateRef.current = state;
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
   const [searchPreset, setSearchPreset] = useState<{ text: string; nonce: number } | null>(null);
   const prefetched = useRef(false);
   useEffect(() => {
@@ -226,54 +229,95 @@ export default function App() {
 
   const commands: SlashCommand[] = useMemo(() => {
     if (!api || !actions) return [];
-    const chat = () => stateRef.current?.chats.find((item) => item.id === stateRef.current?.activeChatId);
+    const tr = (text: string) => translate(text) ?? text;
+    const chat = () => {
+      const found = stateRef.current?.chats.find((item) => item.id === stateRef.current?.activeChatId);
+      if (!found) notify("Этот чат ещё пустой");
+      return found;
+    };
     const needArg = (arg: string, what: string) => { if (!arg) notify(`Напиши ${what} после команды`); return Boolean(arg); };
     const reply = (result: { ok: boolean; error?: string }) => done(result.ok ? undefined : result.error);
+    const thinkingLabel = (value: unknown) => (value === true ? "с размышлением" : value === false ? "без размышления" : thinkingName(value as never).toLowerCase());
+    // Each name in "aliases" works as the command too; a name typed in the wrong keyboard layout is understood as well.
     return [
-      { name: "new", hint: "Новый чат", run: () => newChat() },
-      { name: "project", hint: "Новый проект", run: () => newProject() },
-      { name: "model", args: "название", hint: "Сменить модель", run: (arg) => {
-        const models = stateRef.current?.models ?? [];
-        const needle = arg.toLowerCase();
-        const found = models.find((name) => name.toLowerCase() === needle) ?? models.find((name) => shortModel(name).toLowerCase().includes(needle) || name.toLowerCase().includes(needle));
-        if (!arg) { window.dispatchEvent(new Event("piven:model-menu")); return; }
-        if (!found) { notify(`Модель «${arg}» не найдена`); return; }
-        void api.set_model(found).then(reply);
-      } },
-      { name: "think", args: "уровень", hint: "Размышление: выкл, низкий, средний, высокий…", run: (arg) => {
-        const model = stateRef.current?.settings.model ?? "";
-        void api.thinking_options(model).then((options) => {
-          if (!options.values.length) { notify("Эта модель не даёт выбрать размышление"); return; }
+      { name: "new", aliases: ["новый", "чат"], hint: "Новый чат", run: () => newChat() },
+      { name: "project", aliases: ["проект"], hint: "Новый проект", run: () => newProject() },
+      { name: "model", aliases: ["модель"], args: "название", hint: "Сменить модель",
+        options: () => {
+          const current = stateRef.current;
+          return groupModels(current?.models ?? []).flatMap(([group, names]) =>
+            names.map((name) => ({ value: name, label: shortModel(name), hint: group, current: name === current?.settings.model })));
+        },
+        run: (arg) => {
+          const models = stateRef.current?.models ?? [];
           const needle = arg.toLowerCase();
-          const off = /^(выкл|нет|без|off|no|none)/.test(needle), on = /^(вкл|да|on|yes)/.test(needle);
-          const label = (value: unknown) => (value === true ? "с размышлением" : value === false ? "без размышления" : thinkingName(value as never).toLowerCase());
-          const value = options.values.find((item) => (off && (item === false || item === "none")) || (on && item === true)
-            || String(item).toLowerCase() === needle || (needle && (label(item).startsWith(needle) || (translate(label(item)) ?? "").toLowerCase().startsWith(needle))));
-          if (value === undefined) { notify(`Можно: ${options.values.map((item) => label(item)).join(", ")}`); return; }
-          void api.set_thinking(model, value).then(reply);
-        });
-      } },
-      { name: "search", args: "текст", hint: "Найти в чатах и сообщениях", run: (arg) => { setSidebarOpen(true); setSearchPreset({ text: arg, nonce: Date.now() }); window.setTimeout(() => searchRef.current?.focus(), 0); } },
-      { name: "web", args: "запрос", hint: "Найти в интернете во встроенном браузере", run: (arg) => {
+          const found = models.find((name) => name.toLowerCase() === needle) ?? models.find((name) => shortModel(name).toLowerCase().includes(needle) || name.toLowerCase().includes(needle));
+          if (!arg) { window.dispatchEvent(new Event("piven:model-menu")); return; }
+          if (!found) { notify(`Модель «${arg}» не найдена`); return; }
+          if (found !== stateRef.current?.settings.model) void api.set_model(found).then(reply);
+        } },
+      { name: "think", aliases: ["думай", "размышление"], args: "уровень", hint: "Размышление: выкл, низкий, средний, высокий…",
+        options: async () => {
+          const options = await api.thinking_options(stateRef.current?.settings.model ?? "");
+          return options.values.map((value) => ({ value: tr(thinkingLabel(value)), current: value === options.current }));
+        },
+        run: (arg) => {
+          const model = stateRef.current?.settings.model ?? "";
+          void api.thinking_options(model).then((options) => {
+            if (!options.values.length) { notify("Эта модель не даёт выбрать размышление"); return; }
+            const needle = arg.toLowerCase();
+            const off = /^(выкл|нет|без|off|no|none)/.test(needle), on = /^(вкл|да|on|yes)/.test(needle);
+            const value = options.values.find((item) => (off && (item === false || item === "none")) || (on && item === true)
+              || String(item).toLowerCase() === needle || (needle && (thinkingLabel(item).startsWith(needle) || tr(thinkingLabel(item)).toLowerCase().startsWith(needle))));
+            if (value === undefined) { notify(`Можно: ${options.values.map((item) => thinkingLabel(item)).join(", ")}`); return; }
+            void api.set_thinking(model, value).then(reply);
+          });
+        } },
+      { name: "mode", aliases: ["режим"], args: "режим", hint: "Режим агента в проекте",
+        options: () => MODES.map((mode) => ({ value: tr(mode.short).toLowerCase(), label: tr(mode.name), hint: mode.hint, current: stateRef.current?.code.mode === mode.id })),
+        run: (arg) => {
+          if (!stateRef.current?.code.on) { notify("Режим выбирается только в проекте"); return; }
+          const needle = arg.toLowerCase();
+          const found = MODES.find((mode) => mode.id === needle || (needle && [mode.short, mode.name, tr(mode.short), tr(mode.name)].some((text) => text.toLowerCase().startsWith(needle))));
+          if (!found) { notify(`Режимы: ${MODES.map((mode) => tr(mode.short).toLowerCase()).join(", ")}`); return; }
+          void api.code_set({ mode: found.id }).then(reply);
+        } },
+      { name: "search", aliases: ["поиск", "найди"], args: "текст", hint: "Найти в чатах и сообщениях", run: (arg) => { setSidebarOpen(true); setSearchPreset({ text: arg, nonce: Date.now() }); window.setTimeout(() => searchRef.current?.focus(), 0); } },
+      { name: "web", aliases: ["интернет", "гугл"], args: "запрос", hint: "Найти в интернете во встроенном браузере", run: (arg) => {
         if (!arg) { setBrowserOpen(true); return; }
         openLink(`https://search.brave.com/search?q=${encodeURIComponent(arg)}`);
       } },
-      { name: "image", args: "описание", hint: "Нарисовать картинку", run: (arg) => { if (needArg(arg, "что нарисовать")) void api.send_message(`${language === "en" ? "Draw" : "Нарисуй"} ${arg}`, []).then(reply); } },
-      { name: "rename", args: "название", hint: "Переименовать чат", run: (arg) => { const current = chat(); if (current && needArg(arg, "новое название")) actions.rename(current, arg); } },
-      { name: "pin", hint: "Закрепить или открепить чат", run: () => { const current = chat(); if (current) actions.pin(current); } },
-      { name: "export", hint: "Сохранить чат в файл Markdown", run: () => { const current = chat(); if (current) actions.exportChat(current, true); } },
-      { name: "delete", hint: "Удалить чат", run: () => { const current = chat(); if (current) actions.remove(current); } },
-      { name: "copy", hint: "Скопировать последний ответ", run: () => { const text = lastAnswer(); if (text) copy(text); else notify("Ответов пока нет"); } },
-      { name: "theme", args: "название", hint: "Сменить тему оформления", run: (arg) => {
-        const needle = arg.toLowerCase();
-        const found = THEMES.find(([id, label]) => id === needle || label.toLowerCase().startsWith(needle) || (translate(label) ?? "").toLowerCase().startsWith(needle));
-        if (!arg || !found) { notify(`Темы: ${THEMES.map(([, label]) => label).join(", ")}`); return; }
-        setTheme(found[0]);
+      { name: "image", aliases: ["картинка", "нарисуй"], args: "описание", hint: "Нарисовать картинку", run: (arg) => { if (needArg(arg, "что нарисовать")) void api.send_message(`${language === "en" ? "Draw" : "Нарисуй"} ${arg}`, []).then(reply); } },
+      { name: "remember", aliases: ["запомни"], args: "факт", hint: "Запомнить факт о тебе", run: (arg) => {
+        if (needArg(arg, "что запомнить")) void api.memory_add_fact(arg).then((result) => notify(result.ok ? "Запомнил" : "Это уже есть в памяти", "info"));
       } },
-      { name: "browser", hint: "Показать или скрыть браузер", run: () => setBrowserOpen((open) => !open) },
-      { name: "settings", hint: "Открыть настройки", run: () => setDialog("settings") },
-      { name: "stop", hint: "Остановить ответ", run: () => stop() },
-      { name: "help", hint: "Все команды и сочетания клавиш", run: () => setDialog("help") },
+      { name: "retry", aliases: ["заново", "повтори"], hint: "Ответить на последнее сообщение заново", run: () => { void api.retry_last().then(reply); } },
+      { name: "copy", aliases: ["скопируй", "копировать"], hint: "Скопировать последний ответ", run: () => { const text = lastAnswer(); if (text) copy(text); else notify("Ответов пока нет"); } },
+      { name: "speak", aliases: ["озвучь", "прочитай"], hint: "Прочитать последний ответ вслух", run: () => { const text = lastAnswer(); if (text) void api.speak(text).then(reply); else notify("Ответов пока нет"); } },
+      { name: "rename", aliases: ["переименуй", "имя"], args: "название", hint: "Переименовать чат", run: (arg) => { const current = chat(); if (current && needArg(arg, "новое название")) actions.rename(current, arg); } },
+      { name: "pin", aliases: ["закрепи"], hint: "Закрепить или открепить чат", run: () => { const current = chat(); if (current) actions.pin(current); } },
+      { name: "export", aliases: ["сохрани", "экспорт"], hint: "Сохранить чат в файл Markdown", run: () => { const current = chat(); if (current) actions.exportChat(current, true); } },
+      { name: "delete", aliases: ["удали"], hint: "Удалить чат", run: () => { const current = chat(); if (current) actions.remove(current); } },
+      { name: "theme", aliases: ["тема"], args: "название", hint: "Сменить тему оформления",
+        options: () => THEMES.map(([id, label]) => ({ value: tr(label), current: id === themeRef.current })),
+        run: (arg) => {
+          const needle = arg.toLowerCase();
+          const found = THEMES.find(([id, label]) => id === needle || label.toLowerCase().startsWith(needle) || tr(label).toLowerCase().startsWith(needle));
+          if (!arg || !found) { notify(`Темы: ${THEMES.map(([, label]) => label).join(", ")}`); return; }
+          setTheme(found[0]);
+        } },
+      { name: "lang", aliases: ["язык", "language"], args: "язык", hint: "Сменить язык интерфейса",
+        options: () => LANGUAGES.map(([id, label]) => ({ value: id, label, current: id === language })),
+        run: (arg) => {
+          const needle = arg.toLowerCase();
+          const found = LANGUAGES.find(([id, label]) => id === needle || (needle && label.toLowerCase().startsWith(needle)) || (id === "en" && /^(англ|eng)/.test(needle)));
+          if (!found) { notify(`Языки: ${LANGUAGES.map(([id, label]) => `${label} (${id})`).join(", ")}`); return; }
+          setLanguageChoice(found[0]);
+        } },
+      { name: "browser", aliases: ["браузер"], hint: "Показать или скрыть браузер", run: () => setBrowserOpen((open) => !open) },
+      { name: "settings", aliases: ["настройки"], hint: "Открыть настройки", run: () => setDialog("settings") },
+      { name: "stop", aliases: ["стоп"], hint: "Остановить ответ", run: () => { if (stateRef.current?.busy) stop(); else notify("Сейчас ничего не выполняется", "info"); } },
+      { name: "help", aliases: ["помощь", "команды"], hint: "Все команды и сочетания клавиш", run: () => setDialog("help") },
     ];
   }, [api, actions, newChat, newProject, notify, done, openLink, copy, lastAnswer, setTheme, stop, language]);
 

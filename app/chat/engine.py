@@ -856,13 +856,15 @@ class CompanionCore:
         self.mic_sensitivity = self.settings["mic_sensitivity"]
         self.barge_in = self.settings["barge_in"]
 
-    def record_dialogue_item(self, who, text, images=None):
+    def record_dialogue_item(self, who, text, images=None, files=None):
         text = str(text)
         images = [str(path) for path in (images or []) if path]
-        self.dialogue_items.append({"role": who, "text": text, "images": images})
+        files = [str(path) for path in (files or []) if path]
+        self.dialogue_items.append({"role": who, "text": text, "images": images, **({"files": files} if files else {})})
         active_chat = self._active_chat()
         if active_chat and who == "user" and active_chat.get("title") in ("Новый чат", "Старый чат"):
-            words = " ".join(text.split())
+            # A message that is only a file is named after the file.
+            words = " ".join(text.split()) or (Path(files[0]).name if files else "")
             title = words[:42].rsplit(" ", 1)[0] if len(words) > 42 and " " in words[:42] else words[:42]
             active_chat["title"] = title + ("…" if len(words) > len(title) else "") or "Новый чат"
         if len(self.dialogue_items) > 500:

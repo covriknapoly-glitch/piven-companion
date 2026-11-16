@@ -194,7 +194,7 @@ export function phoneApi(link: PhoneLink): WebApi {
     copy_text: async (text) => { try { await navigator.clipboard.writeText(String(text)); return { ok: true }; } catch { return { ok: false, error: "Телефон не дал скопировать." }; } },
     set_title_theme: async () => ({ ok: true }),
     open_url: async (url) => { window.open(String(url), "_blank", "noopener"); return { ok: true }; },
-    pick_images: async () => [],
+    pick_attachments: async () => ({ images: [], files: [], error: "" }),
   };
   return new Proxy({}, {
     get: (_, name) => {

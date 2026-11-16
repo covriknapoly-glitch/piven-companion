@@ -26,6 +26,7 @@ from app.chat import engine as core
 from app.chat.engine import (APP_DIR, APP_NAME, COMFY_DEFAULT_WORKFLOW, COMPANION_SYSTEM_PROMPT, DATA_DIR, LOG_PATH,
                             THINKING_LEVELS, CompanionCore, acquire_instance_lock, bounded_int, encode_chat_image,
                             log, list_models, backend_problem, model_thinking)
+from app.chat import attachments
 from app.models import huggingface
 from app.models import llama
 from app.models import memory_fit
@@ -150,7 +151,8 @@ class WebCompanion(CompanionCore):
 
     def known_files(self):
         with self._state_lock:
-            files = {str(path) for chat in self.chats for item in chat.get("items", []) for path in item.get("images") or []}
+            files = {str(path) for chat in self.chats for item in chat.get("items", [])
+                     for path in [*(item.get("images") or []), *(item.get("files") or [])]}
             return files | self._allowed_files
 
     def snapshot(self):
@@ -171,6 +173,7 @@ class WebCompanion(CompanionCore):
                           for chat in chats],
                 "items": [{"role": item.get("role", "system"), "text": str(item.get("text", "")),
                            "images": [str(path) for path in item.get("images") or []],
+                           "files": [str(path) for path in item.get("files") or []],
                            "undo": len(item.get("undo") or [])}
                           for item in self.dialogue_items if isinstance(item, dict)],
                 "chatTitle": active.get("title") or "Новый чат",
@@ -191,7 +194,8 @@ class WebCompanion(CompanionCore):
                 "models": self._models,
                 "modelsError": self._models_error,
                 "update": self._update_banner(),
-                "queue": [{"text": str(entry[0]), "images": len(entry[3] or [])} for entry in self.pending_text_prompts],
+                "queue": [{"text": self._shown(str(entry[0])), "images": len(entry[3] or []), "files": [Path(path).name for path in (entry[4] if len(entry) > 4 else [])]}
+                          for entry in self.pending_text_prompts],
                 "settings": {
                     "model": self.settings.get("model", ""),
                     "speechEnabled": bool(self.speech_enabled),
@@ -280,8 +284,8 @@ class WebCompanion(CompanionCore):
                          "message": job.get("error") if state in ("error", "cancelled") else job.get("message", "")})
         return rows
 
-    def _record(self, role, text, images=None):
-        self.record_dialogue_item(role, text, images)
+    def _record(self, role, text, images=None, files=None):
+        self.record_dialogue_item(role, text, images, files)
         self._changed()
 
     def _call_flags(self):
@@ -380,11 +384,13 @@ class WebCompanion(CompanionCore):
                         self._activity = "Агент берётся за новые сообщения"
                         threading.Thread(target=self._run_coding_agent, args=(text, self.settings.get("model", "").strip()), daemon=True).start()
                     elif self.pending_text_prompts:
-                        text, model, images, image_paths = self.pending_text_prompts.pop(0)
+                        entry = self.pending_text_prompts.pop(0)
+                        text, model, images, image_paths = entry[:4]
+                        files, prompt = (entry[4], entry[5]) if len(entry) > 5 else ([], text)
                         self.busy = True; self.selected_model = model
-                        self._record("user", "" if text in IMAGE_ONLY_PROMPTS.values() else text, image_paths)
+                        self._record("user", self._shown(text), image_paths, files)
                         self._activity = "Думает · отвечает на сообщение из очереди"
-                        threading.Thread(target=self.ask_model, args=(text, images or None, self.speech_enabled),
+                        threading.Thread(target=self.ask_model, args=(prompt, images or None, self.speech_enabled),
                                          daemon=True).start()
 
     def _route_for(self, text, has_images=False):
@@ -396,12 +402,16 @@ class WebCompanion(CompanionCore):
             route = "code"
         return "chat" if route == "code" and chat.get("code_declined") else route
 
-    def send(self, text, image_paths=None):
+    def send(self, text, image_paths=None, file_paths=None):
         text = str(text or "").strip()
         allowed = self.known_files()
         image_paths = [str(path) for path in (image_paths or []) if str(path) in allowed and Path(str(path)).is_file()]
-        if not text and not image_paths:
+        file_paths = [str(path) for path in (file_paths or []) if str(path) in allowed and Path(str(path)).is_file()]
+        if not text and not image_paths and not file_paths:
             return {"ok": False, "error": "Пустое сообщение."}
+        if file_paths:
+            # Attached files always go to the model (a chat or the agent in a project), never to picture generation.
+            return self._send_with_images(text, image_paths, file_paths)
         route = self._route_for(text, has_images=bool(image_paths))
         if image_paths and route == "code":
             return self._send_with_images(text, image_paths)
@@ -498,30 +508,47 @@ class WebCompanion(CompanionCore):
                 self.settings["model"] = names[0]
             self._changed()
 
-    def _send_with_images(self, text, image_paths):
+    def _send_with_images(self, text, image_paths, file_paths=()):
         model = self.settings.get("model", "").strip()
         if self._local_blocked(model):
             return {"ok": False, "error": core.LLAMA_OFF_NOTE}
         if not model:
             return {"ok": False, "error": "Сначала выбери модель."}
+        file_paths = list(file_paths)
         if not text:
-            text = IMAGE_ONLY_PROMPTS[len(image_paths) > 1]
+            text = (attachments.FILE_ONLY_PROMPTS[len(file_paths) + len(image_paths) > 1] if file_paths
+                    else IMAGE_ONLY_PROMPTS[len(image_paths) > 1])
         try:
             image_data = [encode_chat_image(path) for path in image_paths]
         except Exception as error:
             return {"ok": False, "error": f"Не удалось подготовить изображение: {error}"}
+        # Files are read here, before the lock, so a long PDF does not hold up the window.
+        prompt = text + attachments.prompt_block(file_paths, self._attachment_budget(model)) if file_paths else text
         with self._state_lock:
             if self.busy:
-                self.pending_text_prompts.append((text, model, image_data, image_paths))
+                self.pending_text_prompts.append((text, model, image_data or None, image_paths, file_paths, prompt))
                 self._activity = "Сообщение добавлено в очередь"; self._changed()
                 return {"ok": True, "queued": True}
-            self._record("user", "" if text in IMAGE_ONLY_PROMPTS.values() else text, image_paths)
+            self._record("user", self._shown(text), image_paths, file_paths)
             self.action_cancel.clear()
             self._active_response = None
             self.busy = True; self.selected_model = model; self._activity = "Думает"
-            threading.Thread(target=self.ask_model, args=(text, image_data, self.speech_enabled), daemon=True).start()
+            threading.Thread(target=self.ask_model, args=(prompt, image_data or None, self.speech_enabled), daemon=True).start()
             self._changed()
             return {"ok": True, "route": "chat"}
+
+    @staticmethod
+    def _shown(text):
+        """What the chat shows for a message: nothing for the words PIVEN adds itself to a lone picture or file."""
+        return "" if text in IMAGE_ONLY_PROMPTS.values() or text in attachments.FILE_ONLY_PROMPTS.values() else text
+
+    @staticmethod
+    def _attachment_budget(model):
+        """How many characters of attached files a message may carry: plenty for a cloud model, for a local one about
+        a third of its context, so the answer and the history still fit."""
+        if integrations.is_provider_model(model):
+            return 200_000
+        return max(6_000, int(llama.context_size(model) * 1.2))
 
     def _confirm_download(self, url, destination):
         with self._state_lock:
@@ -1649,30 +1676,46 @@ class WebApi:
     def edit_message(self, index, text):
         app = self._app
         with app._state_lock:
-            cut = app.cut_history_at(int(index))
+            index = int(index)
+            files = list(app.dialogue_items[index].get("files") or []) if 0 <= index < len(app.dialogue_items) else []
+            cut = app.cut_history_at(index)
             if cut is None:
                 return {"ok": False, "error": "Это сообщение нельзя изменить: идёт ответ или оно уже в кратком содержании."}
             _old_text, images = cut
             images = [path for path in images if Path(path).is_file()]
-            app._allowed_files |= set(images)
+            files = [path for path in files if Path(path).is_file()]
+            app._allowed_files |= set(images) | set(files)
             app._changed()
-        return app.send(text, images)
+        return app.send(text, images, files)
 
     def speak(self, text):
         threading.Thread(target=self._app._speak, args=(str(text or ""),), daemon=True).start()
         return {"ok": True}
 
-    def pick_images(self):
+    def pick_attachments(self):
+        """The clip button: pictures and files picked on disk. A file with no readable text is left out and named in the error."""
         import webview
         window = self._app.window
         if window is None:
-            return []
-        result = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True,
-                                           file_types=(self._app._tr("Изображения (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff)"),))
-        paths = [str(path) for path in (result or []) if str(path).lower().endswith(IMAGE_SUFFIXES)]
+            return {"images": [], "files": [], "error": ""}
+        tr = self._app._tr
+        result = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=(
+            tr("Картинки и файлы (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.txt;*.md;*.pdf;*.docx;*.csv;*.json;*.py;*.js;*.ts;*.html;*.css;*.log)"),
+            tr("Изображения (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff)"),
+            tr("Все файлы (*.*)")))
+        images, files, refused = [], [], []
+        for path in map(str, result or []):
+            if path.lower().endswith(IMAGE_SUFFIXES):
+                images.append(path)
+                continue
+            problem = attachments.check(path)
+            if problem:
+                refused.append(f"{Path(path).name}: {problem}")
+            else:
+                files.append(path)
         with self._app._state_lock:
-            self._app._allowed_files.update(paths)
-        return paths
+            self._app._allowed_files.update(images + files)
+        return {"images": images, "files": files, "error": "Не прикрепил " + "; ".join(refused) if refused else ""}
 
     def save_upload(self, name, data_b64):
         name = str(name or "image.png")
@@ -1698,8 +1741,31 @@ class WebApi:
             self._app._allowed_files.add(str(path))
         return {"ok": True, "path": str(path)}
 
-    def send_message(self, text, image_paths):
-        return self._app.send(text, image_paths)
+    def save_file(self, name, data_b64):
+        """A file dropped or pasted into the message field. It keeps its name, in a folder of its own."""
+        name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", Path(str(name or "")).name).strip(" .") or "файл.txt"
+        try:
+            data = base64.b64decode(str(data_b64 or ""), validate=True)
+        except ValueError:
+            return {"ok": False, "error": "Не удалось прочитать файл."}
+        if not data:
+            return {"ok": False, "error": f"{name}: файл пустой."}
+        if len(data) > MAX_UPLOAD_BYTES:
+            return {"ok": False, "error": f"{name}: файл больше 20 МБ."}
+        folder = DATA_DIR / "attachments" / f"{datetime.now():%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:6]}"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / name
+        path.write_bytes(data)
+        problem = attachments.check(path)
+        if problem:
+            shutil.rmtree(folder, ignore_errors=True)
+            return {"ok": False, "error": f"Не прикрепил {name}: {problem}."}
+        with self._app._state_lock:
+            self._app._allowed_files.add(str(path))
+        return {"ok": True, "path": str(path)}
+
+    def send_message(self, text, image_paths, file_paths=None):
+        return self._app.send(text, image_paths, file_paths)
 
     def start_listening(self, options):
         app = self._app

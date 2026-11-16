@@ -239,8 +239,9 @@ const PROGRAM_NOTE = /^(Презентация готова · .+|Видео г�
 
 function Message({ api, item, index, answered, pollAnswers, canRetry, canEdit, onCopy, onView, onRetry, onEdit }: MessageProps) {
   const [editing, setEditing] = useState(false);
-  const attachments = item.images.length > 0 && (
-    <div className="attachments">{item.images.map((path) => <Attachment key={path} api={api} path={path} onView={onView} />)}</div>
+  const attached = [...item.images, ...(item.files ?? [])];
+  const attachments = attached.length > 0 && (
+    <div className="attachments">{attached.map((path) => <Attachment key={path} api={api} path={path} onView={onView} />)}</div>
   );
   if (item.role === "poll") return <PollCard api={api} text={item.text} index={index} answered={answered} answers={pollAnswers} />;
   if (item.role === "code") {
@@ -307,7 +308,7 @@ function Queue({ api, state }: { api: WebApi; state: EngineState }) {
       {state.queue.map((entry, index) => (
         <div className="msg msg-queued" key={`${index}-${entry.text}`}>
           <span className="queued-label">В очереди</span>
-          <span className="queued-text" data-i18n-skip>{entry.text || `Картинок: ${entry.images}`}</span>
+          <span className="queued-text" data-i18n-skip>{entry.text || (entry.files?.length ? entry.files.join(", ") : `Картинок: ${entry.images}`)}</span>
           <IconButton icon="close" label="Убрать из очереди" onClick={() => { void api.cancel_queued(index); }} />
         </div>
       ))}

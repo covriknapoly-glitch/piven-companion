@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import type { EngineState, ModelFeatures, ModelMemory, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
 import { useImage } from "./cards";
-import { SlashMenu, slashCommand, slashMatches, type SlashCommand } from "./commands";
+import { SlashMenu, SlashName, SlashUsage, optionMatches, slashArgument, slashCommand, slashMatches, type SlashCommand, type SlashOption, type SlashRow } from "./commands";
 import { publishDraft } from "./context";
 import { CallControl } from "./dialogs";
 import { isPhone } from "./bridge";
@@ -15,6 +15,24 @@ const readAsBase64 = (file: File) => new Promise<string>((resolve, reject) => {
   reader.onerror = () => reject(reader.error);
   reader.readAsDataURL(file);
 });
+
+/** What the phone's file picker offers: pictures and the files whose text PIVEN can read. */
+const PHONE_ACCEPT = "image/*,text/*,.pdf,.docx,.md,.csv,.tsv,.json,.jsonl,.xml,.yaml,.yml,.toml,.ini,.log,.srt,.py,.js,.ts,.tsx,.jsx,.html,.css,"
+  + ".java,.kt,.c,.h,.cpp,.hpp,.cs,.go,.rs,.rb,.php,.sql,.sh,.bat,.ps1,.lua,.swift";
+const MAX_FILE_BYTES = 20_000_000;
+
+/** A file waiting above the message field: its name and the kind of document. */
+function FileChip({ path, onRemove }: { path: string; onRemove: () => void }) {
+  const name = fileName(path);
+  const extension = name.includes(".") ? name.split(".").pop()!.toUpperCase().slice(0, 5) : "";
+  return (
+    <div className="file-chip" title={name}>
+      <span className="file-chip-icon"><Icon name="file" size={16} /></span>
+      <span className="file-chip-copy"><strong data-i18n-skip>{name}</strong>{extension && <small data-i18n-skip>{extension}</small>}</span>
+      <button type="button" aria-label="Убрать файл" onClick={onRemove}><Icon name="close" size={12} /></button>
+    </div>
+  );
+}
 
 function AttachmentChip({ api, path, onRemove }: { api: WebApi; path: string; onRemove: () => void }) {
   const src = useImage(api, path);
@@ -141,6 +159,7 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
   useEffect(() => { publishDraft(draft); }, [draft]);
   useEffect(() => { if (prefill) { setDraft(prefill.text); inputRef.current?.focus(); } }, [prefill, inputRef]);
   const [images, setImages] = useState<string[]>([]);
+  const [files, setFiles] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const dictated = useRef({ session: state.dictation.session, length: state.dictation.text.length });
   const phase = state.dictation.phase;
@@ -182,58 +201,93 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
   }, [draft, inputRef]);
 
   const photoRef = useRef<HTMLInputElement>(null);
-  const addFiles = async (files: File[]) => {
-    for (const file of files.filter((item) => item.type.startsWith("image/"))) {
-      const result = await api.save_upload(file.name || "image.png", await readAsBase64(file));
-      if (result.ok && result.path) setImages((current) => current.includes(result.path!) ? current : [...current, result.path!]);
+  // Pictures go to the model as pictures; any other file is checked by PIVEN, which keeps it only if it has text to read.
+  const addFiles = async (dropped: File[]) => {
+    for (const file of dropped) {
+      if (file.size > MAX_FILE_BYTES) { onError(`${file.name}: файл больше 20 МБ.`); continue; }
+      const picture = file.type.startsWith("image/") && file.type !== "image/svg+xml";
+      const data = await readAsBase64(file);
+      const result = picture ? await api.save_upload(file.name || "image.png", data) : await api.save_file(file.name, data);
+      const add = (current: string[]) => current.includes(result.path!) ? current : [...current, result.path!];
+      if (result.ok && result.path) (picture ? setImages : setFiles)(add);
       else onError(result.error);
     }
   };
 
-  const matches = slashMatches(draft, commands);
-  const [slashActive, setSlashActive] = useState(0);
+  // "/" commands: while the name is typed the menu lists commands, after a space it lists the argument's choices
+  // (models, themes, …) or shows what the free text is for. The top suggestion is also drawn faintly after the text.
+  const named = slashMatches(draft, commands);
+  const argument = slashArgument(draft, commands);
+  const choosing = argument?.command.options ? argument.command : null;
+  const [choices, setChoices] = useState<{ name: string; list: SlashOption[] } | null>(null);
+  useEffect(() => {
+    if (!choosing?.options) return;
+    let live = true;
+    const name = choosing.name;
+    void Promise.resolve(choosing.options()).then((list) => { if (live) setChoices({ name, list }); }, () => { if (live) setChoices({ name, list: [] }); });
+    return () => { live = false; };
+  }, [choosing?.name]);
+  const offered = argument && choosing && choices?.name === choosing.name ? optionMatches(argument.arg, choices.list) : null;
+  const menu: { title: string; rows: SlashRow[]; fills: string[] } | null = named.length
+    ? { title: "Команды", rows: named.map((match) => ({ key: match.command.name, name: <SlashName match={match} />, hint: match.command.hint })),
+        fills: named.map((match) => `/${match.word}${match.command.args ? " " : ""}`) }
+    : argument && offered
+      ? { title: argument.command.hint, rows: offered.map((option) => ({ key: option.value, name: <span className="slash-option">{option.label ?? option.value}</span>, hint: option.hint, current: option.current })),
+          fills: offered.map((option) => `/${argument.word} ${option.value}`) }
+      : null;
+  const usage = !menu && argument && !argument.command.options ? argument : null;
+  const [picked, setPicked] = useState("");
   const [slashHidden, setSlashHidden] = useState("");
-  useEffect(() => { setSlashActive(0); }, [matches.length, draft.split(" ")[0]]);
-  const slashOpen = matches.length > 0 && slashHidden !== draft;
-  const runCommand = (command: SlashCommand, arg: string) => {
-    history.current = [...history.current.filter((item) => item !== draft.trim()), draft.trim()].slice(-100);
+  const slashShown = slashHidden !== draft;
+  const slashOpen = Boolean(menu) && slashShown;
+  let slashActive = menu ? menu.rows.findIndex((row) => row.key === picked) : -1;
+  if (menu && slashActive < 0) slashActive = argument?.arg.trim() ? 0 : Math.max(0, menu.rows.findIndex((row) => row.current));
+  const fill = slashOpen && menu?.rows.length ? menu.fills[slashActive] : "";
+  const ghost = fill.length > draft.length && fill.toLowerCase().startsWith(draft.toLowerCase()) ? fill.slice(draft.length) : "";
+  const runCommand = (command: SlashCommand, arg: string, line = draft.trim()) => {
+    history.current = [...history.current.filter((item) => item !== line), line].slice(-100);
     historyIndex.current = null;
-    setDraft("");
+    setDraft(""); setPicked("");
     command.run(arg);
   };
-  const pickCommand = (command: SlashCommand) => {
-    if (command.args) { setDraft(`/${command.name} `); inputRef.current?.focus(); }
-    else runCommand(command, "");
+  const pickRow = (index: number) => {
+    const match = named[index];
+    if (match) {
+      if (match.command.args) { setDraft(`/${match.word} `); setPicked(""); inputRef.current?.focus(); }
+      else runCommand(match.command, "", `/${match.word}`);
+    } else if (argument && offered?.[index]) runCommand(argument.command, offered[index].value, `/${argument.word} ${offered[index].value}`);
   };
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     const text = draft.trim();
-    if (!text && !images.length) return;
-    const asked = images.length ? null : slashCommand(text, commands);
+    if (!text && !images.length && !files.length) return;
+    const asked = images.length || files.length ? null : slashCommand(text, commands);
     if (asked) { runCommand(asked.command, asked.arg); return; }
     if (phase) void api.stop_dictation();
-    void api.send_message(text, images).then((result) => {
+    void api.send_message(text, images, files).then((result) => {
       if (result.ok) {
         if (text) { history.current = [...history.current.filter((item) => item !== text), text].slice(-100); }
         historyIndex.current = null;
-        setDraft(""); setImages([]);
+        setDraft(""); setImages([]); setFiles([]);
         onSent(Boolean(result.queued));
       } else onError(result.error);
     });
   };
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (slashOpen) {
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (slashOpen && menu) {
+      const count = menu.rows.length;
+      if ((event.key === "ArrowDown" || event.key === "ArrowUp") && count) {
         event.preventDefault();
-        setSlashActive((index) => (index + (event.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length);
+        setPicked(menu.rows[(slashActive + (event.key === "ArrowDown" ? 1 : count - 1)) % count].key);
         return;
       }
-      if (event.key === "Tab" && !event.shiftKey) { event.preventDefault(); setDraft(`/${matches[slashActive].name}${matches[slashActive].args ? " " : ""}`); return; }
-      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); pickCommand(matches[slashActive]); return; }
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setSlashHidden(draft); return; }
+      const atEnd = event.currentTarget.selectionStart === draft.length;
+      if (fill && ((event.key === "Tab" && !event.shiftKey) || (event.key === "ArrowRight" && ghost && atEnd))) { event.preventDefault(); setDraft(fill); return; }
+      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && count) { event.preventDefault(); pickRow(slashActive); return; }
     }
+    if ((slashOpen || usage) && slashShown && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setSlashHidden(draft); return; }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); return; }
     if (event.key === "Tab" && event.shiftKey && state.code.on) { event.preventDefault(); void api.code_set({ mode: nextMode(state.code.mode) }).then((result) => onError(result.ok ? undefined : result.error)); return; }
     const caretAtStart = event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0;
@@ -251,29 +305,41 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
   };
 
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(event.clipboardData.files);
-    if (files.some((file) => file.type.startsWith("image/"))) { event.preventDefault(); void addFiles(files); }
+    const pasted = Array.from(event.clipboardData.files);
+    if (pasted.length) { event.preventDefault(); void addFiles(pasted); }
   };
   const onDrop = (event: DragEvent) => { event.preventDefault(); setDragging(false); void addFiles(Array.from(event.dataTransfer.files)); };
 
-  const canSend = Boolean(draft.trim() || images.length);
+  const canSend = Boolean(draft.trim() || images.length || files.length);
   return (
     <form className={`composer ${dragging ? "is-dragging" : ""}`} onSubmit={submit}
       onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
       onDragLeave={() => setDragging(false)} onDrop={onDrop}>
-      {images.length > 0 && (
+      {(images.length > 0 || files.length > 0) && (
         <div className="composer-attachments">
           {images.map((path) => <AttachmentChip key={path} api={api} path={path} onRemove={() => setImages((current) => current.filter((item) => item !== path))} />)}
+          {files.map((path) => <FileChip key={path} path={path} onRemove={() => setFiles((current) => current.filter((item) => item !== path))} />)}
         </div>
       )}
-      {slashOpen && <SlashMenu matches={matches} active={slashActive} onPick={pickCommand} />}
-      <textarea ref={inputRef} rows={1} aria-label="Сообщение" value={draft} spellCheck
-        placeholder={phase === "listening" ? "Говори, текст появится здесь" : phase === "starting" ? "Запускает распознавание" : state.busy ? "Можно дописать: сообщение учтётся в работе" : "Сообщение или / для команд"}
-        onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
+      {slashOpen && menu && <SlashMenu title={menu.title} rows={menu.rows} active={slashActive} empty="Нет подходящих вариантов" onPick={pickRow} />}
+      {usage && slashShown && <SlashUsage command={usage.command} word={usage.word} />}
+      <div className="composer-input">
+        {ghost && <div className="composer-ghost" aria-hidden="true" data-i18n-skip><span>{draft}</span>{ghost}</div>}
+        <textarea ref={inputRef} rows={1} aria-label="Сообщение" value={draft} spellCheck
+          placeholder={phase === "listening" ? "Говори, текст появится здесь" : phase === "starting" ? "Запускает распознавание" : state.busy ? "Можно дописать: сообщение учтётся в работе" : "Сообщение или / для команд"}
+          onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} />
+      </div>
       <div className="composer-bar">
-        <IconButton icon="paperclip" label="Прикрепить картинку (можно вставить Ctrl+V или перетащить)"
-          onClick={() => { if (isPhone) { photoRef.current?.click(); return; } void api.pick_images().then((paths) => setImages((current) => [...current, ...paths.filter((path) => !current.includes(path))])); }} />
-        {isPhone && <input ref={photoRef} type="file" accept="image/*" multiple hidden onChange={(event) => { const files = [...(event.target.files ?? [])]; event.target.value = ""; void addFiles(files); }} />}
+        <IconButton icon="paperclip" label="Прикрепить картинку или файл (можно вставить Ctrl+V или перетащить)"
+          onClick={() => {
+            if (isPhone) { photoRef.current?.click(); return; }
+            void api.pick_attachments().then((picked) => {
+              setImages((current) => [...current, ...picked.images.filter((path) => !current.includes(path))]);
+              setFiles((current) => [...current, ...picked.files.filter((path) => !current.includes(path))]);
+              if (picked.error) onError(picked.error);
+            });
+          }} />
+        {isPhone && <input ref={photoRef} type="file" accept={PHONE_ACCEPT} multiple hidden onChange={(event) => { const files = [...(event.target.files ?? [])]; event.target.value = ""; void addFiles(files); }} />}
         <ModelChip state={state} api={api} onDone={onError} onOpenHub={onOpenHub} onOpenVoiceHub={onOpenVoiceHub} />
         <ThinkingChip state={state} api={api} onDone={onError} />
         <span className="composer-spacer" />

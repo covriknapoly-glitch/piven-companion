@@ -38,7 +38,7 @@ function FolderRows({ state, api, onDone, onPicked }: { state: EngineState; api:
   );
 }
 
-const MODES: { id: CodeMode; name: string; short: string; hint: string; icon: IconName }[] = [
+export const MODES: { id: CodeMode; name: string; short: string; hint: string; icon: IconName }[] = [
   { id: "ask", name: "Спрашивать разрешения", short: "Спрашивать", hint: "Каждую правку и команду нужно подтвердить.", icon: "chat" },
   { id: "edits", name: "Принимать правки", short: "Правки", hint: "Файлы меняются сразу, команды спрашивают разрешения.", icon: "edit" },
   { id: "plan", name: "Режим плана", short: "План", hint: "Только изучает проект и пишет план. Ничего не меняет.", icon: "file" },

@@ -4,6 +4,8 @@ export interface DialogueItem {
   role: ChatRole;
   text: string;
   images: string[];
+  /** Text files, code, PDF or Word documents attached to the message; their text went to the model. */
+  files?: string[];
   undo?: number;
 }
 
@@ -49,7 +51,7 @@ export interface EngineState {
   items: DialogueItem[];
   chatTitle: string;
   busy: boolean;
-  queue: { text: string; images: number }[];
+  queue: { text: string; images: number; files?: string[] }[];
   busySince: number;
   listening: { running: boolean; options: ListenOptions };
   call: { speaking: boolean; hearing: boolean; muted: boolean };
@@ -161,7 +163,7 @@ interface WebApi {
   poll(knownVersion: number): Promise<PollResult>;
   state(): Promise<EngineState>;
   refresh_models(): Promise<EngineState>;
-  send_message(text: string, imagePaths: string[]): Promise<CommandResult>;
+  send_message(text: string, imagePaths: string[], filePaths?: string[]): Promise<CommandResult>;
   interrupt(): Promise<CommandResult>;
   select_chat(chatId: string): Promise<CommandResult>;
   new_chat(): Promise<CommandResult>;
@@ -186,8 +188,9 @@ interface WebApi {
   open_file(path: string): Promise<CommandResult>;
   save_copy(path: string): Promise<CommandResult>;
   copy_text(text: string): Promise<CommandResult>;
-  pick_images(): Promise<string[]>;
+  pick_attachments(): Promise<{ images: string[]; files: string[]; error: string }>;
   save_upload(name: string, dataBase64: string): Promise<CommandResult>;
+  save_file(name: string, dataBase64: string): Promise<CommandResult>;
   start_listening(options: ListenOptions): Promise<CommandResult>;
   stop_listening(): Promise<CommandResult>;
   start_dictation(): Promise<CommandResult & { needsModel?: boolean }>;

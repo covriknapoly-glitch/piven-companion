@@ -4,11 +4,11 @@ import type { WebApi } from "./bridge";
 import { ICE_SERVERS, Mailbox, Wire, gathered, randomToken, topicFor, type Packet } from "./link";
 
 const PC_ONLY = new Set([
-  "pick_images", "pick_path", "code_pick_folder", "code_open_folder", "open_data_folder", "open_file", "open_url", "save_copy", "export_chat",
+  "pick_attachments", "pick_path", "code_pick_folder", "code_open_folder", "open_data_folder", "open_file", "open_url", "save_copy", "export_chat",
   "set_title_theme", "restart_app", "copy_text", "speak", "start_listening", "stop_listening", "set_mic_muted", "start_dictation", "stop_dictation",
   "browser_place", "browser_go", "browser_command", "browser_state",
 ]);
-const QUIET: Record<string, unknown> = { pick_images: [], pick_path: "", set_title_theme: { ok: true } };
+const QUIET: Record<string, unknown> = { pick_attachments: { images: [], files: [], error: "" }, pick_path: "", set_title_theme: { ok: true } };
 
 type Device = { id: string; secret: string; mailbox: Mailbox; peer: RTCPeerConnection | null };
 
