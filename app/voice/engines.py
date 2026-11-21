@@ -26,10 +26,14 @@ SHARED_PACKAGES = ["qwen-tts==0.1.1", "piper-tts==1.8.0", "fastapi", "uvicorn", 
 
 ENGINES = {
     "nemo": {"label": "NeMo-Speech", "roles": {"asr"}, "pip": None, "note": "Parakeet и Nemotron от NVIDIA в формате GGUF."},
+    "transcribe": {"label": "transcribe.cpp", "roles": {"asr"}, "native": True, "pip": None},
     "qwen": {"label": "Qwen3-TTS", "roles": {"tts"}, "pip": None, "note": "Модели Qwen3-TTS: готовые голоса, голос по описанию и клонирование."},
     "transformers": {"label": "Transformers", "roles": {"asr", "tts"}, "pip": None,
                      "note": "Whisper, wav2vec2, MMS, VITS, Bark, CSM и другие модели библиотеки Transformers."},
     "piper": {"label": "Piper", "roles": {"tts"}, "pip": None, "note": "Лёгкие голоса Piper, работают на процессоре."},
+    "vosk": {"label": "Vosk", "roles": {"asr"}, "standalone": True,
+             "pip": ["vosk==0.3.45", "numpy", "soundfile", "fastapi", "uvicorn", "python-multipart"],
+             "note": "Лёгкие офлайн-модели русского и английского для процессора."},
     "faster-whisper": {"label": "faster-whisper", "roles": {"asr"}, "pip": ["faster-whisper==1.2.1"],
                        "note": "Whisper в формате CTranslate2, быстрее обычного."},
     "qwen-asr": {"label": "Qwen3-ASR", "roles": {"asr"}, "pip": ["qwen-asr==0.0.6"], "note": "Распознавание речи Qwen3-ASR."},
@@ -49,6 +53,13 @@ ENGINES = {
 }
 
 AUDIOCPP_VERSION = "v0.9.3"
+TRANSCRIBE_VERSION = "0.4.1"
+TRANSCRIBE_ARCHIVE = f"transcribe-native-{TRANSCRIBE_VERSION}-windows-x86_64-cpu-vulkan.tar.gz"
+TRANSCRIBE_SIZE = 18_052_295
+TRANSCRIBE_SHA256 = "272eb97795048ccb557c85bb9dd44c9e530e1c928443114c39816a8a5f76269d"
+TRANSCRIBE_WHEEL = f"transcribe_cpp-{TRANSCRIBE_VERSION}-py3-none-any.whl"
+TRANSCRIBE_WHEEL_URL = "https://files.pythonhosted.org/packages/60/df/55b97bec42c43f44a3d1bf1d4bbaf32b8bb1f99f444f4d49bfe6ca4224f4/" + TRANSCRIBE_WHEEL
+TRANSCRIBE_WHEEL_SHA256 = "a4bb6ffb8eac16875daec12a8b3b9598024a34d1c10507cff51f0c42400eab5d"
 AUDIOCPP_DIR = ENGINES_DIR / "audiocpp"
 AUDIOCPP_ASSETS = [
     (f"https://github.com/0xShug0/audio.cpp/releases/download/{AUDIOCPP_VERSION}/audio-{AUDIOCPP_VERSION}-bin-windows-x64-cuda13.3.zip",
@@ -61,6 +72,43 @@ AUDIOCPP_ASSETS = [
 def audiocpp_server():
     found = sorted(AUDIOCPP_DIR.rglob("audiocpp_server.exe")) if AUDIOCPP_DIR.is_dir() else []
     return found[0] if found else None
+
+
+def transcribe_library():
+    return ENGINES_DIR / "transcribe" / f"native-{TRANSCRIBE_VERSION}" / "transcribe.dll"
+
+
+def transcribe_bindings():
+    return transcribe_library().parent.parent / TRANSCRIBE_WHEEL
+
+
+def ensure_transcribe(progress, cancel_event):
+    import tarfile
+    import tempfile
+    from app.voice.install import _download
+
+    library = transcribe_library()
+    if ready("transcribe"):
+        return 0
+    if not library.is_file():
+        folder = library.parent.parent
+        archive = folder / TRANSCRIBE_ARCHIVE
+        _download(f"https://github.com/handy-computer/transcribe.cpp/releases/download/v{TRANSCRIBE_VERSION}/{TRANSCRIBE_ARCHIVE}",
+                  archive, TRANSCRIBE_SIZE, TRANSCRIBE_SHA256, cancel_event,
+                  lambda received: progress(10 * received / TRANSCRIBE_SIZE, "Скачивание transcribe.cpp"))
+        with tempfile.TemporaryDirectory(dir=folder) as temporary:
+            with tarfile.open(archive) as bundle:
+                bundle.extractall(temporary, filter="data")
+            extracted = Path(temporary) / "transcribe-native-windows-x86_64-cpu-vulkan"
+            if not (extracted / library.name).is_file():
+                raise RuntimeError("В архиве transcribe.cpp нет transcribe.dll.")
+            extracted.replace(library.parent)
+        archive.unlink(missing_ok=True)
+    bindings = transcribe_bindings()
+    if not bindings.is_file():
+        progress(10, "Скачивание Python-обвязки transcribe.cpp")
+        _download(TRANSCRIBE_WHEEL_URL, bindings, 0, TRANSCRIBE_WHEEL_SHA256, cancel_event, lambda received: None)
+    return 12
 
 
 def ensure_audiocpp(progress, cancel_event):
@@ -132,6 +180,10 @@ NAME_ENGINES = [(r"faster-whisper|ctranslate2|-ct2\b", "faster-whisper"), (r"kok
                 (r"f5-?tts|e2-?tts", "f5-tts"), (r"xtts|coqui", "coqui"), (r"voxcpm", "voxcpm"), (r"parler", "parler"),
                 (r"omnivoice", "omnivoice"), (r"piper", "piper"), (r"qwen3-asr", "qwen-asr")]
 TRANSFORMERS_TTS_TYPES = {"vits", "bark", "seamless_m4t", "seamless_m4t_v2", "csm", "dia", "fastspeech2_conformer"}
+TRANSFORMERS_ASR_TYPES = {"whisper", "wav2vec2", "wav2vec2-bert", "wav2vec2-conformer", "hubert", "wavlm",
+                          "data2vec-audio", "sew", "sew-d", "unispeech", "unispeech-sat", "mctct", "parakeet_ctc",
+                          "speech_to_text", "speech-encoder-decoder", "moonshine", "granite_speech", "kyutai_speech_to_text",
+                          "seamless_m4t", "seamless_m4t_v2", "speecht5"}
 NOT_ON_WINDOWS = {"mlx": "формат MLX, он только для Mac", "mlx-audio": "формат MLX, он только для Mac",
                   "coreml": "формат Core ML, он только для Mac и iPhone", "whisperkit": "WhisperKit, он только для Mac и iPhone",
                   "vllm": "сервер vLLM, он работает только на Linux", "transformers.js": "формат для браузера (transformers.js)",
@@ -140,26 +192,39 @@ NOT_ON_WINDOWS = {"mlx": "формат MLX, он только для Mac", "mlx-
 
 
 def engine_for(kind, item):
-    tags = set(item.get("tags", []))
+    tags = set(item.get("tags") or [])
     library = item.get("library_name") or ""
     model_type = (item.get("config") or {}).get("model_type") or ""
-    name = item["id"].lower()
-    for key in (library, *sorted(tags)):
-        if key in NOT_ON_WINDOWS:
-            return "", NOT_ON_WINDOWS[key]
+    task = item.get("pipeline_tag")
+    if task == "automatic-speech-recognition" and kind == "tts":
+        return "", "Эта модель предназначена для распознавания речи. Открой вкладку распознавания."
+    if task in ("text-to-speech", "text-to-audio") and kind == "asr":
+        return "", "Эта модель генерирует аудио. Проверь её во вкладке озвучки."
+    if library in NOT_ON_WINDOWS:
+        return "", NOT_ON_WINDOWS[library]
+    files = {record.get("rfilename") or "" for record in item.get("siblings") or []}
+    has_weights = any(name.endswith((".safetensors", ".bin")) for name in files)
+    if not library and not has_weights:
+        for tag in sorted(tags):
+            if tag in NOT_ON_WINDOWS:
+                return "", NOT_ON_WINDOWS[tag]
     candidates = [MODEL_TYPE_ENGINES.get(model_type), LIBRARY_ENGINES.get(library)]
-    candidates += [engine for pattern, engine in NAME_ENGINES if re.search(pattern, name)]
-    if kind == "asr" and "gguf" in tags:
+    if kind == "asr" and ({"config.json", "model.bin", "vocabulary.json"} <= files or "ctranslate2" in tags):
+        candidates.append("faster-whisper")
+    candidates += [engine for pattern, engine in NAME_ENGINES if re.search(pattern, item["id"].lower())]
+    if kind == "asr" and "gguf" in tags and not has_weights:
         candidates.append("nemo")
-    if library == "transformers" and model_type and (kind == "asr" or model_type in TRANSFORMERS_TTS_TYPES):
+    if model_type in (TRANSFORMERS_ASR_TYPES if kind == "asr" else TRANSFORMERS_TTS_TYPES):
         candidates.append("transformers")
     for engine in candidates:
         if engine and kind in ENGINES[engine]["roles"]:
             return engine, ""
-    if library == "transformers" and kind == "tts":
-        return "", f"модель «{model_type or 'без типа'}» со своим кодом, общий движок Transformers её не запустит"
+    if library == "transformers" and model_type:
+        return "", f"Движок Transformers пока не поддерживает «{model_type}» для этой задачи."
     if "onnx" in tags:
         return "", "формат ONNX без описания движка"
+    if model_type:
+        return "", f"Для архитектуры «{model_type}» нет совместимого движка."
     return "", f"движок {library or 'не указан'}: такой в программу пока не встроен"
 
 
@@ -185,8 +250,12 @@ def ready(engine):
         return ASR_EXE.is_file()
     if engine == "audiocpp":
         return audiocpp_server() is not None
+    if engine == "transcribe":
+        return transcribe_library().is_file() and transcribe_bindings().is_file()
     if ENGINES[engine]["pip"] is None:
         return shared_ready()
+    if ENGINES[engine].get("standalone"):
+        return python_for(engine).is_file() and _marker(engine).is_file()
     return shared_ready() and _marker(engine).is_file()
 
 
@@ -246,8 +315,9 @@ def ensure_shared(progress, cancel_event):
 
 
 def ensure_engine(engine, progress, cancel_event):
-    start = ensure_shared(progress, cancel_event)
     info = ENGINES[engine]
+    standalone = info.get("standalone")
+    start = 0 if standalone else ensure_shared(progress, cancel_event)
     if info["pip"] is None or ready(engine):
         return start
     folder = venv_dir(engine)
@@ -256,11 +326,15 @@ def ensure_engine(engine, progress, cancel_event):
         progress(start + 1, f"Создание окружения {info['label']}")
         base = BUNDLED_PYTHON if BUNDLED_PYTHON.is_file() else Path(sys.executable)
         run([str(base), "-m", "venv", str(folder)], cancel_event, lambda line: None)
-    link_shared(engine)
+    if not standalone:
+        link_shared(engine)
     progress(start + 3, f"Установка {info['label']}")
     if info.get("no_deps"):
         run(_pip(python) + ["--no-deps"] + info["no_deps"], cancel_event, lambda line: progress(start + 3, f"{info['label']} · " + _short(line)))
-    run(_pip(python) + info["pip"] + ["--extra-index-url", TORCH_INDEX], cancel_event,
+    packages = _pip(python) + info["pip"]
+    if not standalone:
+        packages += ["--extra-index-url", TORCH_INDEX]
+    run(packages, cancel_event,
         lambda line: progress(start + 3, f"{info['label']} · " + _short(line)))
     _marker(engine).write_text("ok\n", encoding="utf-8")
     return start + 10

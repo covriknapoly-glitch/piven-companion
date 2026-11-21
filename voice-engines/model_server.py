@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import threading
 import wave
@@ -57,14 +58,14 @@ class Transformers(Engine):
         cuda = torch.cuda.is_available()
         task = "automatic-speech-recognition" if ROLE == "asr" else "text-to-speech"
         self.pipe = pipeline(task, model=_local(MODEL), device=0 if cuda else -1,
-                             torch_dtype=torch.float16 if cuda and ROLE == "asr" else None)
+                             torch_dtype=torch.float16 if cuda and ROLE == "asr" else None, trust_remote_code=False)
 
     def listen(self, audio, rate):
         sample = {"raw": audio, "sampling_rate": rate}
-        try:
+        generation = getattr(self.pipe.model, "generation_config", None)
+        if self.pipe.type == "seq2seq_whisper" and getattr(generation, "is_multilingual", False):
             return self.pipe(sample, generate_kwargs={"language": LANGUAGE_NAMES.get(LANGUAGE, LANGUAGE), "task": "transcribe"})["text"]
-        except Exception:
-            return self.pipe(sample)["text"]
+        return self.pipe(sample)["text"]
 
     def speak(self, text, voice, speed):
         result = self.pipe(text)
@@ -114,6 +115,47 @@ class QwenAsr(Engine):
     def listen(self, audio, rate):
         result = self.model.transcribe((audio, rate), language=None)
         return result[0].text if result else ""
+
+
+class Vosk(Engine):
+    def __init__(self):
+        from vosk import Model
+
+        self.model = Model(model_path=MODEL)
+
+    def listen(self, audio, rate):
+        from vosk import KaldiRecognizer
+
+        recognizer = KaldiRecognizer(self.model, rate)
+        pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype("<i2")
+        parts = []
+        for start in range(0, len(pcm), 4000):
+            if recognizer.AcceptWaveform(pcm[start:start + 4000].tobytes()):
+                parts.append(json.loads(recognizer.Result()).get("text", ""))
+        parts.append(json.loads(recognizer.FinalResult()).get("text", ""))
+        return " ".join(filter(None, parts))
+
+
+class QwenVoiceClone(Engine):
+    def __init__(self):
+        import torch
+        from qwen_tts import Qwen3TTSModel
+
+        sample = _sample("sample")
+        if not sample:
+            raise RuntimeError("Qwen3-TTS Base requires a reference recording.")
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is unavailable; Qwen3-TTS requires the RTX GPU runtime.")
+        self.model = Qwen3TTSModel.from_pretrained(_local(MODEL), device_map="cuda:0", dtype=torch.bfloat16,
+                                                    attn_implementation="sdpa")
+        reference = SAMPLE_TEXT.strip()
+        self.prompt = self.model.create_voice_clone_prompt(ref_audio=sample, ref_text=reference or None,
+                                                           x_vector_only_mode=not reference)
+
+    def speak(self, text, voice, speed):
+        language = LANGUAGE_NAMES.get(LANGUAGE, LANGUAGE).title()
+        waves, self.rate = self.model.generate_voice_clone(text=text, language=language, voice_clone_prompt=self.prompt)
+        return waves[0]
 
 
 class Kokoro(Engine):
@@ -245,7 +287,8 @@ class OmniVoice(Engine):
         return np.asarray(audio[0], dtype=np.float32).squeeze()
 
 
-ENGINES = {"transformers": Transformers, "piper": Piper, "faster-whisper": FasterWhisper, "qwen-asr": QwenAsr, "kokoro": Kokoro,
+ENGINES = {"transformers": Transformers, "piper": Piper, "vosk": Vosk, "faster-whisper": FasterWhisper,
+           "qwen-asr": QwenAsr, "qwen": QwenVoiceClone, "kokoro": Kokoro,
            "chatterbox": Chatterbox, "f5-tts": F5, "coqui": Coqui, "voxcpm": VoxCPM, "parler": Parler, "omnivoice": OmniVoice}
 MODEL_ENGINE = ENGINES[ENGINE]()
 

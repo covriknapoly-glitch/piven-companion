@@ -4,7 +4,7 @@ export type ThemeId = "system" | "dark" | "light" | "forest" | "coffee" | "abyss
 export const THEMES: readonly (readonly [ThemeId, string, boolean, readonly string[]])[] = [
   ["system", "Как в Windows", false, ["#0a0a0a", "#ffffff", "#7a7a7a", "#5c9cf5"]],
   ["dark", "Графит", false, ["#0a0a0a", "#111111", "#eeeeee", "#5c9cf5"]],
-  ["light", "Светлая", true, ["#ffffff", "#f7f7f7", "#1a1a1a", "#2f6fd0"]],
+  ["light", "Светлая", true, ["#ffffff", "#f8fcf9", "#26332a", "#00783a"]],
   ["forest", "Тёмный лес", false, ["#0a120e", "#0e1813", "#dbe7de", "#7cc49b"]],
   ["coffee", "Кофе", false, ["#14100c", "#1b1510", "#eadfd2", "#86b8ad"]],
   ["abyss", "Глубина", false, ["#050c13", "#08121b", "#d3e2ec", "#4fb3d9"]],

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { HfFile, MemoryStatus, WebApi } from "./bridge";
 import { ConfirmDialog } from "./dialogs";
-import { AdvancedHead, Button, Field, IconButton, Switch, Toggle, useShared } from "./ui";
+import { AdvancedHead, Button, Field, IconButton, MotionPresence, Toggle, useShared } from "./ui";
 
 function EmbeddingSearch({ api, onStarted }: { api: WebApi; onStarted: () => void }) {
   const [query, setQuery] = useState("");
@@ -56,8 +56,7 @@ export function MemoryPane({ api }: { api: WebApi }) {
   const [clearing, setClearing] = useState<"" | "fact" | "exchange" | "all">("");
   const job = status?.job;
   useEffect(() => {
-    if (job?.state !== "running") return;
-    const timer = window.setInterval(() => { void load(); }, 700);
+    const timer = window.setInterval(() => { void load().catch(() => {}); }, job?.state === "running" ? 700 : 1500);
     return () => window.clearInterval(timer);
   }, [job?.state, load]);
   if (!status) return null;
@@ -69,17 +68,21 @@ export function MemoryPane({ api }: { api: WebApi }) {
     </Field>
     <p className="pane-note">В памяти: фактов {status.counts.facts}, разговоров {status.counts.exchanges}. Удалённый чат забывается вместе со своими разговорами.</p>
 
-    <h5 className="pane-subhead">Факты</h5>
+    <h5 className="pane-subhead">Сохранённые факты</h5>
     <div className="row grow">
       <input className="input" value={fact} placeholder="Например: я пишу на Python и люблю короткие ответы" onChange={(event) => setFact(event.target.value)}
         onKeyDown={(event) => { if (event.key === "Enter") add(); }} />
       <Button disabled={!fact.trim()} onClick={add}>Запомнить</Button>
     </div>
-    {!status.facts.length && <p className="pane-note">Пока пусто. Скажи модели «запомни, что…», и факт появится здесь.</p>}
+    {!status.facts.length && <p className="pane-note">Пока нет фактов. Когда модель сохранит факт, он появится здесь.</p>}
     <div className="memory-facts">
       {status.facts.map((item) => (
         <div key={item.id} className="memory-fact">
-          <span>{item.text}</span>
+          <div className="memory-fact-body">
+            <span data-i18n-skip>{item.text}</span>
+            {item.source === "model" && <small>Запомнила модель</small>}
+            {item.source === "manual" && <small>Добавлено вручную</small>}
+          </div>
           <IconButton icon="close" label="Забыть" size={13} onClick={() => { void api.memory_delete(item.id).then(load); }} />
         </div>
       ))}
@@ -105,8 +108,8 @@ export function MemoryPane({ api }: { api: WebApi }) {
       <Button kind="secondary" onClick={() => setClearing("fact")}>Забыть факты</Button>
       <Button kind="danger" onClick={() => setClearing("all")}>Очистить всю память</Button>
     </div>
-    {clearing && <ConfirmDialog title="Очистить память?" danger confirmLabel="Очистить"
+    <MotionPresence>{clearing && <ConfirmDialog title="Очистить память?" danger confirmLabel="Очистить"
       text={clearing === "all" ? "Модель забудет все факты и прошлые разговоры. Сами чаты останутся." : clearing === "fact" ? "Модель забудет все сохранённые факты." : "Модель перестанет находить прошлые разговоры. Сами чаты останутся."}
-      onClose={() => setClearing("")} onConfirm={() => { void api.memory_clear(clearing === "all" ? "" : clearing).then(load); }} />}
+      onClose={() => setClearing("")} onConfirm={() => { void api.memory_clear(clearing === "all" ? "" : clearing).then(load); }} />}</MotionPresence>
   </>;
 }

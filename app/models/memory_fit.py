@@ -26,7 +26,7 @@ def _exact(stream, size):
     return data
 
 
-def _value(stream, kind):
+def _value(stream, kind, keep_strings=False):
     if kind in _SCALARS:
         fmt = _SCALARS[kind]
         return struct.unpack(fmt, _exact(stream, struct.calcsize(fmt)))[0]
@@ -35,39 +35,50 @@ def _value(stream, kind):
         return _exact(stream, length).decode("utf-8", errors="replace")
     if kind == 9:
         item_kind, count = struct.unpack("<IQ", _exact(stream, 12))
-        if item_kind in _SCALARS and count <= 4096:
+        if (item_kind in _SCALARS or keep_strings and item_kind == 8) and count <= 4096:
             return [_value(stream, item_kind) for _ in range(count)]
+        if item_kind in _SCALARS:
+            remaining = count * struct.calcsize(_SCALARS[item_kind])
+            while remaining:
+                length = min(remaining, 65536)
+                _exact(stream, length)
+                remaining -= length
+            return None
         for _ in range(count):
             _value(stream, item_kind)
         return None
     raise ValueError(f"unknown GGUF value type {kind}")
 
 
-def read_metadata(stream):
+def read_metadata(stream, partial=False):
     if _exact(stream, 4) != b"GGUF":
         raise ValueError("not a GGUF file")
     version, _tensors, count = struct.unpack("<IQQ", _exact(stream, 20))
     if version < 2:
         raise ValueError("GGUF v1 is not supported")
     meta = {}
-    for _ in range(count):
-        (length,) = struct.unpack("<Q", _exact(stream, 8))
-        key = _exact(stream, length).decode("utf-8", errors="replace")
-        (kind,) = struct.unpack("<I", _exact(stream, 4))
-        value = _value(stream, kind)
-        if value is not None:
-            meta[key] = value
+    try:
+        for _ in range(count):
+            (length,) = struct.unpack("<Q", _exact(stream, 8))
+            key = _exact(stream, length).decode("utf-8", errors="replace")
+            (kind,) = struct.unpack("<I", _exact(stream, 4))
+            value = _value(stream, kind, keep_strings=key == "audiocpp.embedded_files.names")
+            if value is not None:
+                meta[key] = value
+    except (OSError, EOFError):
+        if not partial:
+            raise
     return meta
 
 
-def local_metadata(path):
-    key = ("file", str(path), path.stat().st_mtime_ns)
+def local_metadata(path, *, prefix_bytes=0):
+    key = ("file", str(path), path.stat().st_mtime_ns, prefix_bytes)
     with _lock:
         if key in _cache:
             return _cache[key]
     try:
-        with open(path, "rb") as handle:
-            meta = read_metadata(io.BufferedReader(handle, 1 << 20))
+        with open(path, "rb", buffering=1 << 20) as handle:
+            meta = read_metadata(_MetadataPrefix(handle, prefix_bytes), partial=True) if prefix_bytes else read_metadata(handle)
     except Exception:
         meta = {}
     with _lock:
@@ -75,23 +86,38 @@ def local_metadata(path):
     return meta
 
 
-def remote_metadata(repo_id, file_path, token=""):
-    key = ("hf", repo_id, file_path)
+class _MetadataPrefix:
+    def __init__(self, stream, limit):
+        self.stream = stream
+        self.remaining = limit
+
+    def read(self, size):
+        if size > self.remaining:
+            raise EOFError("GGUF metadata exceeds the probe limit")
+        self.remaining -= size
+        return self.stream.read(size)
+
+
+def remote_metadata(repo_id, file_path, token="", *, prefix_bytes=0):
+    key = ("hf", repo_id, file_path, prefix_bytes)
     with _lock:
         if key in _cache:
             return _cache[key]
     quoted = "/".join(urllib.parse.quote(part, safe="") for part in str(file_path).split("/"))
     url = f"https://huggingface.co/{urllib.parse.quote(repo_id, safe='/')}/resolve/main/{quoted}"
-    headers = {"User-Agent": USER_AGENT, "Range": "bytes=0-"}
+    headers = {"User-Agent": USER_AGENT, "Range": f"bytes=0-{prefix_bytes - 1}" if prefix_bytes else "bytes=0-"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
-            meta = read_metadata(io.BufferedReader(response, 1 << 20))
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=8 if prefix_bytes else 30) as response:
+            with io.BufferedReader(response, 16384 if prefix_bytes else 1 << 20) as stream:
+                meta = read_metadata(_MetadataPrefix(stream, prefix_bytes), partial=True) if prefix_bytes else read_metadata(stream)
     except Exception:
         meta = {}
-    with _lock:
-        _cache[key] = meta
+    if meta and (not prefix_bytes or meta.get("general.architecture") not in (None, "audiocpp")
+                 or meta.get("audiocpp.model_spec.family")):
+        with _lock:
+            _cache[key] = meta
     return meta
 
 

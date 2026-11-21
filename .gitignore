@@ -22,6 +22,7 @@
 /voice-engines/*
 !/voice-engines/README.md
 !/voice-engines/model_server.py
+!/voice-engines/transcribe_server.py
 !/voice-engines/qwen-tts/
 /voice-engines/qwen-tts/*
 !/voice-engines/qwen-tts/server.py

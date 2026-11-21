@@ -95,6 +95,20 @@ class SendingFiles(unittest.TestCase):
         self.assertEqual(files, [str(self.path)])
         self.assertIn("секретный рецепт", prompt)
 
+    def test_a_draft_is_not_sent_if_the_chat_switches_while_its_file_is_read(self):
+        self.state.active_chat_id = "original"
+
+        def read_file(_paths, _budget):
+            self.state.active_chat_id = "other"
+            return "\n\nСодержимое файла."
+
+        with mock.patch.object(attachments, "prompt_block", side_effect=read_file):
+            result = self.web.WebCompanion._send_with_images(self.state, "вопрос", [], [str(self.path)], chat_id="original")
+        self.assertEqual(result, {"ok": False, "error": self.web.SEND_CHAT_CHANGED})
+        self.assertEqual(self.recorded, [])
+        self.assertEqual(self.state.pending_text_prompts, [])
+        self.assertFalse(self.done.is_set())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,8 +22,6 @@ function toUrl(text: string) {
   return `https://search.brave.com/search?q=${encodeURIComponent(clean)}`;
 }
 
-const TAB_FOLD_MS = 200;
-
 const NUDGE: Record<string, Keyframe[]> = {
   back: [{ transform: "scaleX(-1) translateX(0)" }, { transform: "scaleX(-1) translateX(4px)", offset: .35 }, { transform: "scaleX(-1) translateX(0)" }],
   forward: [{ transform: "translateX(0)" }, { transform: "translateX(4px)", offset: .35 }, { transform: "translateX(0)" }],
@@ -39,6 +37,7 @@ export function BrowserPane({ api, openRequest, covered }:
   const [state, setState] = useState<BrowserState>(EMPTY);
 
   const [tabs, setTabs] = useState<{ id: number; url: string; title: string }[]>([{ id: 1, url: "", title: "" }]);
+  const nextTabId = useRef(2);
   const [activeId, setActiveId] = useState(1);
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
   const started = Boolean(activeTab.url);
@@ -47,7 +46,7 @@ export function BrowserPane({ api, openRequest, covered }:
 
   const nudge = (selector: string, frames: Keyframe[]) => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    barRef.current?.querySelector(`${selector} .ico`)?.animate(frames, { duration: 420, easing: "cubic-bezier(.16, 1, .3, 1)" });
+    barRef.current?.querySelector(`${selector} .ico`)?.animate(frames, { duration: 240, easing: "cubic-bezier(.16, 1, .3, 1)" });
   };
 
   const [closing, setClosing] = useState<number[]>([]);
@@ -55,7 +54,9 @@ export function BrowserPane({ api, openRequest, covered }:
   const [highlight, setHighlight] = useState<{ left: number; width: number } | null>(null);
   const measure = useCallback(() => {
     const element = tabsRef.current?.querySelector<HTMLElement>(".browser-tab.on");
-    if (element) setHighlight({ left: element.offsetLeft, width: element.offsetWidth });
+    if (!element) return;
+    const next = { left: element.offsetLeft, width: element.offsetWidth };
+    setHighlight((current) => current?.left === next.left && current.width === next.width ? current : next);
   }, []);
   useLayoutEffect(() => {
     measure();
@@ -66,26 +67,81 @@ export function BrowserPane({ api, openRequest, covered }:
     return () => observer.disconnect();
   }, [measure, tabs, activeId, closing]);
 
-  const place = useCallback(() => {
-    const element = viewRef.current;
-    if (!element) return;
-    const rect = element.getBoundingClientRect();
-    const scale = window.devicePixelRatio || 1;
-    void api.browser_place(Math.round(rect.left * scale), Math.round(rect.top * scale), Math.round(rect.width * scale), Math.round(rect.height * scale), started && !covered);
-  }, [api, started, covered]);
+  useLayoutEffect(() => {
+    let current = true;
+    for (const id of closing) {
+      const tab = tabsRef.current?.querySelector(`[data-tab-id="${id}"]`);
+      const fold = tab?.getAnimations().find((animation) =>
+        animation instanceof CSSTransition && animation.transitionProperty === "max-width");
+      const remove = () => {
+        if (!current) return;
+        setTabs((list) => list.filter((item) => item.id !== id));
+        setClosing((list) => list.filter((item) => item !== id));
+      };
+      if (fold) void fold.finished.then(remove, remove);
+      else remove();
+    }
+    return () => { current = false; };
+  }, [closing]);
+
+  const placement = useRef({ pending: Promise.resolve() as Promise<unknown>, sequence: 0 });
+  const placeNative = useCallback((...bounds: Parameters<WebApi["browser_place"]>) => {
+    // A slow bridge should apply the latest position before accepting another frame.
+    const queue = placement.current;
+    const sequence = ++queue.sequence;
+    queue.pending = queue.pending.then(() => {
+      if (sequence === queue.sequence) return api.browser_place(...bounds);
+    }).catch(() => undefined);
+  }, [api]);
 
   useLayoutEffect(() => {
-    place();
     const element = viewRef.current;
-    const observer = new ResizeObserver(() => place());
-    if (element) observer.observe(element);
-    window.addEventListener("resize", place);
+    if (!started || covered || !element) {
+      placeNative(0, 0, 0, 0, false);
+      return;
+    }
 
-    const slid = (event: AnimationEvent) => { if ((event.target as Element).classList?.contains("workspace")) place(); };
-    document.addEventListener("animationend", slid);
-    return () => { observer.disconnect(); window.removeEventListener("resize", place); document.removeEventListener("animationend", slid); };
-  }, [place]);
-  useEffect(() => () => { void api.browser_place(0, 0, 0, 0, false); }, [api]);
+    const app = element.closest<HTMLDivElement>(".app");
+    let lastBounds = "";
+    let frame = 0;
+    const place = () => {
+      const rect = element.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      const visible = rect.width > 0 && rect.height > 0 && rect.left < window.innerWidth;
+      const bounds: Parameters<WebApi["browser_place"]> = visible
+        ? [Math.round(rect.left * scale), Math.round(rect.top * scale), Math.round(rect.width * scale), Math.round(rect.height * scale), true]
+        : [0, 0, 0, 0, false];
+      const key = bounds.join();
+      if (key === lastBounds) return;
+      lastBounds = key;
+      placeNative(...bounds);
+    };
+    const followSlide = () => {
+      place();
+      const sliding = app?.getAnimations().some((animation) =>
+        animation instanceof CSSTransition && animation.transitionProperty === "--workspace-progress");
+      frame = sliding ? requestAnimationFrame(followSlide) : 0;
+    };
+    const updateSlide = (event: TransitionEvent) => {
+      if (event.target !== app || event.propertyName !== "--workspace-progress") return;
+      cancelAnimationFrame(frame);
+      followSlide();
+    };
+
+    const observer = new ResizeObserver(place);
+    observer.observe(element);
+    window.addEventListener("resize", place);
+    const events = ["transitionrun", "transitionend", "transitioncancel"] as const;
+    events.forEach((name) => app?.addEventListener(name, updateSlide));
+    followSlide();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+      events.forEach((name) => app?.removeEventListener(name, updateSlide));
+    };
+  }, [placeNative, started, covered]);
+  useLayoutEffect(() => () => placeNative(0, 0, 0, 0, false), [placeNative]);
 
   useEffect(() => {
     const timer = window.setInterval(() => { void api.browser_state().then(setState); }, 400);
@@ -102,7 +158,7 @@ export function BrowserPane({ api, openRequest, covered }:
     if (tab?.url) void api.browser_go(tab.url);
   };
   const newTab = () => {
-    const id = Math.max(...tabs.map((tab) => tab.id)) + 1;
+    const id = nextTabId.current++;
     setTabs((list) => [...list, { id, url: "", title: "" }]);
     setActiveId(id);
   };
@@ -110,16 +166,16 @@ export function BrowserPane({ api, openRequest, covered }:
     if (closing.includes(id)) return;
     const rest = tabs.filter((tab) => tab.id !== id && !closing.includes(tab.id));
     if (!rest.length) {
-      setTabs([{ id: id + 1, url: "", title: "" }]); setActiveId(id + 1); return;
+      const replacementId = nextTabId.current++;
+      setTabs([{ id: replacementId, url: "", title: "" }]);
+      setActiveId(replacementId);
+      setClosing([]);
+      return;
     }
 
     const position = tabs.filter((tab) => !closing.includes(tab.id)).findIndex((tab) => tab.id === id);
     if (id === activeId) switchTab(rest[Math.min(rest.length - 1, Math.max(0, position - 1))].id);
     setClosing((list) => [...list, id]);
-    window.setTimeout(() => {
-      setTabs((list) => list.filter((tab) => tab.id !== id));
-      setClosing((list) => list.filter((item) => item !== id));
-    }, TAB_FOLD_MS);
   };
 
   const [startQuery, setStartQuery] = useState("");
@@ -137,7 +193,8 @@ export function BrowserPane({ api, openRequest, covered }:
       <div className="browser-tabs" ref={tabsRef}>
         {highlight && <span className="browser-tab-highlight" style={{ transform: `translateX(${highlight.left}px)`, width: highlight.width }} />}
         {tabs.map((tab) => (
-          <div key={tab.id} className={`browser-tab ${tab.id === activeId ? "on" : ""} ${closing.includes(tab.id) ? "closing" : ""}`}>
+          <div key={tab.id} data-tab-id={tab.id} inert={closing.includes(tab.id)}
+            className={`browser-tab ${tab.id === activeId ? "on" : ""} ${closing.includes(tab.id) ? "closing" : ""}`}>
             <button type="button" onClick={() => switchTab(tab.id)} title={tab.url || "Новая вкладка"}>{tab.title || (tab.url ? tab.url.replace(/^https?:\/\/(www\.)?/, "") : "Новая вкладка")}</button>
             <IconButton icon="close" label="Закрыть вкладку" size={12} onClick={() => closeTab(tab.id)} />
           </div>

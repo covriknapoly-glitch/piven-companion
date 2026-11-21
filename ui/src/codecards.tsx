@@ -1,8 +1,8 @@
 import { useContext, useState } from "react";
-import type { WebApi } from "./bridge";
+import type { PlanStep, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
 import { LinkContext, Markdown } from "./markdown";
-import { fileName } from "./ui";
+import { MotionPresence, fileName } from "./ui";
 
 export interface CodeCardData {
   kind: "read" | "write" | "edit" | "command" | "page" | "plan" | "note" | "changes" | "offer" | "plan_ready";
@@ -18,7 +18,8 @@ export interface CodeCardData {
   denied?: boolean;
   stopped?: boolean;
   background?: boolean;
-  items?: { text: string; status: "pending" | "in_progress" | "done" }[];
+  items?: PlanStep[];
+  planId?: string;
   root?: string;
   files?: { path: string; state: "created" | "edited" | "deleted" }[];
   checkpoint?: string;
@@ -33,6 +34,43 @@ export function parseCard(text: string): CodeCardData | null {
   } catch {
     return null;
   }
+}
+
+export function isFailedCheck(card: CodeCardData) {
+  return (card.kind === "command" || card.kind === "page")
+    && !card.denied && !card.background && !card.stopped && card.exit != null && card.exit !== 0;
+}
+
+const PLAN_STATUS = { pending: "В очереди", in_progress: "В работе", done: "Выполнено" };
+
+export function CodePlan({ items, live = false }: { items: PlanStep[]; live?: boolean }) {
+  const [expanded, setExpanded] = useState(true);
+  if (!items.length) return null;
+  const done = items.filter((item) => item.status === "done").length;
+  const current = items.find((item) => item.status === "in_progress") ?? items.find((item) => item.status === "pending");
+  const renderSteps = (steps: PlanStep[]) => (
+    <ol className="code-plan-list">
+      {steps.map((item, index) => (
+        <li key={index} className={item.status} aria-current={item.status === "in_progress" ? "step" : undefined}>
+          <span className="code-plan-mark" title={PLAN_STATUS[item.status]} aria-label={PLAN_STATUS[item.status]}>
+            {item.status === "done" && <Icon name="check" size={12} />}
+          </span>
+          <span className="code-plan-text" data-i18n-skip>{item.text}</span>
+        </li>
+      ))}
+    </ol>
+  );
+  return (
+    <section className="code-plan" aria-label="План задачи">
+      <button type="button" className="code-plan-head" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+        <Icon name="chevronRight" size={13} className="disclosure-chevron" />
+        <strong>План</strong>
+        <span className="code-plan-count" title={`Выполнено ${done} из ${items.length}`}>{`${done}/${items.length}`}</span>
+      </button>
+      <MotionPresence kind="collapse">{expanded && renderSteps(items)}</MotionPresence>
+      {live && <MotionPresence kind="collapse">{!expanded && current && renderSteps([current])}</MotionPresence>}
+    </section>
+  );
 }
 
 function Diff({ text }: { text: string }) {
@@ -53,9 +91,9 @@ function Expandable({ icon, title, tags, open: startOpen = false, tone = "", chi
         <Icon name={icon} size={14} />
         <span className="code-card-title" title={title}>{title}</span>
         {tags}
-        {children ? <Icon name="chevronRight" size={13} className={open ? "rot90" : ""} /> : null}
+        {children ? <Icon name="chevronRight" size={13} className="disclosure-chevron" /> : null}
       </button>
-      {open && children}
+      <MotionPresence kind="collapse">{open && children}</MotionPresence>
     </div>
   );
 }
@@ -140,13 +178,7 @@ export function CodeCard({ api, card, index, onCopy }: { api: WebApi; card: Code
     case "read":
       return <div className="code-card-line"><Icon name="search" size={13} /><span>{card.title}</span></div>;
     case "plan":
-      return (
-        <ul className="code-plan">
-          {(card.items ?? []).map((item, key) => (
-            <li key={key} className={item.status}><Icon name={item.status === "done" ? "check" : item.status === "in_progress" ? "arrowRight" : "more"} size={13} /><span data-i18n-skip>{item.text}</span></li>
-          ))}
-        </ul>
-      );
+      return <CodePlan items={card.items ?? []} />;
     case "write":
     case "edit":
       return (
@@ -157,7 +189,7 @@ export function CodeCard({ api, card, index, onCopy }: { api: WebApi; card: Code
       );
     case "command":
     case "page": {
-      const failed = !card.denied && !card.background && !card.stopped && card.exit !== 0 && card.exit !== undefined && card.exit !== null;
+      const failed = isFailedCheck(card);
       const status = card.denied ? "не разрешено" : card.background ? "работает в фоне" : card.stopped ? "остановлено по времени" : failed ? (card.kind === "page" ? "есть ошибки" : `код ${card.exit}`) : "готово";
       return (
         <Expandable icon={card.kind === "page" ? "globe" : "keyboard"} title={card.title ?? ""} open={failed} tone={failed ? "failed" : ""}

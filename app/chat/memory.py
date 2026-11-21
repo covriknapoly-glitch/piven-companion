@@ -36,13 +36,15 @@ class Memory:
         self.server_exe = Path(server_exe)
         self._db = sqlite3.connect(str(self.folder / "memory.sqlite"), check_same_thread=False)
         self._db.execute("CREATE TABLE IF NOT EXISTS memories (id INTEGER PRIMARY KEY, kind TEXT, chat_id TEXT, text TEXT, "
-                         "created REAL, vector BLOB)")
+                         "created REAL, vector BLOB, source TEXT NOT NULL DEFAULT '')")
+        if not any(column[1] == "source" for column in self._db.execute("PRAGMA table_info(memories)")):
+            self._db.execute("ALTER TABLE memories ADD COLUMN source TEXT NOT NULL DEFAULT ''")
         self._db.commit()
         self._lock = threading.Lock()
         self._process = None
         self._server_lock = threading.Lock()
 
-    def add(self, kind, text, chat_id=""):
+    def add(self, kind, text, chat_id="", *, source=""):
         text = " ".join(str(text).split())[:4000]
         if not text:
             return None
@@ -50,8 +52,8 @@ class Memory:
         with self._lock:
             if kind == "fact" and self._db.execute("SELECT 1 FROM memories WHERE kind='fact' AND text=?", (text,)).fetchone():
                 return None
-            cursor = self._db.execute("INSERT INTO memories (kind, chat_id, text, created, vector) VALUES (?, ?, ?, ?, ?)",
-                                      (kind, chat_id, text, time.time(), _pack(vector)))
+            cursor = self._db.execute("INSERT INTO memories (kind, chat_id, text, created, vector, source) VALUES (?, ?, ?, ?, ?, ?)",
+                                      (kind, chat_id, text, time.time(), _pack(vector), source))
             self._db.commit()
             return cursor.lastrowid
 
@@ -62,8 +64,8 @@ class Memory:
 
     def facts(self):
         with self._lock:
-            rows = self._db.execute("SELECT id, text, created FROM memories WHERE kind='fact' ORDER BY created DESC").fetchall()
-        return [{"id": row[0], "text": row[1], "created": row[2]} for row in rows]
+            rows = self._db.execute("SELECT id, text, created, source FROM memories WHERE kind='fact' ORDER BY created DESC, id DESC").fetchall()
+        return [{"id": row[0], "text": row[1], "created": row[2], "source": row[3]} for row in rows]
 
     def counts(self):
         with self._lock:
@@ -86,10 +88,13 @@ class Memory:
             self._db.execute("DELETE FROM memories" + (" WHERE kind=?" if kind else ""), (kind,) if kind else ())
             self._db.commit()
 
-    def search(self, query, limit=4, exclude_chat=""):
+    def search(self, query, limit=4, exclude_chat="", exclude_chats=()):
         with self._lock:
             rows = self._db.execute("SELECT id, kind, chat_id, text, vector FROM memories").fetchall()
-        rows = [row for row in rows if not (row[1] == "exchange" and exclude_chat and row[2] == exclude_chat)]
+        excluded = set(exclude_chats)
+        if exclude_chat:
+            excluded.add(exclude_chat)
+        rows = [row for row in rows if not (row[1] == "exchange" and row[2] in excluded)]
         if not rows:
             return []
         query_terms = terms(query)

@@ -234,7 +234,10 @@ class ToolBox:
                 skill = next((item for item in self.skills if item["name"] == arguments.get("name")), None)
                 return skill["body"][:MAX_RESULT] if skill else "Такого навыка нет."
             if name == "remember" and self.memory is not None:
-                return "Запомнено." if self.memory.add("fact", arguments.get("fact", "")) else "Это уже есть в памяти."
+                fact = arguments.get("fact")
+                if not isinstance(fact, str) or not fact.strip():
+                    return "Укажи, какой факт нужно запомнить."
+                return "Запомнено." if self.memory.add("fact", fact, source="model") else "Это уже есть в памяти."
             if name == "recall" and self.memory is not None:
                 hits = self.memory.search(arguments.get("query", ""), limit=6)
                 return "\n".join(f"- {hit['text']}" for hit in hits) if hits else "В памяти ничего подходящего нет."

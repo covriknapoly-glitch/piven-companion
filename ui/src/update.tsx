@@ -4,7 +4,7 @@ import type { EngineState, UpdateStatus, WebApi } from "./bridge";
 import { currentLanguage } from "./i18n";
 import { Icon } from "./icons";
 import { Markdown } from "./markdown";
-import { Button, Field, IconButton, Modal, Toggle, useShared } from "./ui";
+import { Button, Field, IconButton, Modal, MotionPresence, Toggle, useShared } from "./ui";
 
 const SHOT = /^!\[([^\]]*)\]\((https:\/\/[^\s)]+)\)$/;
 const TRUSTED = /^https:\/\/(raw\.githubusercontent\.com|github\.com|user-images\.githubusercontent\.com|private-user-images\.githubusercontent\.com|objects\.githubusercontent\.com)\//;
@@ -63,7 +63,7 @@ export function UpdateBanner({ api, state, onError }: { api: WebApi; state: Engi
   const notes = (
     <>
       <button type="button" className="link-btn" onClick={() => setReading(true)}>Что нового</button>
-      {reading && <ReleaseNotes api={api} version={update.version} onClose={() => setReading(false)} onUpdate={idle && update.canInstall ? download : undefined} />}
+      <MotionPresence>{reading && <ReleaseNotes api={api} version={update.version} onClose={() => setReading(false)} onUpdate={idle && update.canInstall ? download : undefined} />}</MotionPresence>
     </>
   );
   if (update.state === "running") {
@@ -118,8 +118,8 @@ export function UpdatePane({ api }: { api: WebApi }) {
         <span className="pane-note">{line}</span>
         {status.available && <button type="button" className="link-btn" onClick={() => setReading(true)}>Что нового</button>}
       </div>
-      {reading && <ReleaseNotes api={api} version={status.latest} onClose={() => setReading(false)}
-        onUpdate={status.canInstall && status.job.state !== "running" && !status.ready ? () => { void api.update_download(); } : undefined} />}
+      <MotionPresence>{reading && <ReleaseNotes api={api} version={status.latest} onClose={() => setReading(false)}
+        onUpdate={status.canInstall && status.job.state !== "running" && !status.ready ? () => { void api.update_download(); } : undefined} />}</MotionPresence>
     </Field>
   );
 }

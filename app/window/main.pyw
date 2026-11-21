@@ -6,6 +6,7 @@ import mimetypes
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -23,10 +24,10 @@ if __name__ == "__main__":
     paths.migrate()
 
 from app.chat import engine as core
-from app.chat.engine import (APP_DIR, APP_NAME, COMFY_DEFAULT_WORKFLOW, COMPANION_SYSTEM_PROMPT, DATA_DIR, LOG_PATH,
+from app.chat.engine import (APP_DIR, APP_NAME, COMFY_DEFAULT_WORKFLOW, DATA_DIR, LOG_PATH,
                             THINKING_LEVELS, CompanionCore, acquire_instance_lock, bounded_int, encode_chat_image,
                             log, list_models, backend_problem, model_thinking)
-from app.chat import attachments
+from app.chat import attachments, knowledge
 from app.models import huggingface
 from app.models import llama
 from app.models import memory_fit
@@ -91,6 +92,7 @@ def set_window_icon(window):
 
 IMAGE_ONLY_PROMPTS = {False: "Посмотри на это изображение и коротко расскажи, что на нём.",
                       True: "Посмотри на эти изображения и коротко расскажи, что на них."}
+SEND_CHAT_CHANGED = "Чат переключился. Черновик сохранён в исходном чате."
 
 
 class WebCompanion(CompanionCore):
@@ -109,6 +111,7 @@ class WebCompanion(CompanionCore):
         self._models = []
         self._models_error = ""
         self._busy_since = None
+        self._code_plans = {}
         self._allowed_files = set()
         self._confirm = None
         self._confirm_answer = threading.Event()
@@ -167,17 +170,22 @@ class WebCompanion(CompanionCore):
                            "busy": chat.get("id") in self._busy_chats, "unread": bool(chat.get("unread")),
                            "model": chat.get("model", ""), "updated": chat.get("updated", 0),
                            "code": bool(chat.get("code_on")), "root": str(chat.get("code_root") or ""),
+                           "branchOf": str(chat.get("branch_from") or ""),
                            "preview": next((" ".join(str(item.get("text", "")).split())[:90]
                                             for item in reversed(chat.get("items", []))
                                             if item.get("role") in ("assistant", "user") and item.get("text")), "")}
                           for chat in chats],
                 "items": [{"role": item.get("role", "system"), "text": str(item.get("text", "")),
+                           "created": item.get("created"),
                            "images": [str(path) for path in item.get("images") or []],
                            "files": [str(path) for path in item.get("files") or []],
+                           **({"sources": [{key: val for key, val in source.items() if key not in ("folder", "text")}
+                                           for source in item["sources"] if isinstance(source, dict)]} if item.get("sources") else {}),
                            "undo": len(item.get("undo") or [])}
                           for item in self.dialogue_items if isinstance(item, dict)],
                 "chatTitle": active.get("title") or "Новый чат",
                 "busy": bool(self.busy),
+                "activePlan": self._code_plans.get(self.active_chat_id) if self.busy else None,
                 "busySince": self._busy_since or 0,
                 "listening": {"running": bool(self.running),
                               "options": dict(zip(("mic", "loopback", "screen", "proactive"), map(bool, self.capture_options)))},
@@ -204,7 +212,6 @@ class WebCompanion(CompanionCore):
                     "comfyUrl": self.settings.get("comfy_url", ""),
                     "voice": self.settings.get("voice", ""),
                     "theme": self.settings.get("canvas_theme", ""),
-                    "systemPrompt": self.settings.get("system_prompt", ""),
                     "integrations": dict(self.settings.get("integrations_enabled", {})),
                     "thinkingLevel": self.settings.get("thinking_levels", {}).get(self.settings.get("model", ""), "__auto__"),
                 },
@@ -224,9 +231,11 @@ class WebCompanion(CompanionCore):
     def _background_event(self, chat_id, kind, value):
         chat = next((item for item in self.chats if item.get("id") == chat_id), None)
         title = chat.get("title", "") if chat else ""
-        if kind == "message":
-            role, content, _voice = value
-            self.append_to_chat(chat_id, role, content)
+        if kind == "plan_update":
+            self._record_code_plan(chat_id, value)
+        elif kind == "message":
+            role, content, _voice = value[:3]
+            self.append_to_chat(chat_id, role, content, sources=value[3] if len(value) > 3 else None)
             if role == "assistant":
                 self._notify(f"Ответ в чате «{title}»", content)
         elif kind == "error":
@@ -250,6 +259,7 @@ class WebCompanion(CompanionCore):
                 result = f"Не удалось выполнить действие на компьютере: {error}"
             self.append_to_chat(chat_id, "system", result)
         elif kind == "request_done":
+            self._code_plans.pop(chat_id, None)
             self._busy_chats.discard(chat_id)
         else:
             return
@@ -284,9 +294,37 @@ class WebCompanion(CompanionCore):
                          "message": job.get("error") if state in ("error", "cancelled") else job.get("message", "")})
         return rows
 
-    def _record(self, role, text, images=None, files=None):
-        self.record_dialogue_item(role, text, images, files)
+    def _record(self, role, text, images=None, files=None, sources=None):
+        self.record_dialogue_item(role, text, images, files, sources)
         self._changed()
+
+    def _record_code_plan(self, chat_id, card):
+        active = chat_id == self.active_chat_id
+        chat = next((item for item in self.chats if item.get("id") == chat_id), None)
+        if chat is None:
+            return
+        self._code_plans[chat_id] = card
+        items = self.dialogue_items if active else chat.get("items", [])
+        payload = json.dumps(card, ensure_ascii=False)
+        for item in reversed(items):
+            if not isinstance(item, dict) or item.get("role") != "code":
+                continue
+            try:
+                previous = json.loads(item.get("text", ""))
+            except (TypeError, ValueError):
+                continue
+            if isinstance(previous, dict) and previous.get("kind") == "plan" and previous.get("planId") == card["planId"]:
+                item["text"] = payload
+                if active:
+                    self._save_conversation()
+                else:
+                    self._conversation_save_generation += 1
+                    self._schedule_conversation_write()
+                return
+        if active:
+            self._record("code", payload)
+        else:
+            self.append_to_chat(chat_id, "code", payload)
 
     def _call_flags(self):
         hearing = self.running and not self.mic_muted and time.monotonic() - getattr(self, "last_mic_activity", 0.0) < 0.9
@@ -322,12 +360,14 @@ class WebCompanion(CompanionCore):
                     self._reasoning = str(value)
                 elif kind in ("reasoning_clear", "reasoning_remove"):
                     self._reasoning = ""
+                elif kind == "plan_update":
+                    self._record_code_plan(self.active_chat_id, value)
                 elif kind == "message":
-                    role, content, voice = value
+                    role, content, voice = value[:3]
                     if role == "assistant":
                         self._activity = "Ответ получен"; self._reasoning = ""
                         self._notify("PIVEN ответил", content)
-                    self._record(role, content)
+                    self._record(role, content, sources=value[3] if len(value) > 3 else None)
                     if voice:
                         threading.Thread(target=self._speak, args=(content,), daemon=True).start()
                 elif kind == "computer_action":
@@ -371,10 +411,20 @@ class WebCompanion(CompanionCore):
                     self._changed()
                 elif kind == "asr":
                     self.handle_transcript(value, self.settings.get("model", "").strip())
+                elif kind == "user_merge":
+                    # The user went on after a pause: the half already in the chat grows into the whole phrase.
+                    before, after = value
+                    last = next((item for item in reversed(self.dialogue_items) if item.get("role") in ("user", "assistant")), None)
+                    if last is not None and last.get("role") == "user" and last.get("text") == before:
+                        last["text"] = after
+                        self._save_conversation()
+                    else:
+                        self._record("user", after)
                 elif kind in ("stopped", "capture_failed"):
                     self.running = False
                     self._activity = "Прослушивание остановлено"
                 elif kind == "request_done":
+                    self._code_plans.pop(self.active_chat_id, None)
                     self._save_conversation()
                     self.busy = False
                     if self.pending_code_prompts:
@@ -402,7 +452,9 @@ class WebCompanion(CompanionCore):
             route = "code"
         return "chat" if route == "code" and chat.get("code_declined") else route
 
-    def send(self, text, image_paths=None, file_paths=None):
+    def send(self, text, image_paths=None, file_paths=None, chat_id=None):
+        if chat_id is not None and chat_id != self.active_chat_id:
+            return {"ok": False, "error": SEND_CHAT_CHANGED}
         text = str(text or "").strip()
         allowed = self.known_files()
         image_paths = [str(path) for path in (image_paths or []) if str(path) in allowed and Path(str(path)).is_file()]
@@ -411,12 +463,14 @@ class WebCompanion(CompanionCore):
             return {"ok": False, "error": "Пустое сообщение."}
         if file_paths:
             # Attached files always go to the model (a chat or the agent in a project), never to picture generation.
-            return self._send_with_images(text, image_paths, file_paths)
+            return self._send_with_images(text, image_paths, file_paths, chat_id=chat_id)
         route = self._route_for(text, has_images=bool(image_paths))
         if image_paths and route == "code":
-            return self._send_with_images(text, image_paths)
+            return self._send_with_images(text, image_paths, chat_id=chat_id)
         if image_paths and self._detect_composer_route(text) == "video":
             with self._state_lock:
+                if chat_id is not None and chat_id != self.active_chat_id:
+                    return {"ok": False, "error": SEND_CHAT_CHANGED}
                 if self.busy:
                     return {"ok": False, "error": "Дождись завершения текущего действия."}
                 self._record("user", text, image_paths)
@@ -424,8 +478,10 @@ class WebCompanion(CompanionCore):
                 self._start_video_generation(text, image_paths[0])
             return {"ok": True, "route": "video"}
         if image_paths:
-            return self._send_with_images(text, image_paths)
+            return self._send_with_images(text, image_paths, chat_id=chat_id)
         with self._state_lock:
+            if chat_id is not None and chat_id != self.active_chat_id:
+                return {"ok": False, "error": SEND_CHAT_CHANGED}
             self._notice = ""
             if route == "audio":
                 return {"ok": False, "error": "Генерация музыки и звуков пока не поддерживается."}
@@ -508,7 +564,7 @@ class WebCompanion(CompanionCore):
                 self.settings["model"] = names[0]
             self._changed()
 
-    def _send_with_images(self, text, image_paths, file_paths=()):
+    def _send_with_images(self, text, image_paths, file_paths=(), chat_id=None):
         model = self.settings.get("model", "").strip()
         if self._local_blocked(model):
             return {"ok": False, "error": core.LLAMA_OFF_NOTE}
@@ -525,6 +581,8 @@ class WebCompanion(CompanionCore):
         # Files are read here, before the lock, so a long PDF does not hold up the window.
         prompt = text + attachments.prompt_block(file_paths, self._attachment_budget(model)) if file_paths else text
         with self._state_lock:
+            if chat_id is not None and chat_id != self.active_chat_id:
+                return {"ok": False, "error": SEND_CHAT_CHANGED}
             if self.busy:
                 self.pending_text_prompts.append((text, model, image_data or None, image_paths, file_paths, prompt))
                 self._activity = "Сообщение добавлено в очередь"; self._changed()
@@ -620,15 +678,14 @@ class WebCompanion(CompanionCore):
         return {"ok": True}
 
     def start_voice_install(self, kind, model_id, extra=None, token=""):
-        catalogue = install.ASR_MODELS if kind == "asr" else install.TTS_MODELS if kind == "tts" else None
         extra = extra if isinstance(extra, dict) else {}
-        if catalogue is None or (model_id not in catalogue and not (extra.get("file") or extra.get("repo") or extra.get("engine"))):
-            return {"ok": False, "error": "Неизвестная модель."}
+        try:
+            install.validate_install(kind, model_id, extra)
+        except ValueError as error:
+            return {"ok": False, "error": str(error)}
         with self._state_lock:
             if self._voice["state"] == "running":
                 return {"ok": False, "error": "Уже идёт установка."}
-            if kind == "tts" and not install.tts_packages_ready() and (self.running or self.tts_playing.is_set()):
-                return {"ok": False, "error": "Сначала заверши звонок и озвучку."}
             self._voice = {"kind": kind, "id": model_id, "state": "running", "percent": 0, "message": "Подключение", "error": "", "installed": ""}
             self._changed()
             self._voice_cancel.clear()
@@ -840,17 +897,107 @@ class WebApi:
             app._changed()
         return {"ok": ok}
 
-    def new_chat(self):
+    def new_chat(self, draft_chat_ids=None):
         app = self._app
+        drafts = {chat_id for chat_id in draft_chat_ids if isinstance(chat_id, str)} if isinstance(draft_chat_ids, list) else set()
         with app._state_lock:
             code = bool((app._active_chat() or {}).get("code_on"))
             empty = next((chat for chat in reversed(app.chats) if not chat.get("items") and not chat.get("messages")
-                          and bool(chat.get("code_on")) == code), None)
+                          and bool(chat.get("code_on")) == code and chat["id"] not in drafts), None)
+            if empty is not None and app.knowledge is not None:
+                try:
+                    if app.knowledge.configured(app.knowledge_scope(empty)):
+                        empty = None
+                except sqlite3.Error as error:
+                    log(f"knowledge lookup error: {error}")
             if empty is not None:
                 app.select_chat(empty["id"])
             else:
                 app.create_chat(code)
             app._changed()
+        return {"ok": True}
+
+    def fork_chat(self, chat_id, index=None, text=""):
+        app = self._app
+        with app._state_lock:
+            if (index is not None and type(index) is not int) or app.fork_chat(str(chat_id), index, str(text)) is None:
+                return {"ok": False, "error": "Не удалось создать ветку. Нужен чат с сообщениями без активного ответа или звонка."}
+            app._changed()
+        return {"ok": True}
+
+    def _knowledge_scope(self, chat_id):
+        app = self._app
+        scope = app.knowledge_scope(next((chat for chat in app.chats if chat.get("id") == chat_id), None))
+        if not scope:
+            raise ValueError("Чат не найден.")
+        if app.knowledge is None:
+            raise ValueError("База знаний недоступна.")
+        return scope
+
+    def knowledge_status(self, chat_id):
+        app = self._app
+        with app._state_lock:
+            try:
+                scope = self._knowledge_scope(str(chat_id))
+                return {"ok": True, **app.knowledge.status(scope)}
+            except (ValueError, sqlite3.Error) as error:
+                return {"ok": False, "error": str(error)}
+
+    def knowledge_pick_folder(self, chat_id):
+        folder = self.pick_path("folder")
+        if not folder:
+            return {"ok": False, "cancelled": True}
+        return self._start_knowledge_index(str(chat_id), folder)
+
+    def knowledge_refresh(self, chat_id):
+        return self._start_knowledge_index(str(chat_id))
+
+    def _start_knowledge_index(self, chat_id, folder=""):
+        app = self._app
+        with app._state_lock:
+            try:
+                scope = self._knowledge_scope(chat_id)
+                index = app.knowledge
+                folder = folder or index.status(scope)["folder"]
+                if not folder:
+                    raise ValueError("Сначала выбери папку с документами.")
+                index.start(scope, folder)
+            except (ValueError, sqlite3.Error) as error:
+                return {"ok": False, "error": str(error)}
+        return {"ok": True}
+
+    def knowledge_remove(self, chat_id):
+        app = self._app
+        with app._state_lock:
+            try:
+                scope = self._knowledge_scope(str(chat_id))
+                app.knowledge.remove(scope)
+            except (ValueError, sqlite3.Error) as error:
+                return {"ok": False, "error": str(error)}
+        return {"ok": True}
+
+    def _message_source(self, chat_id, index, number, path):
+        app = self._app
+        with app._state_lock:
+            if str(chat_id) != app.active_chat_id or not (type(index) is int and index >= 0 and type(number) is int and number >= 1):
+                raise ValueError("Source is not in the active chat")
+            source = app.dialogue_items[index]["sources"][number - 1]
+            if source["path"] != path:
+                raise ValueError("Source no longer matches the message")
+            return dict(source)
+
+    def knowledge_excerpt(self, chat_id, index, number, path):
+        try:
+            return {"ok": True, "text": self._message_source(chat_id, index, number, path)["text"]}
+        except (KeyError, IndexError, TypeError, ValueError):
+            return {"ok": False, "error": "Файл источника недоступен."}
+
+    def knowledge_open_source(self, chat_id, index, number, path):
+        try:
+            source = self._message_source(chat_id, index, number, path)
+            os.startfile(str(knowledge.source_path(source)))
+        except (OSError, RuntimeError, KeyError, IndexError, TypeError, ValueError):
+            return {"ok": False, "error": "Файл источника недоступен."}
         return {"ok": True}
 
     def code_mode(self, on):
@@ -984,8 +1131,6 @@ class WebApi:
         except Exception as error:
             mic_error = f"Список микрофонов недоступен: {error}"
         return {
-            "systemPrompt": settings.get("system_prompt", ""),
-            "defaultSystemPrompt": COMPANION_SYSTEM_PROMPT,
             "speechEnabled": bool(app.speech_enabled),
             "voice": settings.get("voice", "Russian"),
             "voices": install.tts_voices(settings.get("tts_model")),
@@ -1015,13 +1160,7 @@ class WebApi:
             return {"ok": False, "errors": {"_": "Некорректный запрос."}}
         errors, changes = {}, {}
         for key, value in patch.items():
-            if key == "systemPrompt":
-                text = str(value or "").strip()
-                if len(text) > 20000:
-                    errors[key] = "Слишком длинный промпт (больше 20 000 символов)."
-                else:
-                    changes["system_prompt"] = text or COMPANION_SYSTEM_PROMPT
-            elif key == "speechEnabled":
+            if key == "speechEnabled":
                 changes["speech_enabled"] = bool(value)
             elif key == "bargeIn":
                 changes["barge_in"] = bool(value)
@@ -1098,7 +1237,6 @@ class WebApi:
                 app.mic_device = app.settings["mic_device"]
                 app.mic_sensitivity = app.settings["mic_sensitivity"]
                 app.barge_in = app.settings["barge_in"]
-                app.messages[0]["content"] = app._effective_system_prompt(app.settings["system_prompt"])
                 if "heavy_mode" in changes or "max_loaded_models" in changes:
                     app.apply_heavy_mode()
                 if "integrations_enabled" in changes:
@@ -1210,33 +1348,48 @@ class WebApi:
         os.startfile(root)
         return {"ok": True}
 
-    def code_files(self):
+    def _code_project_root(self, chat_id=None):
+        app = self._app
+        with app._state_lock:
+            chat = app._active_chat() if chat_id is None else next((item for item in app.chats if item.get("id") == chat_id), None)
+            root = str((chat or {}).get("code_root") or "")
+        return root if root and Path(root).is_dir() else ""
+
+    def code_files(self, chat_id=None):
         from app.tools.coding import CodeTools
-        root = str((self._app._active_chat() or {}).get("code_root") or "")
-        if not root or not Path(root).is_dir():
+        root = self._code_project_root(chat_id)
+        if not root:
             return {"root": "", "files": []}
         tools = CodeTools(root, APP_DIR, DATA_DIR)
-        files = []
-        for item in tools._walk():
-            if item.is_file():
-                try:
-                    files.append({"path": tools._show(item), "size": item.stat().st_size})
-                except OSError:
-                    pass
-                if len(files) >= 1000:
-                    break
-        return {"root": root, "files": files}
+        files, limited = tools.project_files()
+        return {"root": root, "files": files, "limited": limited}
 
-    def code_read(self, path):
+    def code_read(self, path, chat_id=None):
         from app.tools.coding import CodeTools
-        root = str((self._app._active_chat() or {}).get("code_root") or "")
+        root = self._code_project_root(chat_id)
         if not root:
             return {"ok": False, "error": "Нет папки проекта."}
         tools = CodeTools(root, APP_DIR, DATA_DIR)
         try:
             target = tools._path(path, must_exist=True)
-            return {"ok": True, "text": tools._text(target)[:400_000], "full": str(target)}
+            text = tools._text(target)
+            return {"ok": True, "text": text[:400_000], "truncated": len(text) > 400_000, "full": str(target)}
         except (ValueError, OSError) as error:
+            return {"ok": False, "error": str(error)}
+
+    def code_project_memory(self, chat_id, action="", entry=None):
+        index = self._app.knowledge
+        root = self._code_project_root(chat_id)
+        if not index or not root:
+            return {"ok": False, "error": "Память проекта недоступна."}
+        scope = knowledge.project_scope(root)
+        try:
+            if action == "forget" and isinstance(entry, int):
+                index.forget_project_note(scope, entry)
+            elif action == "refresh" or not index.configured(scope) and not index.status(scope)["error"]:
+                index.start(scope, root)
+            return {"ok": True, "index": index.status(scope), "notes": index.project_notes(scope)}
+        except (sqlite3.Error, ValueError) as error:
             return {"ok": False, "error": str(error)}
 
     def code_preview(self, path):
@@ -1309,7 +1462,7 @@ class WebApi:
         return {"ok": True}
 
     def memory_add_fact(self, text):
-        return {"ok": bool(self._app.memory.add("fact", str(text or "")))}
+        return {"ok": bool(self._app.memory.add("fact", str(text or ""), source="manual"))}
 
     def memory_delete(self, entry_id):
         self._app.memory.delete(int(entry_id))
@@ -1506,27 +1659,62 @@ class WebApi:
         return {"model": model, "defaults": llama.DEFAULT_PARAMS, "limits": llama.PARAM_LIMITS,
                 "choices": {key: list(values) for key, values in llama.CHOICES.items()},
                 "presets": llama.PRESETS, "serverKeys": list(llama.SERVER_KEYS),
-                "all": saved.get("*", {}), "own": saved.get(model, {}), "effective": llama.params_for(model),
+                "own": saved.get(model, {}) if model != "*" else {}, "effective": llama.params_for(model),
+                "systemPrompt": app.settings.get("model_system_prompts", {}).get(model, ""),
                 "cloud": integrations.is_provider_model(model),
                 "autoTitles": bool(app.settings.get("auto_titles", True))}
 
-    def set_model_params(self, scope, values, replace=False):
+    def set_model_prompt(self, model, prompt):
+        if not isinstance(model, str) or model.strip() in ("", "*"):
+            return {"ok": False, "error": "Сначала выбери модель."}
+        model = model.strip()
+        if not isinstance(prompt, str):
+            return {"ok": False, "error": "Некорректный запрос."}
+        text = prompt.strip()
+        if len(text) > core.MAX_SYSTEM_PROMPT_LENGTH:
+            return {"ok": False, "error": "Слишком длинный промпт (больше 20 000 символов)."}
         app = self._app
-        scope = str(scope or "*")
-        values = values if isinstance(values, dict) else {}
         with app._state_lock:
-            saved = app.settings.setdefault("model_params", {})
-            current = {} if replace else dict(saved.get(scope, {}))
-            current.update(llama.clean_params(values))
-            base = llama.DEFAULT_PARAMS if scope == "*" else {**llama.DEFAULT_PARAMS, **saved.get("*", {})}
-            current = {key: value for key, value in current.items() if base.get(key) != value}
-            if current:
-                saved[scope] = current
+            previous = app.settings.get("model_system_prompts", {})
+            updated = dict(previous)
+            if text:
+                updated[model] = text
             else:
-                saved.pop(scope, None)
-            llama.model_params.clear()
-            llama.model_params.update(saved)
-            app._save_settings(); app._changed()
+                updated.pop(model, None)
+            app.settings["model_system_prompts"] = updated
+            if not app._save_settings():
+                app.settings["model_system_prompts"] = previous
+                return {"ok": False, "error": "Не удалось сохранить промпт."}
+            app._changed()
+        return {"ok": True}
+
+    def set_model_params(self, scope, values, replace=False):
+        if not isinstance(scope, str) or scope.strip() in ("", "*"):
+            return {"ok": False, "error": "Сначала выбери модель."}
+        if not isinstance(values, dict):
+            return {"ok": False, "error": "Некорректный запрос."}
+        app = self._app
+        scope = scope.strip()
+        with app._state_lock:
+            saved = app.settings.get("model_params", {})
+            current = {} if replace else {key: value for key, value in saved.get(scope, {}).items()
+                                          if key not in values or values[key] is not None}
+            current.update(llama.clean_params({key: value for key, value in values.items() if value is not None}))
+            current = {key: value for key, value in current.items() if llama.DEFAULT_PARAMS.get(key) != value}
+            updated = dict(saved)
+            if current:
+                updated[scope] = current
+            else:
+                updated.pop(scope, None)
+            app.settings["model_params"] = updated
+            if not app._save_settings():
+                app.settings["model_params"] = saved
+                return {"ok": False, "error": "Не удалось сохранить параметры модели."}
+            if current:
+                llama.model_params[scope] = current
+            else:
+                llama.model_params.pop(scope, None)
+            app._changed()
         return {"ok": True}
 
     def recommended_model(self):
@@ -1764,8 +1952,8 @@ class WebApi:
             self._app._allowed_files.add(str(path))
         return {"ok": True, "path": str(path)}
 
-    def send_message(self, text, image_paths, file_paths=None):
-        return self._app.send(text, image_paths, file_paths)
+    def send_message(self, text, image_paths, file_paths=None, chat_id=None):
+        return self._app.send(text, image_paths, file_paths, chat_id=chat_id)
 
     def start_listening(self, options):
         app = self._app
@@ -1775,6 +1963,9 @@ class WebApi:
                                         app.settings.get("model", "").strip())
             app._changed()
         return {"ok": not error, "error": error}
+
+    def call_live(self):
+        return self._app.call_live_state()
 
     def set_mic_muted(self, muted):
         with self._app._state_lock:
@@ -1917,15 +2108,24 @@ class WebApi:
             return {"text": "", "source": ""}
         return huggingface.model_description(repo_id, str(token or "").strip())
 
-    def voice_search(self, kind, query, token=""):
+    def voice_search(self, kind, query, token="", recent=False, cursor=""):
         try:
-            return {"ok": True, "models": install.search(str(kind), str(query or ""), str(token or "").strip())}
+            warnings, next_page = [], []
+            models = install.search(str(kind), str(query or ""), str(token or "").strip(), recent is True,
+                                    warnings=warnings, cursor=str(cursor or ""), next_page=next_page)
+            return {"ok": True, "models": models, "warning": next(iter(warnings), ""), "nextCursor": next(iter(next_page), "")}
         except Exception as error:
             return {"ok": False, "error": str(error), "models": []}
 
     def voice_details(self, kind, repo, engine, token=""):
         try:
             return {"ok": True, **install.details(str(kind), str(repo), str(engine), str(token or "").strip())}
+        except Exception as error:
+            return {"ok": False, "error": str(error)}
+
+    def voice_check_file(self, kind, repo, filename, token=""):
+        try:
+            return {"ok": True, **install.check_file(str(kind), str(repo), str(filename), str(token or "").strip())}
         except Exception as error:
             return {"ok": False, "error": str(error)}
 
@@ -2005,7 +2205,7 @@ class WebApi:
             sizes = llama.model_sizes()
             voice = install.disk_usage()
             return {"ok": True, "models": [{"name": name, "bytes": size} for name, size in sorted(sizes.items(), key=lambda item: -item[1])],
-                    "voiceModels": voice["models"], "engines": voice["engines"]}
+                    "voiceModels": voice["models"], "legacyVoiceModels": voice["legacy"], "engines": voice["engines"]}
         except Exception as error:
             log(f"disk usage error: {error}")
             return {"ok": False, "error": str(error), "models": [], "voiceModels": 0, "engines": []}
@@ -2044,6 +2244,7 @@ class WebApi:
                 messages = list(app.messages)
                 summary = str(app._chat_summary() or "")
                 live = dict(app._live_turns.get(app.active_chat_id) or {})
+                system = app._effective_system_prompt(app._system_prompt_for_model(model))
             work = app.code_usage.get(app.active_chat_id)
             if work and work["model"] == model and (app._active_chat() or {}).get("code_on"):
                 # Project chats report the agent's working memory.
@@ -2069,7 +2270,6 @@ class WebApi:
                     tools_names, waiting = len(specs), list(toolbox.unstarted)
                 except Exception as error:
                     log(f"context tools count error: {error}")
-            system = str(messages[0].get("content", "")) if messages else ""
             parts = {"system": tokens(system + app._language_rule(app.settings.get("ui_language", "ru")) + app._date_rule()),
                      "summary": tokens(summary),
                      "skills": tokens(skills_text),

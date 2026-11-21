@@ -1,8 +1,12 @@
 import hashlib
+import importlib.machinery
+import importlib.util
 import io
 import json
 import queue
 import re
+import sqlite3
+import struct
 import sys
 import tempfile
 import threading
@@ -54,6 +58,103 @@ class SettingsDefaults(unittest.TestCase):
     def test_ten_models_have_ports(self):
         self.assertGreaterEqual(1 + len(llama.EXTRA_PORTS), 10)
         self.assertNotIn(47870, llama.EXTRA_PORTS)
+
+
+class ModelSettings(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        loader = importlib.machinery.SourceFileLoader("piven_prompt_window", str(ROOT / "app" / "window" / "main.pyw"))
+        cls.web = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        loader.exec_module(cls.web)
+
+    def test_prompts_are_saved_by_model_and_an_empty_prompt_restores_the_builtin_default(self):
+        strata = "strata:local-model"
+        unsloth = "unsloth:org/Qwen:Q4"
+        app = Core()
+        app._state_lock = threading.RLock()
+        app._changed = mock.Mock()
+        app._messages = [{"role": "system", "content": ""}]
+        api = self.web.WebApi(app)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "settings.json"
+            path.write_text(json.dumps({"system_prompt": "Общий промпт", "theme_revision": 2}), encoding="utf-8")
+            with mock.patch.object(core, "SETTINGS_PATH", path), mock.patch.object(core, "THINKING_LEVELS", {}), \
+                    mock.patch.multiple(llama, model_params={}, max_loaded=[3]), \
+                    mock.patch.multiple(integrations, config={}, learned={}, on_learned=None), mock.patch.object(core.mcp, "configure"):
+                app._load_settings()
+                self.assertEqual(app._system_prompt_for_model(strata), core.COMPANION_SYSTEM_PROMPT)
+                self.assertEqual(api.model_params(strata)["systemPrompt"], "")
+                self.assertFalse(api.update_settings({"systemPrompt": "Replace all prompts"})["ok"])
+                self.assertTrue(api.set_model_prompt(strata, "  Сначала выведи ответ.\nЗатем пояснение.  ")["ok"])
+                self.assertTrue(api.set_model_prompt(unsloth, "Use short sentences.")["ok"])
+                app._load_settings()
+                self.assertEqual(api.model_params(strata)["systemPrompt"], "Сначала выведи ответ.\nЗатем пояснение.")
+                self.assertEqual(api.model_params(unsloth)["systemPrompt"], "Use short sentences.")
+                self.assertFalse(api.set_model_prompt(strata, "x" * (core.MAX_SYSTEM_PROMPT_LENGTH + 1))["ok"])
+                with mock.patch.object(app, "_save_settings", return_value=False):
+                    self.assertFalse(api.set_model_prompt(unsloth, "New prompt")["ok"])
+                    self.assertEqual(api.model_params(unsloth)["systemPrompt"], "Use short sentences.")
+                self.assertTrue(api.set_model_prompt(strata, " \n ")["ok"])
+                app._load_settings()
+                self.assertEqual(app._system_prompt_for_model(strata), core.COMPANION_SYSTEM_PROMPT)
+                self.assertEqual(app._system_prompt_for_model(unsloth), "Use short sentences.")
+                persisted = json.loads(path.read_text(encoding="utf-8"))
+                self.assertNotIn("system_prompt", persisted)
+                self.assertEqual(persisted["legacy_system_prompt"], "Общий промпт")
+
+    def test_model_parameters_survive_reload_without_inheriting_legacy_shared_values(self):
+        local, remote = "local.gguf", "strata:local-model"
+        app = Core()
+        app._state_lock = threading.RLock()
+        app._changed = mock.Mock()
+        api = self.web.WebApi(app)
+        original = {"*": {"temperature": 0.1}, local: {"top_k": 17}, remote: {"temperature": 0.3}, "invalid": [1]}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "settings.json"
+            path.write_text(json.dumps({"model_params": original, "theme_revision": 2}), encoding="utf-8")
+            with mock.patch.object(core, "SETTINGS_PATH", path), mock.patch.object(core, "THINKING_LEVELS", {}), \
+                    mock.patch.multiple(llama, model_params={}, max_loaded=[3]), \
+                    mock.patch.multiple(integrations, config={}, learned={}, on_learned=None), mock.patch.object(core.mcp, "configure"):
+                app._load_settings()
+                self.assertEqual(api.model_params(local)["own"], {"top_k": 17})
+                self.assertEqual(llama.params_for(local)["temperature"], llama.DEFAULT_PARAMS["temperature"])
+                self.assertFalse(api.set_model_params("*", {"temperature": 0.2})["ok"])
+                self.assertTrue(api.set_model_params(local, {"min_p": 0.4})["ok"])
+                self.assertTrue(api.set_model_params(local, {"top_k": None})["ok"])
+                with mock.patch.object(app, "_save_settings", return_value=False):
+                    self.assertFalse(api.set_model_params(remote, {"temperature": 0.9})["ok"])
+                    self.assertEqual(llama.params_for(remote)["temperature"], 0.3)
+                app._load_settings()
+                self.assertEqual(api.model_params(local)["own"], {"min_p": 0.4})
+                self.assertEqual(api.model_params(remote)["own"], {"temperature": 0.3})
+                self.assertEqual(app.settings["legacy_model_params"], original["*"])
+                self.assertNotIn("*", app.settings["model_params"])
+                self.assertTrue(api.set_model_params(local, {}, replace=True)["ok"])
+                self.assertEqual(llama.params_for(local), llama.DEFAULT_PARAMS)
+                self.assertEqual(llama.params_for(remote)["temperature"], 0.3)
+
+    def test_each_request_uses_its_model_prompt_without_replacing_chat_history(self):
+        app = Core()
+        app.settings = {"model": "unsloth:model", "legacy_system_prompt": "Shared prompt.",
+                        "model_system_prompts": {"strata:model": "Strata prompt.", "unsloth:model": "Unsloth prompt."},
+                        "memory_enabled": False, "tools_enabled": False}
+        app._messages = [{"role": "system", "content": "Previous prompt."}]
+        app._chat_cancels, app._live_messages, app._live_turns = {}, {}, {}
+        app.active_chat_id = "chat"
+        app.chats = []
+        app.running = False
+        app.events = queue.Queue()
+        with mock.patch.object(core, "model_chat", return_value="A reply.") as send:
+            for model, expected in (("strata:model", "Strata prompt."), ("unsloth:model", "Unsloth prompt."),
+                                    ("custom:other", core.COMPANION_SYSTEM_PROMPT)):
+                with self.subTest(model=model):
+                    app.selected_model = model
+                    app.ask_model("Can you help?", None, False)
+                    requested_model, messages = send.call_args.args
+                    self.assertEqual(requested_model, model)
+                    self.assertTrue(messages[0]["content"].startswith(expected + "\n\n"))
+                    self.assertIn(core.COMPANION_SYSTEM_GUARDRAILS, messages[0]["content"])
+        self.assertEqual([item["content"] for item in app.messages[1:]], ["Can you help?", "A reply."] * 3)
 
 
 class EngineRemoval(unittest.TestCase):
@@ -110,6 +211,7 @@ class EngineRemoval(unittest.TestCase):
 class VoiceDefaults(unittest.TestCase):
     def setUp(self):
         from app.voice import catalog
+        self.original_catalog_search = catalog.search
         patcher = mock.patch.object(catalog, "search", return_value=[])
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -121,46 +223,279 @@ class VoiceDefaults(unittest.TestCase):
             self.assertIn("GitHub", core.install.engine_note("nemo"))
             self.assertIn("PyTorch", core.install.engine_note("kokoro"))
 
-    def test_search_lists_only_models_the_app_can_run(self):
-        def model(name, library, files, **fields):
-            return {"id": name, "library_name": library, "tags": [], "likes": 500, "config": {"model_type": "whisper"}, "siblings": [{"rfilename": file} for file in files], **fields}
-        items = [model("a/works", "transformers", ["config.json", "model.safetensors"]),
-                 model("a/only-onnx", "transformers", ["config.json", "onnx/model.onnx"]),
-                 model("a/other-engine", "nemo", ["model.nemo"], config={}),
-                 model("a/mac-only", "mlx", ["model.safetensors"])]
-        with mock.patch.object(core.install, "_hf_json", return_value=items):
-            self.assertEqual([hit["id"] for hit in core.install.search("asr", "")], ["a/works"])
+    def test_search_queries_gguf_and_preserves_the_next_page(self):
+        install = core.install
+        def page(path, token, **options):
+            self.assertIn("filter=gguf", path)
+            self.assertIn("filter=automatic-speech-recognition", path)
+            self.assertIn("sort=createdAt", path)
+            self.assertIn("cursor=older", path)
+            options["next_page"].append("next")
+            return [
+                {"id": "someone/new-asr", "tags": ["gguf"], "likes": 0},
+                {"id": "someone/another-asr", "tags": ["gguf"], "likes": 0},
+                {"id": "someone/onnx-only", "tags": ["onnx"]},
+            ]
 
-    def test_popular_list_keeps_originals_and_fills_up_to_the_minimum(self):
-        def model(name, likes, *tags):
-            return {"id": name, "library_name": "kokoro", "tags": list(tags), "likes": likes, "config": {}, "siblings": [{"rfilename": "model.safetensors"}]}
-        items = [model("big/original", 900), model("fan/copy", 40, "base_model:finetune:big/original"),
-                 model("big/own-version", 300, "base_model:finetune:big/original"),
-                 model("small/popular-fork", 950, "base_model:finetune:big/original"),
-                 model("facebook/mms-tts-eng", 180), model("facebook/mms-tts-rus", 30)]
-        items += [model(f"quiet/model-{index}", 50 - index) for index in range(40)]
-        with mock.patch.object(core.install, "_hf_json", return_value=items):
-            shown = [hit["id"] for hit in core.install.search("tts", "")]
-        self.assertEqual(len(shown), core.install.POPULAR_AT_LEAST)
-        self.assertEqual(shown[:4], ["small/popular-fork", "big/original", "big/own-version", "facebook/mms-tts-eng"])
-        self.assertNotIn("fan/copy", shown)
-        self.assertNotIn("facebook/mms-tts-rus", shown)
+        next_page = []
+        with mock.patch.object(install, "_hf_json", side_effect=page):
+            hits = install.search("asr", "", recent=True, cursor="older", next_page=next_page)
+        self.assertEqual([hit["id"] for hit in hits], ["someone/new-asr", "someone/another-asr"])
+        self.assertEqual(next_page, ["next"])
 
-    def test_junk_is_hidden_unless_the_exact_repo_is_asked_for(self):
-        worth = core.install._worth_showing
-        self.assertTrue(worth({"id": "openai/whisper", "likes": 6000}, ""))
-        self.assertTrue(worth({"id": "someone/whisper-ru", "likes": 40}, "russian"))
-        self.assertFalse(worth({"id": "someone/whisper-ru", "likes": 1}, "russian"))
-        self.assertFalse(worth({"id": "someone/whisper-ru", "likes": 40, "tags": ["generated_from_trainer"]}, "russian"))
-        self.assertFalse(worth({"id": "x/mms-forced-aligner", "likes": 900}, ""))
-        self.assertTrue(worth({"id": "someone/whisper-ru", "likes": 0, "tags": ["generated_from_trainer"]}, "someone/whisper-ru"))
+    def test_direct_link_lists_gguf_variants_and_excludes_the_projector(self):
+        install = core.install
+        repo = "someone/NewASR"
+        names = ["model-q4.gguf", "parts/model-q8_0.GGUF", "mmproj-model.gguf", "model.safetensors"]
+        model = {"id": repo, "siblings": [{"rfilename": name} for name in names]}
+        with mock.patch.object(install, "_hf_json", return_value=model) as request:
+            hit, = install.search("asr", f"https://huggingface.co/{repo}/blob/main/config.json", "token")
+        request.assert_called_once_with(f"/api/models/{repo}", "token")
+        self.assertEqual((hit["engine"], hit["problem"], hit["direct"]), ("auto", "", True))
+        with mock.patch.object(install, "_repo_files", return_value=[{"path": name} for name in names]):
+            info = install._details("asr", repo, "nemo")
+        self.assertEqual([item["path"] for item in info["files"]], [names[1], names[0]])
 
-    def test_search_drops_files_the_engine_would_refuse(self):
-        items = [{"id": name, "library_name": "", "tags": ["gguf"], "likes": 500, "siblings": [{"rfilename": "model.gguf"}]} for name in ("a/asr", "a/other")]
-        answers = {"a/asr": {"supported": True}, "a/other": {"supported": False}}
-        core.install._checked_repos.clear()
-        with mock.patch.object(core.install, "_hf_json", return_value=items), mock.patch.object(core.install, "_details", side_effect=lambda kind, repo, engine, token: answers[repo]):
-            self.assertEqual([hit["id"] for hit in core.install.search("asr", "")], ["a/asr"])
+    def test_unmapped_tts_ggufs_are_listed_for_file_compatibility_check(self):
+        model = {"id": "someone/new-tts", "tags": ["gguf"], "pipeline_tag": "text-to-speech"}
+        with mock.patch.object(core.install, "_hf_json", return_value=[model]) as request:
+            hit, = core.install.search("tts", "", recent=True)
+        self.assertIn("filter=text-to-speech", request.call_args.args[0])
+        self.assertEqual(hit["id"], model["id"])
+        self.assertEqual(hit["engine"], "auto")
+        self.assertFalse(hit.get("problem"))
+
+    def test_direct_model_lookup_explains_other_formats(self):
+        model = {"id": "someone/only-onnx", "tags": ["onnx"], "siblings": [{"rfilename": "onnx/model.onnx"}]}
+        with mock.patch.object(core.install, "_hf_json", return_value=model):
+            hit, = core.install.search("asr", "someone/only-onnx")
+        self.assertTrue(hit["direct"])
+        self.assertIn("GGUF", hit["problem"])
+
+    def test_legacy_models_stay_in_disk_inventory_but_cannot_be_chosen(self):
+        install = core.install
+        legacy = {"engine": "qwen", "title": "Legacy TTS", "bytes": 42}
+        with mock.patch.object(install, "tts_catalogue", return_value={"legacy": legacy}), \
+             mock.patch.object(install, "asr_catalogue", return_value={}), \
+             mock.patch.object(install, "_tts_installed", return_value=True), \
+             mock.patch.object(install, "_engines_in_use", return_value=set()):
+            self.assertEqual(install.chosen_model("tts", "legacy"), "")
+            self.assertFalse(install.ready("tts", "legacy"))
+            self.assertEqual(install.status()["tts"]["models"], [])
+            self.assertEqual(install.disk_usage()["legacy"], [{"id": "legacy", "kind": "tts", "title": "Legacy TTS", "bytes": 42}])
+
+    def test_popular_search_falls_back_to_builtin_ggufs(self):
+        warnings = []
+        with mock.patch.object(core.install, "_hf_json", side_effect=TimeoutError("slow")):
+            hits = core.install.search("asr", "", warnings=warnings)
+        self.assertIn("не загрузился", warnings[0])
+        self.assertEqual({item["engine"] for item in hits}, {"nemo"})
+
+    def test_installer_rejects_legacy_formats_and_checks_selected_gguf(self):
+        from app.models import memory_fit
+        install = core.install
+        with self.assertRaisesRegex(ValueError, "GGUF"):
+            install.validate_install("tts", "Qwen/voice", {"engine": "qwen"})
+        with self.assertRaisesRegex(ValueError, "GGUF"):
+            install.validate_install("asr", "someone/voice", {"engine": "nemo", "file": {"path": "model.safetensors"}})
+        extra = {"engine": "nemo", "file": {"path": "voice-q4.gguf"}}
+        with mock.patch.object(memory_fit, "remote_metadata", return_value={"general.architecture": "llama"}), \
+             mock.patch.object(install, "install_asr") as download:
+            with self.assertRaisesRegex(ValueError, "llama"):
+                install.install("asr", "someone/voice", None, None, extra)
+        download.assert_not_called()
+
+    def test_official_asr_uses_pinned_artifact_when_repo_listing_fails(self):
+        install = core.install
+        source = install.ASR_MODELS["parakeet-ctc"]
+        with mock.patch.object(install, "_hf_json", side_effect=TimeoutError):
+            hit, = install.search("asr", source["repo"])
+        with mock.patch.object(install, "_repo_files", side_effect=TimeoutError):
+            details = install._details("asr", hit["id"], hit["engine"])
+        file, = details["files"]
+        self.assertEqual(file, {"path": source["file"], "size": source["bytes"]})
+        progress = lambda *_: None
+        cancel = threading.Event()
+        with mock.patch.object(install, "ASR_EXE", mock.Mock()), \
+             mock.patch.object(install, "_asr_installed", return_value=False), \
+             mock.patch.object(install, "_download") as download:
+            result = install.install("asr", hit["id"], progress, cancel, {"engine": "nemo", "file": file})
+        self.assertEqual(result, "parakeet-ctc")
+        url, _, size, checksum = download.call_args.args[:4]
+        self.assertTrue(url.endswith(f"/resolve/{source['revision']}/{source['file']}"))
+        self.assertEqual((size, checksum), (source["bytes"], source["sha256"]))
+
+    def test_asr_checks_downloaded_header_if_remote_read_fails(self):
+        from app.models import memory_fit
+        install = core.install
+        repo = "someone/voice"
+        filename = "model.gguf"
+
+        def gguf_string(value):
+            value = value.encode()
+            return struct.pack("<Q", len(value)) + value
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for architecture in ("parakeet-ctc", "llama"):
+                with self.subTest(architecture=architecture):
+                    header = b"GGUF" + struct.pack("<IQQ", 3, 0, 1)
+                    header += gguf_string("general.architecture") + struct.pack("<I", 8) + gguf_string(architecture)
+                    extra = {"engine": "auto", "file": {"path": filename, "size": len(header)}}
+                    destination = root / architecture / "someone--voice" / filename
+
+                    with mock.patch.object(install, "ASR_EXE", mock.Mock()), \
+                         mock.patch.object(install, "ASR_MODELS_DIR", root), \
+                         mock.patch.object(install, "CUSTOM_ASR_DIR", root / architecture), \
+                         mock.patch.object(memory_fit, "remote_metadata", return_value={}), \
+                         mock.patch.object(install.download, "fetch") as fetch:
+                        def receive(url, partial, *_, **_options):
+                            partial.parent.mkdir(parents=True, exist_ok=True)
+                            return partial.write_bytes(header)
+                        fetch.side_effect = receive
+                        if architecture == "parakeet-ctc":
+                            self.assertEqual(install.install("asr", repo, lambda *_: None, threading.Event(), extra),
+                                             f"hf:{repo}/{filename}")
+                            self.assertEqual(destination.read_bytes(), header)
+                        else:
+                            with self.assertRaisesRegex(ValueError, "llama"):
+                                install.install("asr", repo, lambda *_: None, threading.Event(), extra)
+                            self.assertFalse(destination.exists())
+                            self.assertFalse(destination.with_suffix(".gguf.download").exists())
+
+    def test_asr_keeps_original_files_alongside_a_matching_audiocpp_package(self):
+        from app.voice import catalog
+        install = core.install
+        repo = "handy-computer/Voxtral-Mini-4B-Realtime-2602-gguf"
+        spec = {"tasks": ["asr"], "display_name": "Voxtral", "packages": [{
+            "format": "gguf", "files": ["voxtral.gguf"], "target_directory": "Voxtral-Mini-4B-Realtime-2602-GGUF",
+        }]}
+        item = {"id": repo, "tags": ["gguf"]}
+        with mock.patch.object(catalog, "search", wraps=self.original_catalog_search), \
+             mock.patch.object(catalog, "specs", return_value={"voxtral_realtime": spec}), \
+             mock.patch.object(install, "_hf_json", side_effect=[item, [item]]):
+            direct, package = install.search("asr", repo)
+            self.assertEqual((direct["id"], direct["engine"], direct["direct"]), (repo, "auto", True))
+            self.assertEqual((package["id"], package["engine"]), ("audiocpp:voxtral_realtime", "audiocpp"))
+            hits = install.search("asr", "voxtral", recent=True)
+            self.assertEqual([row["id"] for row in hits], [package["id"], repo])
+
+    def test_whisper_gguf_routes_to_transcribe_and_is_selectable_after_install(self):
+        from app.models import memory_fit
+        install = core.install
+        repo = "third-party/speech-checkpoints"
+        item = {"id": repo, "tags": ["gguf"], "pipeline_tag": "automatic-speech-recognition"}
+        header = {"general.architecture": "whisper", "stt.variant": "large-v3"}
+        with mock.patch.object(install, "_hf_json", side_effect=[item, [item]]):
+            direct, = install.search("asr", repo)
+            listed, = install.search("asr", "whisper", recent=True)
+        self.assertEqual((direct["engine"], listed["engine"]), ("auto", "auto"))
+        extra = {"engine": "auto", "file": {"path": "whisper-large-v3-Q8_0.gguf", "size": 4}}
+
+        def receive(url, partial, *_, **_options):
+            self.assertIn(f"/{repo}/resolve/main/", url)
+            partial.parent.mkdir(parents=True)
+            return partial.write_bytes(b"GGUF")
+
+        with tempfile.TemporaryDirectory() as folder, \
+             mock.patch.object(install, "ASR_MODELS_DIR", Path(folder)), \
+             mock.patch.object(install, "REGISTRY_PATH", Path(folder) / "voice.json"), \
+             mock.patch.object(install.voice_engines, "ensure_transcribe", return_value=20), \
+             mock.patch.object(install.voice_engines, "ready", return_value=True), \
+             mock.patch.object(memory_fit, "remote_metadata", return_value=header), \
+             mock.patch.object(memory_fit, "local_metadata", return_value=header), \
+             mock.patch.object(install, "repo_license", return_value="Apache 2.0"), \
+             mock.patch.object(install.download, "fetch", side_effect=receive), \
+             mock.patch.object(install, "_install_nemo") as install_nemo:
+            checked = install.check_file("asr", repo, extra["file"]["path"])
+            self.assertEqual((checked["engine"], checked["engineName"]), ("transcribe", "transcribe.cpp"))
+            model_id = install.install("asr", repo, lambda *_: None, threading.Event(), extra)
+            self.assertTrue(install.ready("asr", model_id))
+            self.assertEqual(install.chosen_model("asr", model_id), model_id)
+            self.assertEqual(install.asr_model_path(model_id).read_bytes(), b"GGUF")
+            install_nemo.assert_not_called()
+
+    def test_engine_selection_uses_each_file_and_requested_voice_task(self):
+        from app.models import memory_fit
+        from app.voice import catalog
+        install = core.install
+        headers = {
+            "asr.gguf": {"general.architecture": "asr", "asr.head_type": "tdt"},
+            "whisper.gguf": {"general.architecture": "whisper"},
+            "tts.gguf": {"general.architecture": "audiocpp", "audiocpp.model_spec.family": "qwen3_tts"},
+            "text.gguf": {"general.architecture": "llama"},
+            "missing.gguf": {},
+        }
+        specs = {"qwen3_tts": {"tasks": ["tts"], "packages": [{"id": "package", "format": "gguf",
+                  "files": ["models/weights.gguf"], "download": {"repo": "example/packaged"}}]}}
+        with mock.patch.object(catalog, "specs", return_value=specs), \
+             mock.patch.object(memory_fit, "remote_metadata", side_effect=lambda repo, path, *_, **_options: headers[path]) as probe:
+            for kind, path, engine in (("asr", "asr.gguf", "nemo"), ("asr", "whisper.gguf", "transcribe"),
+                                       ("tts", "tts.gguf", "audiocpp"), ("tts", "whisper.gguf", ""),
+                                       ("asr", "text.gguf", ""), ("asr", "missing.gguf", "")):
+                with self.subTest(kind=kind, path=path):
+                    result = install.check_file(kind, "example/mixed", path)
+                    self.assertEqual((result["supported"], result["engine"]), (bool(engine), engine))
+                    self.assertEqual(result["retryable"], path == "missing.gguf")
+            probe.reset_mock()
+            self.assertEqual(install.check_file("tts", "example/packaged", "models/weights.gguf")["engine"], "audiocpp")
+            probe.assert_not_called()
+
+    def test_automatic_tts_install_keeps_required_sidecars_with_the_selected_file(self):
+        from app.models import memory_fit
+        from app.voice import catalog
+        install = core.install
+        repo, filename = "example/tts", "voices/weights.gguf"
+        header = {"general.architecture": "audiocpp", "audiocpp.model_spec.family": "test_tts",
+                  "audiocpp.embedded_files.names": ["tokenizer.json"]}
+        spec = {"tasks": ["tts"], "sources": [{"format": "gguf", "files": {
+            "config": "model:config.json", "tokenizer": "model:tokenizer.json"}}]}
+        files = [{"path": "voices/config.json", "size": 2}, {"path": filename, "size": 4}]
+
+        def receive(url, partial, *_, **_options):
+            partial.parent.mkdir(parents=True, exist_ok=True)
+            return partial.write_bytes(b"GGUF" if url.endswith(filename) else b"{}")
+
+        with tempfile.TemporaryDirectory() as folder, \
+             mock.patch.object(catalog, "specs", return_value={"test_tts": spec}), \
+             mock.patch.object(install, "_repo_files", return_value=files), \
+             mock.patch.object(install, "ASR_MODELS_DIR", Path(folder)), \
+             mock.patch.object(install, "REGISTRY_PATH", Path(folder) / "voice.json"), \
+             mock.patch.object(install, "repo_license", return_value="MIT"), \
+             mock.patch.object(install.voice_engines, "ensure_audiocpp", return_value=0), \
+             mock.patch.object(memory_fit, "remote_metadata", return_value=header), \
+             mock.patch.object(memory_fit, "local_metadata", return_value=header), \
+             mock.patch.object(install.download, "fetch", side_effect=receive) as fetch:
+            self.assertEqual(install.check_file("tts", repo, filename)["engine"], "audiocpp")
+            selected = install.install("tts", repo, lambda *_: None, threading.Event(),
+                                        {"engine": "auto", "file": {"path": filename, "size": 4}})
+            info = install.tts_model(selected)
+            self.assertEqual((info["task"], info["family"], info["bytes"]), ("tts", "test_tts", 6))
+            self.assertEqual(info["path"].with_name("config.json").read_bytes(), b"{}")
+            self.assertEqual(fetch.call_count, 2)
+
+    def test_short_voice_download_resumes_at_the_received_offset(self):
+        install = core.install
+        responses = [io.BytesIO(b"abc"), io.BytesIO(b"def")]
+        responses[0].status, responses[0].headers = 200, {}
+        responses[1].status, responses[1].headers = 206, {"Content-Range": "bytes 3-5/6"}
+        with tempfile.TemporaryDirectory() as folder, \
+             mock.patch.object(urllib.request, "urlopen", side_effect=responses) as request, \
+             mock.patch.object(time, "monotonic", side_effect=[0, 3]):
+            target = Path(folder) / "voice.gguf"
+            install._download("https://example.test/voice.gguf", target, 6, "", threading.Event(), lambda *_: None)
+            self.assertEqual(target.read_bytes(), b"abcdef")
+            self.assertEqual(request.call_args.args[0].get_header("Range"), "bytes=3-")
+
+    def test_multifile_audiocpp_packages_are_selectable(self):
+        install = core.install
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)
+            (path / "voice.gguf").write_bytes(b"weights")
+            info = {"engine": "audiocpp", "path": str(path), "title": "GGUF voice"}
+            registry = {"asr": {}, "tts": {"audiocpp:family/pkg": info}}
+            with mock.patch.object(install, "_registry", return_value=registry):
+                self.assertEqual(install.chosen_model("tts"), "audiocpp:family/pkg")
 
     def test_nothing_downloaded_means_nothing_chosen_or_listed(self):
         with mock.patch.object(core.install, "_asr_installed", return_value=False), mock.patch.object(core.install, "_tts_installed", return_value=False):
@@ -557,6 +892,28 @@ class SavedErrors(unittest.TestCase):
 
 
 class MemoryModels(unittest.TestCase):
+    def test_model_saved_facts_and_manual_facts_keep_their_source_in_an_existing_database(self):
+        from contextlib import closing
+        from app.chat.memory import Memory
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "memory").mkdir()
+            with closing(sqlite3.connect(root / "memory" / "memory.sqlite")) as previous:
+                previous.execute("CREATE TABLE memories (id INTEGER PRIMARY KEY, kind TEXT, chat_id TEXT, text TEXT, created REAL, vector BLOB)")
+                previous.execute("INSERT INTO memories (kind, chat_id, text, created) VALUES ('fact', '', 'Old fact', 1)")
+                previous.commit()
+
+            memory = Memory(root, root / "server.exe")
+            with closing(memory._db):
+                toolbox = tools.ToolBox(root, root, memory=memory)
+                memory.add("fact", "Manual fact", source="manual")
+                memory.add_exchange("chat", "Some question", "Some answer")
+                self.assertEqual(toolbox.run("remember", {"fact": "Model fact"}), "Запомнено.")
+                self.assertEqual(toolbox.run("remember", {"fact": "Model fact"}), "Это уже есть в памяти.")
+                self.assertEqual([(row["text"], row["source"]) for row in memory.facts()],
+                                 [("Model fact", "model"), ("Manual fact", "manual"), ("Old fact", "")])
+
     def test_switch_removes_earlier_models_and_unfinished_downloads(self):
         from app.chat import memory
         with tempfile.TemporaryDirectory() as folder:
@@ -975,6 +1332,165 @@ class FakeStream(io.BytesIO):
     pass
 
 
+class VllmProvider(unittest.TestCase):
+    def test_vllm_appears_in_settings_without_a_windows_install(self):
+        with mock.patch.dict(integrations.config, clear=True):
+            row = next(row for row in integrations.status() if row["id"] == "vllm")
+        self.assertTrue(row["installed"])
+        self.assertFalse(row["enabled"])
+        self.assertEqual(row["url"], "http://127.0.0.1:8000/v1")
+
+    def test_discovers_models_and_streams_chat_through_the_configured_server(self):
+        model = "Qwen/chat:alias"
+        received = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                received.append((self.path, self.headers.get("Authorization"), None))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({"data": [{"id": model}]}).encode())
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                received.append((self.path, self.headers.get("Authorization"), body))
+                if "tools" in body:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(b'{"error":{"message":"Auto tool choice requires --enable-auto-tool-choice"}}')
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: [DONE]\n\n')
+
+        with HTTPServer(("127.0.0.1", 0), Handler) as server:
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            config = {"vllm": {"enabled": True, "url": f"http://127.0.0.1:{server.server_port}/proxy/", "key": "sealed"}}
+            try:
+                with mock.patch.dict(integrations.config, config, clear=True), \
+                        mock.patch.object(integrations, "unseal", return_value="token"):
+                    discovered = integrations.fetch_models("vllm")
+                    name = f"vllm:{discovered[0]}"
+                    answer = llama.chat(name, [{"role": "user", "content": "hi"}], timeout=3,
+                                        tools=[{"type": "function", "function": {"name": "example"}}])
+            finally:
+                server.shutdown()
+                worker.join()
+        self.assertEqual(discovered, [model])
+        self.assertEqual(answer, "hello")
+        self.assertEqual([path for path, _, _ in received], [
+            "/proxy/v1/models", "/proxy/v1/chat/completions", "/proxy/v1/chat/completions",
+        ])
+        self.assertTrue(all(auth == "Bearer token" for _, auth, _ in received))
+        first, second = received[1][2], received[2][2]
+        self.assertIn("tools", first)
+        self.assertNotIn("tools", second)
+        self.assertEqual(second["model"], model)
+        self.assertTrue(second["stream"])
+        self.assertIn("repetition_penalty", second)
+        self.assertNotIn("repeat_penalty", second)
+
+
+class LocalChatServers(unittest.TestCase):
+    def test_strata_and_unsloth_start_disabled_with_local_defaults(self):
+        with mock.patch.dict(integrations.config, clear=True):
+            rows = {row["id"]: row for row in integrations.status()}
+        for provider, port in (("strata", 8080), ("unsloth", 8888)):
+            with self.subTest(provider=provider):
+                row = rows[provider]
+                self.assertTrue(row["local"] and row["needsKey"])
+                self.assertFalse(row["enabled"])
+                self.assertEqual(row["url"], f"http://127.0.0.1:{port}/v1")
+                self.assertTrue(row["site"])
+
+    def test_discovers_models_and_streams_chat_with_provider_options(self):
+        strata_model = "local-model"
+        unsloth_model = "unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL"
+        received = []
+        tools = [{"type": "function", "function": {"name": "example"}}]
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                auth = self.headers.get("Authorization")
+                received.append((self.path, auth, None))
+                if self.path.startswith("/studio/") and auth != "Bearer sk-unsloth-test":
+                    self.send_error(401)
+                    return
+                models = [{"id": strata_model}] if self.path.startswith("/strata/") else [
+                    {"id": unsloth_model, "loaded": True},
+                    {"id": "on-disk", "loaded": False},
+                    {"id": "image-model", "loaded": True, "task": "text-to-image"},
+                ]
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({"data": models}).encode())
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                received.append((self.path, self.headers.get("Authorization"), body))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                if body.get("reasoning_effort") == "medium":
+                    self.wfile.write(b'data: {"choices":[{"delta":{"reasoning_content":"thinking"}}]}\n\n')
+                self.wfile.write(b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: [DONE]\n')
+
+        with HTTPServer(("127.0.0.1", 0), Handler) as server:
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            base = f"http://127.0.0.1:{server.server_port}"
+            config = {
+                "strata": {"enabled": True, "url": base + "/strata/"},
+                "unsloth": {"enabled": True, "url": base + "/studio/v1/", "key": "sealed"},
+            }
+            try:
+                with mock.patch.dict(integrations.config, config, clear=True), \
+                        mock.patch.object(integrations, "unseal", side_effect=lambda key: "sk-unsloth-test" if key else ""), \
+                        mock.patch.dict(integrations._models, clear=True), \
+                        mock.patch.dict(llama.model_params, {f"unsloth:{unsloth_model}": {
+                            "top_k": 500, "repeat_penalty": 3.0, "temperature": 4.0,
+                        }}, clear=True):
+                    with self.assertRaises(integrations.KeyRejected):
+                        integrations.fetch_models("unsloth", key="")
+                    for provider, model, think in (("strata", strata_model, "medium"), ("unsloth", unsloth_model, False)):
+                        with self.subTest(provider=provider):
+                            self.assertTrue(integrations.refresh_one(provider))
+                            name = f"{provider}:{model}"
+                            self.assertIn(name, integrations.model_names())
+                            thoughts = []
+                            answer = llama.chat(name, [{"role": "user", "content": "hi"}], think=think,
+                                                timeout=3, on_thinking=thoughts.append, tools=tools)
+                            self.assertEqual(answer, "hello")
+                            self.assertEqual(thoughts[-1:], ["thinking"] if provider == "strata" else [])
+                    self.assertCountEqual(integrations.model_names(), [f"strata:{strata_model}", f"unsloth:{unsloth_model}"])
+            finally:
+                server.shutdown()
+                worker.join()
+        self.assertEqual([(path, key) for path, key, _ in received], [
+            ("/studio/v1/models", None),
+            ("/strata/v1/models", None), ("/strata/v1/chat/completions", None),
+            ("/studio/v1/models", "Bearer sk-unsloth-test"), ("/studio/v1/chat/completions", "Bearer sk-unsloth-test"),
+        ])
+        strata, unsloth = received[2][2], received[4][2]
+        self.assertTrue(strata["stream"] and unsloth["stream"])
+        self.assertEqual(strata["tools"], tools)
+        self.assertEqual(unsloth["tools"], tools)
+        self.assertEqual(strata["model"], strata_model)
+        self.assertEqual(strata["reasoning_effort"], "medium")
+        self.assertEqual(unsloth["model"], unsloth_model)
+        self.assertIs(unsloth["enable_thinking"], False)
+        self.assertIs(unsloth["enable_tools"], False)
+        self.assertEqual((unsloth["top_k"], unsloth["repetition_penalty"], unsloth["temperature"]), (100, 2.0, 2.0))
+
+
 class ProviderConnection(unittest.TestCase):
     def setUp(self):
         for store in (integrations._models, integrations._errors, integrations._kinds, integrations._next_try, integrations._gaps):
@@ -1089,6 +1605,41 @@ class ProviderRequests(unittest.TestCase):
         self.assertEqual(body["output_config"], {"effort": "high"})
         self.assertNotIn("temperature", body)
         self.assertEqual(self.body("anthropic:claude-sonnet-5-5", False)["thinking"], {"type": "between_tools"})
+
+    def test_claude_streams_native_tool_calls_and_receives_their_results(self):
+        payloads = []
+        events = [
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": "", "signature": ""}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "Read the entrypoint."}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "opaque"}},
+            {"type": "content_block_start", "index": 1, "content_block": {"type": "tool_use", "id": "toolu_1", "name": "read_file", "input": {}}},
+            {"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta", "partial_json": '{"path":'}},
+            {"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta", "partial_json": '"src/main.py"}'}},
+        ]
+
+        def stream(_url, payload, *_):
+            payloads.append(payload)
+            chunks = events if len(payloads) == 1 else [{"delta": {"type": "text_delta", "text": "Done."}}]
+            return FakeStream("".join(f"data: {json.dumps(event)}\n\n" for event in chunks).encode())
+
+        specs = [{"type": "function", "function": {"name": "read_file", "parameters": {"type": "object"}}}]
+        messages = [{"role": "user", "content": "Find the entrypoint"}]
+        calls = []
+        with mock.patch.object(integrations, "_open_stream", side_effect=stream):
+            integrations.chat("anthropic:claude-sonnet-4-5", messages, tools=specs, tool_calls=calls)
+            self.assertEqual(calls[0]["arguments"], {"path": "src/main.py"})
+            messages.extend([{"role": "assistant", "content": "", "tool_calls": calls},
+                             {"role": "tool", "tool_call_id": "toolu_1", "content": "print('hi')"}])
+            self.assertEqual(integrations.chat("anthropic:claude-sonnet-4-5", messages, tools=specs, overrides={"tool_choice": "none"}), "Done.")
+        self.assertEqual(payloads[0]["tools"][0]["input_schema"], {"type": "object"})
+        self.assertEqual(payloads[1]["tool_choice"], {"type": "none"})
+        self.assertEqual(payloads[1]["messages"][1]["content"], [
+            {"type": "thinking", "thinking": "Read the entrypoint.", "signature": "opaque"},
+            {"type": "tool_use", "id": "toolu_1", "name": "read_file", "input": {"path": "src/main.py"}},
+        ])
+        self.assertEqual(payloads[1]["messages"][2]["content"], [
+            {"type": "tool_result", "tool_use_id": "toolu_1", "content": "print('hi')"},
+        ])
 
     def test_old_claude_keeps_temperature_and_gets_a_budget(self):
         self.assertEqual(self.body("anthropic:claude-3-5-haiku-20241022", "__auto__")["temperature"], 0.7)

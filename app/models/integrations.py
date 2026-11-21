@@ -13,12 +13,19 @@ from ctypes import wintypes
 PROVIDERS = {
     "ollama": {"title": "Ollama", "kind": "openai", "url": "http://127.0.0.1:11434/v1", "key": False, "local": True},
     "lmstudio": {"title": "LM Studio", "kind": "openai", "url": "http://127.0.0.1:1234/v1", "key": False, "local": True},
+    "vllm": {"title": "vLLM", "kind": "openai", "url": "http://127.0.0.1:8000/v1", "key": True, "optional_key": True, "local": True, "api_v1": True,
+             "site": "https://docs.vllm.ai/en/stable/getting_started/quickstart/"},
+    "strata": {"title": "Strata", "kind": "openai", "url": "http://127.0.0.1:8080/v1", "key": True, "optional_key": True, "local": True, "api_v1": True,
+               "site": "https://github.com/Niko1221/Strata/blob/main/docs/INSTALL.md"},
+    "unsloth": {"title": "Unsloth Studio", "kind": "openai", "url": "http://127.0.0.1:8888/v1", "key": True, "optional_key": True, "local": True, "api_v1": True,
+                "site": "https://unsloth.ai/docs/basics/api"},
     "openai": {"title": "OpenAI", "kind": "openai", "url": "https://api.openai.com/v1", "key": True},
     "anthropic": {"title": "Anthropic (Claude)", "kind": "anthropic", "url": "https://api.anthropic.com/v1", "key": True},
     "gemini": {"title": "Google Gemini", "kind": "openai", "url": "https://generativelanguage.googleapis.com/v1beta/openai", "key": True},
     "openrouter": {"title": "OpenRouter", "kind": "openai", "url": "https://openrouter.ai/api/v1", "key": True},
     "custom": {"title": "Свой сервер (OpenAI API)", "kind": "openai", "url": "", "key": True, "optional_key": True},
 }
+APP_DOWNLOADS = {"ollama": "https://ollama.com/download", "lmstudio": "https://lmstudio.ai/download"}
 USER_AGENT = "PIVEN-Companion/1.0"
 config = {}
 _models = {}
@@ -97,8 +104,10 @@ def clean_key(text):
 def settings_of(provider):
     info = PROVIDERS[provider]
     saved = config.get(provider) or {}
-    return {"enabled": bool(saved.get("enabled", False)), "url": str(saved.get("url") or info["url"]).rstrip("/"),
-            "key": unseal(saved.get("key", ""))}
+    url = str(saved.get("url") or info["url"]).rstrip("/")
+    if info.get("api_v1") and not url.endswith("/v1"):
+        url += "/v1"
+    return {"enabled": bool(saved.get("enabled", False)), "url": url, "key": unseal(saved.get("key", ""))}
 
 
 def is_provider_model(name):
@@ -209,28 +218,33 @@ def fetch_models(provider, key=None, start_server=True):
         raise RuntimeError("не указан адрес сервера")
     if info["key"] and not info.get("optional_key") and not options["key"]:
         raise KeyRejected("сохранённый ключ не расшифровать, введи его заново" if (config.get(provider) or {}).get("key") else "нужен API-ключ")
-    local_timeout = 5 if info.get("local") else 15
+    timeout = 5 if provider in APP_DOWNLOADS else 15
     try:
         try:
-            data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=local_timeout)
+            data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=timeout)
         except (urllib.error.URLError, OSError) as error:
             if provider != "lmstudio" or not start_server or isinstance(error, urllib.error.HTTPError):
                 raise
             problem = _start_lmstudio_server(options["url"])
             if problem:
                 raise RuntimeError(problem) from error
-            data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=local_timeout)
+            data = _get(options["url"] + "/models", _headers(provider, options["key"]), timeout=timeout)
     except urllib.error.HTTPError as error:
         message = _http_error(error)
         if error.code in (401, 403) or (error.code == 400 and re.search(r"api.?key", message, re.I)):
             raise KeyRejected(message) from error
         raise RuntimeError(message) from error
     except (urllib.error.URLError, OSError) as error:
-        raise RuntimeError("программа не запущена" if info.get("local") else f"нет связи: {getattr(error, 'reason', error)}") from error
+        raise RuntimeError("программа не запущена" if provider in APP_DOWNLOADS else f"нет связи: {getattr(error, 'reason', error)}") from error
     items = data.get("data") if isinstance(data, dict) else data
-    ids = [str(item.get("id") or "") for item in items or [] if isinstance(item, dict)]
+    items = [item for item in items or [] if isinstance(item, dict)]
+    if provider == "unsloth":
+        # Studio lists downloaded models even when automatic model switching is off.
+        media_tasks = ("text-to-image", "text-to-video", "text-to-speech", "automatic-speech-recognition")
+        items = [item for item in items if item.get("loaded") is not False and item.get("task") not in media_tasks]
+    ids = [str(item.get("id") or "") for item in items]
     if provider == "openrouter":
-        _reasoning[provider] = {str(item.get("id")): _openrouter_thinking(item) for item in items or [] if isinstance(item, dict)
+        _reasoning[provider] = {str(item.get("id")): _openrouter_thinking(item) for item in items
                                 and "reasoning" in (item.get("supported_parameters") or [])}
     if info.get("local"):
         ids = [i for i in ids if "embed" not in i.lower()]
@@ -322,14 +336,11 @@ def model_names():
         return [f"{provider}:{model}" for provider, ids in _models.items() for model in ids]
 
 
-SITES = {"ollama": "https://ollama.com/download", "lmstudio": "https://lmstudio.ai/download"}
-
-
 def installed(provider):
     import os
     import shutil
     from pathlib import Path
-    if not PROVIDERS[provider].get("local"):
+    if provider not in APP_DOWNLOADS:
         return True
     local, home = Path(os.environ.get("LOCALAPPDATA", "")), Path.home()
     places = {"ollama": [local / "Programs" / "Ollama" / "ollama.exe"],
@@ -346,12 +357,13 @@ def status():
         saved = config.get(provider) or {}
         with _lock:
             count, error, kind = len(_models.get(provider, [])), _errors.get(provider, ""), _kinds.get(provider, "")
+        present = installed(provider)
         rows.append({"id": provider, "title": info["title"], "local": bool(info.get("local")), "needsKey": bool(info["key"]),
                      "enabled": options["enabled"], "url": options["url"], "defaultUrl": info["url"],
                      "hasKey": bool(options["key"]), "models": count, "error": error, "errorKind": kind,
                      "keyEnd": options["key"][-4:] if len(options["key"]) >= 12 else "", "keyBroken": bool(saved.get("key")) and not options["key"],
                      "keyPage": KEY_PAGES.get(provider, ""),
-                     "installed": installed(provider), "site": SITES.get(provider, "")})
+                     "installed": present, "site": info.get("site", "" if present else APP_DOWNLOADS.get(provider, ""))})
     return rows
 
 
@@ -363,8 +375,21 @@ def _anthropic_messages(messages):
             continue
         blocks = [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image}}
                   for image in message.get("images") or []]
-        blocks.append({"type": "text", "text": str(message.get("content", "")) or " "})
         role = "assistant" if message.get("role") == "assistant" else "user"
+        if message.get("role") == "tool":
+            blocks = [{"type": "tool_result", "tool_use_id": message["tool_call_id"], "content": str(message.get("content", ""))}]
+        else:
+            calls = message.get("tool_calls") or []
+            content = str(message.get("content", ""))
+            uses = {call["id"]: {"type": "tool_use", "id": call["id"], "name": call["name"], "input": call["arguments"]}
+                    for call in calls}
+            native = (calls[0].get("extra") or {}).get("anthropic_blocks") if calls else None
+            if native and all(block["type"] != "tool_use" or block["id"] in uses for block in native):
+                blocks.extend(uses[block["id"]] if block["type"] == "tool_use" else block for block in native)
+            else:
+                if content or not (blocks or calls):
+                    blocks.append({"type": "text", "text": content or " "})
+                blocks.extend(uses.values())
         if converted and converted[-1]["role"] == role:
             converted[-1]["content"] += blocks
         else:
@@ -372,9 +397,29 @@ def _anthropic_messages(messages):
     return system, converted
 
 
+def _anthropic_tool_delta(chunk, calls, blocks):
+    index = chunk.get("index")
+    block = chunk.get("content_block") or {}
+    delta = chunk.get("delta") or {}
+    if chunk.get("type") == "content_block_start":
+        if block.get("type") == "tool_use":
+            arguments = block.get("input") or {}
+            calls[index] = {"id": block["id"], "name": block["name"],
+                            "arguments": json.dumps(arguments) if arguments else ""}
+            blocks[index] = {"type": "tool_use", "id": block["id"]}
+        elif block.get("type") in ("thinking", "redacted_thinking", "text"):
+            blocks[index] = dict(block)
+    elif chunk.get("type") == "content_block_delta":
+        if delta.get("type") == "input_json_delta" and index in calls:
+            calls[index]["arguments"] += delta.get("partial_json", "")
+        elif index in blocks and delta.get("type") in ("thinking_delta", "signature_delta", "text_delta"):
+            field = delta["type"].removesuffix("_delta")
+            blocks[index][field] = blocks[index].get(field, "") + delta.get(field, "")
+
+
 EFFORTS = ["low", "medium", "high", "xhigh", "max"]
 EFFORT_ORDER = ["minimal", "low", "medium", "high", "xhigh", "max"]
-THINKING_FIELDS = ("reasoning_effort", "reasoning", "chat_template_kwargs", "output_config")
+THINKING_FIELDS = ("reasoning_effort", "reasoning", "chat_template_kwargs", "output_config", "enable_thinking")
 LEVEL_WORDS = r"none|minimal|low|medium|high|xhigh|max"
 learned = {}
 on_learned = None
@@ -525,6 +570,10 @@ def _known_thinking(name):
         return _reasoning.get(provider, {}).get(model, ([], None))
     if provider in ("ollama", "lmstudio"):
         return _local_thinking(provider, model)
+    if provider == "strata":
+        return [False, "low", "medium", "high"], "high"
+    if provider == "unsloth":
+        return _openai_thinking(lowered.rsplit("/", 1)[-1]) or ([True, False], True)
     return _openai_thinking(lowered) or _gemini_thinking(lowered) or ([True, False], True)
 
 
@@ -550,6 +599,10 @@ def _apply_thinking(provider, model, payload, think):
             payload["reasoning_effort"] = "none"
         elif think is not True:
             payload["reasoning_effort"] = think
+    elif provider == "vllm" and isinstance(think, bool):
+        payload["chat_template_kwargs"] = {"enable_thinking": think}
+    elif provider == "unsloth" and isinstance(think, bool):
+        payload["enable_thinking"] = think
     elif provider == "custom" and isinstance(think, bool):
         payload["chat_template_kwargs"] = {"enable_thinking": think}
         if think is False:
@@ -592,6 +645,12 @@ def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
                    "max_tokens": int(overrides.pop("max_tokens", 0) or sampling.get("max_tokens") or 8192)}
         if system:
             payload["system"] = system
+        if tools:
+            payload["tools"] = [{"name": spec["name"], "description": spec.get("description", ""),
+                                 "input_schema": spec.get("parameters", {"type": "object"})}
+                                for tool in tools if (spec := tool.get("function"))]
+            if overrides.get("tool_choice") == "none":
+                payload["tool_choice"] = {"type": "none"}
         family, version = _claude_generation(model)
         values, default, style = _claude_thinking(model)
         level = default if think in (None, "__auto__") else think
@@ -622,7 +681,15 @@ def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
         for key in ("temperature", "top_p", "presence_penalty", "frequency_penalty", "seed"):
             if key in sampling and not (key.endswith("_penalty") and not sampling[key]):
                 payload[key] = sampling[key]
-        if provider in ("ollama", "lmstudio", "openrouter", "custom"):
+        if provider in ("vllm", "strata", "unsloth"):
+            if "top_k" in sampling:
+                top_k = sampling["top_k"]
+                payload["top_k"] = (top_k or -1) if provider == "vllm" else top_k
+            if "min_p" in sampling:
+                payload["min_p"] = sampling["min_p"]
+            if "repeat_penalty" in sampling:
+                payload["repetition_penalty"] = sampling["repeat_penalty"]
+        elif provider in ("ollama", "lmstudio", "openrouter", "custom"):
             for key in ("top_k", "min_p", "repeat_penalty"):
                 if key in sampling:
                     payload[key] = sampling[key]
@@ -630,10 +697,19 @@ def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
             payload["max_tokens"] = sampling["max_tokens"]
         _apply_thinking(provider, model, payload, think)
         payload.update(overrides)
+        if provider == "unsloth":
+            if "temperature" in payload:
+                payload["temperature"] = min(2.0, payload["temperature"])
+            if "top_k" in payload:
+                payload["top_k"] = min(100, payload["top_k"])
+            if "repetition_penalty" in payload:
+                payload["repetition_penalty"] = min(2.0, max(1.0, payload["repetition_penalty"]))
+            payload["enable_tools"] = False  # Use the client-supplied tool catalog.
         url = options["url"] + "/chat/completions"
     if on_status:
         on_status(f"Запрос к {info['title']}")
     parts, thoughts, stage, last, calls = [], [], None, 0.0, {}
+    native_blocks = {}
     try:
         with _open_stream(url, payload, _headers(provider, options["key"]), timeout, name, think) as response:
             if on_response:
@@ -654,6 +730,7 @@ def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
                         delta = chunk.get("delta") or {}
                         text = delta.get("text", "") if delta.get("type") == "text_delta" else ""
                         thought = delta.get("thinking", "") if delta.get("type") == "thinking_delta" else ""
+                        _anthropic_tool_delta(chunk, calls, native_blocks)
                         if chunk.get("type") == "error":
                             raise RuntimeError(str((chunk.get("error") or {}).get("message") or chunk))
                     else:
@@ -679,6 +756,11 @@ def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
                     on_response(None)
     except urllib.error.HTTPError as error:
         text = _error_text(error)
+        if provider == "vllm" and tools and error.code == 400 and "--enable-auto-tool-choice" in text:
+            if cancel_event is not None and cancel_event.is_set():
+                raise InterruptedError("Запрос прерван пользователем") from error
+            return _ask(name, messages, timeout, on_status, on_thinking, cancel_event, on_response, on_text,
+                        overrides, sampling, None, tool_calls, think)
         reason = _http_error(error, text)
         delay = retry_delay(error, text) if error.code == 429 else None
         if delay is not None and delay <= LONGEST_WAIT and not re.search(r"per ?day|PerDay|daily", text, re.I) and not (parts or thoughts or calls):
@@ -704,7 +786,9 @@ def _ask(name, messages, timeout=600, on_status=None, on_thinking=None, cancel_e
         raise RuntimeError(f"{info['title']}: {reason}") from error
     if thoughts and on_thinking:
         on_thinking("".join(thoughts))
-    if tool_calls is not None and info["kind"] != "anthropic":
+    if tool_calls is not None:
+        if calls and native_blocks:
+            calls[min(calls)]["extra"] = {"anthropic_blocks": [native_blocks[index] for index in sorted(native_blocks)]}
         tool_calls.extend(llama.finished_tool_calls(calls))
     return "".join(parts).strip()
 

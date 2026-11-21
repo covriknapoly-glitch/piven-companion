@@ -3,6 +3,14 @@ import { highlight } from "./highlight";
 import { Icon } from "./icons";
 
 export const LinkContext = createContext<((url: string) => void) | null>(null);
+const CitationContext = createContext<{ count: number; open: (number: number) => void } | null>(null);
+
+function Citation({ token }: { token: string }) {
+  const citations = useContext(CitationContext);
+  const number = Number(token.slice(2, -1));
+  if (!citations || number < 1 || number > citations.count) return <>{token}</>;
+  return <button type="button" className="md-link knowledge-citation" onClick={() => citations.open(number)}>{`[${number}]`}</button>;
+}
 
 function MdLink({ label, url }: { label: string; url: string }) {
   const open = useContext(LinkContext);
@@ -81,7 +89,7 @@ function parseBlocks(source: string): Block[] {
   return blocks;
 }
 
-const INLINE = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|(\*[^*\n]+\*)|(\[[^\]\n]+\]\([^)\s]+\))/g;
+const INLINE = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|(\*[^*\n]+\*)|(\[[^\]\n]+\]\([^)\s]+\))|\[[Kk]\d{1,2}\]/g;
 
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -95,6 +103,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     if (token.startsWith("`")) nodes.push(<code key={key} className="md-inline-code">{token.slice(1, -1)}</code>);
     else if (token.startsWith("**") || token.startsWith("__")) nodes.push(<strong key={key}>{token.slice(2, -2)}</strong>);
     else if (token.startsWith("*")) nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
+    else if (/^\[[Kk]\d{1,2}\]$/.test(token)) nodes.push(<Citation key={key} token={token} />);
     else {
       const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       nodes.push(<MdLink key={key} label={link?.[1] ?? token} url={link?.[2] ?? ""} />);
@@ -121,8 +130,10 @@ function CodeBlock({ lang, text, onCopy }: { lang: string; text: string; onCopy:
   );
 }
 
-export function Markdown({ text, onCopy }: { text: string; onCopy: (text: string) => void }) {
+export function Markdown({ text, onCopy, citations = null }:
+  { text: string; onCopy: (text: string) => void; citations?: { count: number; open: (number: number) => void } | null }) {
   return (
+    <CitationContext.Provider value={citations}>
     <div className="md" data-i18n-skip>
       {parseBlocks(text).map((block, index) => {
         const key = `b${index}`;
@@ -148,5 +159,6 @@ export function Markdown({ text, onCopy }: { text: string; onCopy: (text: string
         }
       })}
     </div>
+    </CitationContext.Provider>
   );
 }
