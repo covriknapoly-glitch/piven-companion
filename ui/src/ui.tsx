@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { MemoryEstimate, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
 import logoSvg from "./assets/piven_logo.svg";
@@ -62,10 +62,12 @@ export function RandomDots({ step = 20, className = "decor-fill" }: { step?: num
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0;
     let last = 0;
-    const draw = (now: number) => {
+    const draw = (now: number, skipHidden = false) => {
+      const style = getComputedStyle(canvas);
+      if (skipHidden && style.visibility === "hidden") return;
       const scale = window.devicePixelRatio || 1;
       const { width, height } = canvas.getBoundingClientRect();
       const pixelWidth = Math.round(width * scale);
@@ -75,8 +77,9 @@ export function RandomDots({ step = 20, className = "decor-fill" }: { step?: num
       if (!context) return;
       context.setTransform(scale, 0, 0, scale, 0, 0);
       context.clearRect(0, 0, width, height);
-      context.fillStyle = getComputedStyle(canvas).color;
+      context.fillStyle = style.color;
       const seconds = now / 1000;
+      const still = motion.matches;
       for (let row = 0; row * step < height + step; row++) {
         for (let column = 0; column * step < width + step; column++) {
           if (cellRandom(column, row, 1) < 0.45) continue;
@@ -97,16 +100,26 @@ export function RandomDots({ step = 20, className = "decor-fill" }: { step?: num
       frame = requestAnimationFrame(tick);
       if (document.hidden || now - last < 50) return;
       last = now;
-      draw(now);
+      draw(now, true);
     };
-    draw(performance.now());
-    if (!still) frame = requestAnimationFrame(tick);
     const redraw = () => draw(performance.now());
+    const updateMotion = () => {
+      cancelAnimationFrame(frame);
+      redraw();
+      if (!motion.matches) frame = requestAnimationFrame(tick);
+    };
+    updateMotion();
+    motion.addEventListener("change", updateMotion);
     const resize = new ResizeObserver(redraw);
     resize.observe(canvas);
     const theme = new MutationObserver(redraw);
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => { cancelAnimationFrame(frame); resize.disconnect(); theme.disconnect(); };
+    return () => {
+      cancelAnimationFrame(frame);
+      motion.removeEventListener("change", updateMotion);
+      resize.disconnect();
+      theme.disconnect();
+    };
   }, [step]);
   return <canvas ref={ref} className={`decor random-dots ${className}`} aria-hidden="true" />;
 }
@@ -133,12 +146,84 @@ export function Button({ children, onClick, kind = "secondary", icon, disabled =
   );
 }
 
+export function MotionPresence({ children, kind = "surface", instant = false, onPresentChange }:
+  { children: ReactNode; kind?: "surface" | "collapse"; instant?: boolean; onPresentChange?: (present: boolean) => void }) {
+  const [previous, setPrevious] = useState<ReactNode>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const open = Boolean(children);
+  const [initiallyOpen, setInitiallyOpen] = useState(kind === "collapse" && open);
+  const content = open ? children : previous;
+  const present = Boolean(content);
+  useLayoutEffect(() => {
+    onPresentChange?.(present);
+  }, [onPresentChange, present]);
+
+  useLayoutEffect(() => {
+    if (open || kind !== "surface") return;
+    const surfaces = [...(ref.current?.children ?? [])] as HTMLElement[];
+    surfaces.forEach((surface) => { surface.inert = true; });
+    return () => { surfaces.forEach((surface) => { surface.inert = false; }); };
+  }, [kind, open]);
+
+  useLayoutEffect(() => {
+    if (open) {
+      setPrevious(children);
+      return;
+    }
+    if (initiallyOpen) setInitiallyOpen(false);
+    const wrapper = ref.current;
+    if (!wrapper) return;
+    // Only wait for the surface being dismissed, never for animations in its content.
+    const targets = kind === "collapse" ? [wrapper] : [...wrapper.children].flatMap((surface) =>
+      surface.matches(".modal-backdrop") ? [surface, ...surface.children] : [surface]);
+    const transitions = targets.flatMap((target) => target.getAnimations().filter((animation) => animation instanceof CSSTransition));
+    if (!transitions.length) {
+      setPrevious(null);
+      return;
+    }
+    let exiting = true;
+    void Promise.allSettled(transitions.map((transition) => transition.finished)).then(() => {
+      if (exiting) setPrevious(null);
+    });
+    return () => { exiting = false; };
+  }, [children, initiallyOpen, kind, open]);
+
+  if (!present) return null;
+  return <div ref={ref} className={kind === "collapse" ? "motion-collapse" : "motion-surface"}
+    data-motion-exit={open ? undefined : ""} data-motion-instant={instant ? "" : undefined}
+    data-motion-initial={initiallyOpen ? "" : undefined} inert={!open}>
+    {kind === "collapse" ? <div className="motion-collapse-content">{content}</div> : content}
+  </div>;
+}
+
+export function SelectionMarker({ selected }: { selected: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const element = ref.current?.parentElement;
+    const current = element?.querySelector<HTMLElement>(":scope > button.on");
+    if (!element || !current) { setBox(null); return; }
+    const measure = () => {
+      const next = { x: current.offsetLeft, y: current.offsetTop, w: current.offsetWidth, h: current.offsetHeight };
+      setBox((old) => old?.x === next.x && old.y === next.y && old.w === next.w && old.h === next.h ? old : next);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    element.querySelectorAll(":scope > button").forEach((button) => observer.observe(button));
+    return () => observer.disconnect();
+  }, [selected]);
+  return <span ref={ref} className="selection-marker" hidden={!box} aria-hidden="true"
+    style={box ? { transform: `translate(${box.x}px, ${box.y}px)`, width: box.w, height: box.h } : undefined} />;
+}
+
 export function useOutsideClose(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const onDown = (event: MouseEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) close(); };
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.stopPropagation(); close(); } };
+    const active = () => ref.current && !ref.current.closest("[data-motion-exit]");
+    const onDown = (event: MouseEvent) => { if (active() && !ref.current?.contains(event.target as Node)) close(); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && active()) { event.stopPropagation(); close(); } };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
@@ -156,7 +241,7 @@ export function MenuButton({ icon = "more", label, items, align = "right", class
   return (
     <div className={`menu-anchor ${className}`} ref={ref}>
       <IconButton icon={icon} label={label} active={open} onClick={() => setOpen((value) => !value)} />
-      {open && (
+      <MotionPresence>{open && (
         <div className={`menu menu-${align}`} role="menu">
           {items.map((item, index) => item === "divider"
             ? <div key={`d${index}`} className="menu-divider" />
@@ -165,7 +250,7 @@ export function MenuButton({ icon = "more", label, items, align = "right", class
                 {item.icon && <Icon name={item.icon} size={16} />}<span>{item.label}</span>{item.hint && <kbd>{item.hint}</kbd>}
               </button>)}
         </div>
-      )}
+      )}</MotionPresence>
     </div>
   );
 }
@@ -255,7 +340,8 @@ function requestLogos(api: WebApi, names: string[], authors: Record<string, stri
 }
 
 const MODEL_SOURCES: Record<string, string> = {
-  ollama: "Ollama", lmstudio: "LM Studio", openai: "OpenAI", anthropic: "Anthropic", gemini: "Google Gemini", openrouter: "OpenRouter", custom: "Свой сервер (OpenAI API)",
+  ollama: "Ollama", lmstudio: "LM Studio", vllm: "vLLM", strata: "Strata", unsloth: "Unsloth Studio",
+  openai: "OpenAI", anthropic: "Anthropic", gemini: "Google Gemini", openrouter: "OpenRouter", custom: "Свой сервер (OpenAI API)",
 };
 
 function modelSource(name: string) {
@@ -280,7 +366,7 @@ export function groupModels(names: string[]): [string, string[]][] {
 
 export function ModelLogo({ api, name, author = "", arch = "", size = 18 }: { api: WebApi | null; name: string; author?: string; arch?: string; size?: number }) {
   const [, redraw] = useState(0);
-  const [failed, setFailed] = useState(false);
+  const [loadedUrl, setLoadedUrl] = useState("");
   useEffect(() => {
     const wake = () => redraw((value) => value + 1);
     logoWaiters.add(wake);
@@ -288,9 +374,10 @@ export function ModelLogo({ api, name, author = "", arch = "", size = 18 }: { ap
     return () => { logoWaiters.delete(wake); };
   }, [api, name, author, arch]);
   const url = logoCache.get(name);
-  return url && !failed
-    ? <img className="model-logo" src={url} width={size} height={size} alt="" draggable={false} onError={() => setFailed(true)} />
-    : <span className="model-logo empty" style={{ width: size, height: size }}><Icon name="box" size={Math.round(size * 0.7)} /></span>;
+  return <span className="model-logo" style={{ width: size, height: size }}>
+    <Icon name="box" size={Math.round(size * 0.7)} />
+    {url && <img key={url} src={url} alt="" draggable={false} hidden={loadedUrl !== url} onLoad={() => setLoadedUrl(url)} />}
+  </span>;
 }
 
 export const gigabytes = (bytes: number) => `${(bytes / 2 ** 30).toLocaleString("ru-RU", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} ГБ`;

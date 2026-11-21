@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import type { CodeMode, EngineState, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
-import { Decor, Logo, fileName, useOutsideClose } from "./ui";
+import { Decor, Logo, MotionPresence, fileName, useOutsideClose } from "./ui";
 
 type Done = (error?: string) => void;
 type Reply = { ok: boolean; error?: string; cancelled?: boolean };
@@ -96,7 +96,7 @@ export function FolderChip({ state, api, onDone }: { state: EngineState; api: We
       <button type="button" className={`chip-btn ${root ? "code-on" : ""}`} aria-expanded={open} onClick={() => setOpen((value) => !value)} title={root || "Папка проекта: пока не выбрана, агент создаст её сам"}>
         <Icon name="folder" size={14} />{root ? <span className="chip-text" data-i18n-skip>{fileName(root)}</span> : <span className="chip-text">Папка</span>}
       </button>
-      {open && (
+      <MotionPresence>{open && (
         <div className="menu menu-up-right code-menu" role="menu">
           <div className="menu-label">Папка проекта</div>
           <FolderRows state={state} api={api} onDone={onDone} onPicked={close} />
@@ -104,7 +104,7 @@ export function FolderChip({ state, api, onDone }: { state: EngineState; api: We
           {root && <button type="button" onClick={() => { close(); void api.code_open_folder().then(reply(onDone)); }}><Icon name="external" size={15} /> Открыть в проводнике</button>}
           {root && <button type="button" onClick={() => { close(); void api.code_set({ root: "" }).then(reply(onDone)); }}><Icon name="plus" size={15} /> Новая папка для проекта</button>}
         </div>
-      )}
+      )}</MotionPresence>
     </div>
   );
 }
@@ -120,13 +120,13 @@ export function ModeChip({ state, api, onDone }: { state: EngineState; api: WebA
       <button type="button" className={`chip-btn mode-chip ${current.id}`} aria-expanded={open} title="Режим работы агента (Shift+Tab)" onClick={() => setOpen((value) => !value)}>
         <Icon name={current.icon} size={14} /><span className="chip-text">{current.short}</span><Icon name="chevronDown" size={14} />
       </button>
-      {open && (
+      <MotionPresence>{open && (
         <div className="menu menu-up-right code-menu" role="menu">
           <div className="menu-label">Режим работы</div>
           <ModeRows state={state} api={api} onDone={onDone} onPicked={close} />
           <div className="menu-label mode-shortcut">Shift+Tab — следующий режим</div>
         </div>
-      )}
+      )}</MotionPresence>
     </div>
   );
 }

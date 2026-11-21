@@ -28,6 +28,7 @@ const glyphs = {
   moon: "\u{f0594}",
   sun: "\u{f0599}",
   chat: "\u{ea6b}",
+  branch: "\u{ec6f}",
   code: "\u{eac4}",
   copy: "\u{ebcc}",
   trash: "\u{ea81}",
@@ -62,7 +63,6 @@ const glyphs = {
 } as const;
 
 export type IconName = keyof typeof glyphs;
-
 type IconProps = HTMLAttributes<HTMLElement> & { name: IconName; size?: number };
 
 export function Icon({ name, size = 18, className = "", style, ...props }: IconProps) {

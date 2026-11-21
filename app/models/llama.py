@@ -272,7 +272,7 @@ def clean_params(values):
                 value = int(float(value))
             else:
                 value = float(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             continue
         if key in PARAM_LIMITS:
             low, high = PARAM_LIMITS[key]
@@ -282,7 +282,7 @@ def clean_params(values):
 
 
 def params_for(model):
-    return {**DEFAULT_PARAMS, **clean_params(model_params.get("*")), **clean_params(model_params.get(model))}
+    return {**DEFAULT_PARAMS, **clean_params(model_params.get(model) if model != "*" else None)}
 
 
 def context_size(model=""):

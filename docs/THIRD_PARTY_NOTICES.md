@@ -45,7 +45,7 @@ PIVEN Companion использует и распространяет вмест�
 
 ## Логотипы сервисов
 
-Значки OpenAI, Anthropic (Claude), Google Gemini, OpenRouter, Ollama, LM Studio и ComfyUI (`ui/src/assets/integrations`) взяты из LobeHub Icons (`@lobehub/icons-static-svg`, MIT, `docs/licenses/lobe-icons-MIT.txt`). Лицензия распространяется на файлы значков. Сами логотипы и названия — товарные знаки их владельцев, под GPL не подпадают и используются только чтобы обозначить соответствующий сервис. PIVEN Companion с этими компаниями не связан.
+Значки OpenAI, Anthropic (Claude), Google Gemini, OpenRouter, Ollama, LM Studio, vLLM, Unsloth и ComfyUI (`ui/src/assets/integrations`) взяты из LobeHub Icons (`@lobehub/icons-static-svg`, MIT, `docs/licenses/lobe-icons-MIT.txt`). Значок Strata адаптирован из логотипа проекта Strata (MIT, `docs/licenses/strata-MIT.txt`). Лицензия распространяется на файлы значков. Сами логотипы и названия — товарные знаки их владельцев, под GPL не подпадают и используются только чтобы обозначить соответствующий сервис. PIVEN Companion с этими компаниями не связан.
 
 ## Логотип
 

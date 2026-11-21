@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { McpServer, SkillRow, ToolsStatus, WebApi } from "./bridge";
 import { ConfirmDialog } from "./dialogs";
-import { AdvancedHead, Button, Field, Modal, Switch, Toggle, useShared } from "./ui";
+import { AdvancedHead, Button, Field, Modal, MotionPresence, SelectionMarker, Switch, Toggle, useShared } from "./ui";
 
 export function ToolsPane({ api, children }: { api: WebApi; children?: ReactNode }) {
   const [status, load] = useShared<ToolsStatus>("tools", () => api.tools_status());
@@ -47,11 +47,11 @@ export function ToolsPane({ api, children }: { api: WebApi; children?: ReactNode
     ))}
     <Button icon="plus" onClick={() => setEditing("new")}>Добавить MCP-сервер</Button>
 
-    {editing && <ServerDialog api={api} server={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={load} />}
-    {skill && <SkillDialog api={api} skill={skill === "new" ? null : skill} onClose={() => setSkill(null)} onSaved={load} />}
-    {removing && <ConfirmDialog title={removing.kind === "server" ? "Удалить MCP-сервер?" : "Удалить навык?"} text={`«${removing.name}» будет удалён.`}
+    <MotionPresence>{editing && <ServerDialog api={api} server={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={load} />}</MotionPresence>
+    <MotionPresence>{skill && <SkillDialog api={api} skill={skill === "new" ? null : skill} onClose={() => setSkill(null)} onSaved={load} />}</MotionPresence>
+    <MotionPresence>{removing && <ConfirmDialog title={removing.kind === "server" ? "Удалить MCP-сервер?" : "Удалить навык?"} text={`«${removing.name}» будет удалён.`}
       confirmLabel="Удалить" danger onClose={() => setRemoving(null)}
-      onConfirm={() => { void (removing.kind === "server" ? api.delete_mcp_server(removing.name) : api.delete_skill(removing.name)).then(load); }} />}
+      onConfirm={() => { void (removing.kind === "server" ? api.delete_mcp_server(removing.name) : api.delete_skill(removing.name)).then(load); }} />}</MotionPresence>
   </>;
 }
 
@@ -78,7 +78,8 @@ function ServerDialog({ api, server, onClose, onSaved }: { api: WebApi; server: 
     </>}>
       <Field label="Название" hint="Латиница, цифры, дефис. Им подписываются инструменты сервера."><input className="input" value={name} onChange={(event) => setName(event.target.value)} /></Field>
       <Field label="Как подключаться">
-        <div className="segmented">
+        <div className="segmented sliding-selection">
+          <SelectionMarker selected={mode} />
           <button type="button" className={mode === "command" ? "on" : ""} onClick={() => setMode("command")}>Команда</button>
           <button type="button" className={mode === "url" ? "on" : ""} onClick={() => setMode("url")}>Адрес</button>
         </div>

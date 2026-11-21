@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import type { ModelParams, ParamValue, WebApi } from "./bridge";
+import type { CommandResult, ModelParams, ParamValue, WebApi } from "./bridge";
 import { Icon } from "./icons";
-import { AdvancedHead, Button, Field, IconButton, ModelLogo, shortModel, Switch, Toggle, useShared } from "./ui";
+import { AdvancedHead, Button, Field, IconButton, ModelLogo, MotionPresence, shortModel, Switch, Toggle, useShared } from "./ui";
 
 type Kind = "int" | "float" | "choice" | "bool" | "context";
 interface Param { key: string; label: string; hint: string; kind: Kind; step?: number; unit?: string; names?: Record<string, string> }
@@ -90,20 +90,35 @@ export function ModelParamsPane({ api, children }: { api: WebApi; children?: Rea
   </>;
 }
 
-/** One model, or the common settings when scope is "*". */
-export function ModelSettingsPage({ api, scope, onBack, onSaved }: { api: WebApi; scope: string; onBack: () => void; onSaved: () => void }) {
+export function ModelSettingsPage({ api, scope, onBack, onSaved }:
+  { api: WebApi; scope: string; onBack: () => void; onSaved: () => void }) {
   const [data, load] = useShared<ModelParams>(`params:${scope}`, () => api.model_params(scope));
   const [opened, setOpened] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState("");
   const head = useRef<HTMLDivElement>(null);
   useEffect(() => { head.current?.closest(".settings-fields")?.scrollTo(0, 0); }, [scope]);
 
-  const common = scope === "*";
-  const changes = !data ? {} : common ? data.all : data.own;
-  const base = !data ? {} : common ? data.defaults : { ...data.defaults, ...data.all };
+  const changes = data?.own ?? {};
+  const base = data?.defaults ?? {};
   const shown = { ...base, ...changes };
-  const save = (values: Record<string, ParamValue>, replace = false) =>
-    api.set_model_params(scope, values, replace).then(() => { onSaved(); void load(); });
-  const reset = (key: string) => { const rest = { ...changes }; delete rest[key]; void save(rest, true); };
+  const save = async (values: Record<string, ParamValue | null>, replace = false) => {
+    setError("");
+    try {
+      const result = await api.set_model_params(scope, values, replace);
+      if (!result.ok) { setError(result.error || "Не удалось сохранить параметры модели."); return; }
+      await load();
+      onSaved();
+    } catch { setError("Не удалось сохранить параметры модели."); }
+  };
+  const savePrompt = async (prompt: string) => {
+    const result = await api.set_model_prompt(scope, prompt);
+    if (result.ok) {
+      await load();
+      onSaved();
+    }
+    return result;
+  };
+  const reset = (key: string) => { void save({ [key]: null }); };
   const visible = (param: Param) => !data?.cloud || REMOTE_PARAMS.has(param.key);
   const groups = GROUPS.filter((group) => !(group.local && data?.cloud)).map((group) => ({ ...group, params: group.params.filter(visible) })).filter((group) => group.params.length);
   const changedCount = Object.keys(changes).length;
@@ -129,7 +144,7 @@ export function ModelSettingsPage({ api, scope, onBack, onSaved }: { api: WebApi
 
   const row = (param: Param) => {
     const changed = param.key in changes;
-    const label = `${common ? "По умолчанию" : "Как в общих"}: ${String(base[param.key])}`;
+    const label = `По умолчанию: ${String(base[param.key])}`;
     return (
       <div key={param.key} className={`param-row ${param.kind === "context" ? "wide" : ""} ${changed ? "changed" : ""}`}>
         <div className="param-name"><span>{param.label}</span><small>{param.hint}</small></div>
@@ -145,31 +160,66 @@ export function ModelSettingsPage({ api, scope, onBack, onSaved }: { api: WebApi
     <div className="model-page">
       <div className="model-page-head" ref={head}>
         <IconButton icon="arrowRight" className="flip" label="Назад" onClick={onBack} />
-        {common ? <Icon name="box" size={18} /> : <ModelLogo api={api} name={scope} size={20} />}
+        <ModelLogo api={api} name={scope} size={20} />
         <div className="model-page-title">
-          {common ? <strong>Общие настройки</strong> : <strong title={scope} data-i18n-skip>{shortModel(scope)}</strong>}
-          <small>{common ? "Действуют на все модели, кроме значений, заданных для конкретной модели." : "Подсвечено то, что отличается от общих настроек."}</small>
+          <strong title={scope} data-i18n-skip>{shortModel(scope)}</strong>
+          <small>Подсвечены значения, изменённые для этой модели.</small>
         </div>
         {changedCount > 0 && <Button kind="ghost" icon="refresh" onClick={() => { void save({}, true); }}>Сбросить</Button>}
       </div>
+      {error && <p className="pane-note error-text" role="alert">{error}</p>}
+      {data && <ModelPrompt saved={data.systemPrompt} onSave={savePrompt} />}
       {!data ? null : groups.map((group) => {
         const count = group.params.filter((param) => param.key in changes).length;
         const open = opened[group.title] ?? (Boolean(group.open) || count > 0);
         return (
           <section key={group.title} className="param-section">
             <button type="button" className="param-section-head" aria-expanded={open} onClick={() => setOpened((current) => ({ ...current, [group.title]: !open }))}>
-              <Icon name={open ? "chevronDown" : "chevronRight"} size={14} />
+              <Icon name="chevronRight" className="disclosure-chevron" size={14} />
               <span>{group.title}</span>
               {count > 0 && <span className="tune-count">изменено: {count}</span>}
             </button>
-            {open && <>
+            <MotionPresence kind="collapse">{open && <>
               {group.note && <p className="pane-note">{group.note}</p>}
               {group.params.map(row)}
-            </>}
+            </>}</MotionPresence>
           </section>
         );
       })}
     </div>
+  );
+}
+
+function ModelPrompt({ saved, onSave }: { saved: string; onSave: (prompt: string) => Promise<CommandResult> }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const text = draft ?? saved;
+  const dirty = text.trim() !== saved;
+  const save = async (prompt: string) => {
+    setSaving(true);
+    setError("");
+    try {
+      const result = await onSave(prompt);
+      if (result.ok) setDraft(null);
+      else setError(result.error || "Не удалось сохранить промпт.");
+    } catch {
+      setError("Не удалось сохранить промпт.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Field label="Системный промпт модели" hint={saved ? "У этой модели свой промпт." : "Используется стандартный промпт PIVEN."} error={error}>
+      <textarea className="textarea prompt-input" aria-label="Системный промпт модели" value={text} spellCheck={false}
+        disabled={saving} onChange={(event) => { setDraft(event.target.value); setError(""); }} />
+      <div className="prompt-actions">
+        <span>{text.length.toLocaleString("ru-RU")} симв.</span>
+        <Button kind="ghost" disabled={saving || !saved} onClick={() => { void save(""); }}>Вернуть стандартный</Button>
+        <Button kind="ghost" disabled={saving || draft === null} onClick={() => { setDraft(null); setError(""); }}>Отменить</Button>
+        <Button kind="primary" disabled={saving || !dirty} onClick={() => { void save(text); }}>Сохранить</Button>
+      </div>
+    </Field>
   );
 }
 

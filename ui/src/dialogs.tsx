@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CommandConfirm, DownloadConfirm, EngineState, HfFile, HfModel, HfStatus, ListenOptions, SearchHit, WebApi, MemoryEstimate } from "./bridge";
 import { Icon, type IconName } from "./icons";
-import { Button, callMemoryLabel, Field, IconButton, MemoryBar, Modal, ModelDescription, ModelLogo, Switch, useOutsideClose } from "./ui";
+import { Button, callMemoryLabel, Field, IconButton, MemoryBar, Modal, ModelDescription, ModelLogo, MotionPresence, Switch, useOutsideClose } from "./ui";
 
 export function ConfirmDialog({ title, text, confirmLabel, cancelLabel = "Отмена", danger = false, onConfirm, onClose }:
   { title: string; text: string; confirmLabel: string; cancelLabel?: string; danger?: boolean; onConfirm: () => void; onClose: () => void }) {
@@ -242,7 +242,7 @@ export function CallControl({ api, state, onError }: { api: WebApi; state: Engin
       <button type="button" className="call-btn" onClick={toggle} aria-label={running ? "Завершить звонок" : "Позвонить"} title={running ? "Завершить звонок" : "Позвонить"}>
         <Icon name="call" size={17} />
       </button>
-      {asking && (
+      <MotionPresence>{asking && (
         <div className="menu menu-up-right listen-menu">
           <div className="menu-title">Что программа будет слышать и видеть</div>
           <ListenOptionList options={options} onChange={setOptions} />
@@ -251,7 +251,7 @@ export function CallControl({ api, state, onError }: { api: WebApi; state: Engin
             <Button kind="primary" icon="call" onClick={() => start(options)}>Позвонить</Button>
           </div>
         </div>
-      )}
+      )}</MotionPresence>
     </div>
   );
 }

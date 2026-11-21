@@ -59,9 +59,11 @@ export function Lightbox({ api, path, onClose }: { api: WebApi; path: string; on
   const src = useImage(api, path);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const frame = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (frame.current?.inert) return;
       if (event.key === "Escape") onClose();
       if (event.key === "+" || event.key === "=") setZoom((value) => Math.min(6, value * 1.25));
       if (event.key === "-") setZoom((value) => Math.max(0.2, value / 1.25));
@@ -72,7 +74,7 @@ export function Lightbox({ api, path, onClose }: { api: WebApi; path: string; on
   }, [onClose]);
   const onWheel = (event: WheelEvent) => setZoom((value) => Math.min(6, Math.max(0.2, value * Math.exp(-event.deltaY * 0.0015))));
   return (
-    <div className="lightbox" onWheel={onWheel}
+    <div className="lightbox" ref={frame} onWheel={onWheel}
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div className="lightbox-bar">
         <span className="lightbox-name">{fileName(path)}</span>

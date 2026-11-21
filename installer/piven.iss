@@ -1,5 +1,5 @@
 ﻿#define AppName "PIVEN Companion"
-#define AppVersion "0.2.3"
+#define AppVersion "0.3.0"
 #define AppPublisher "covriknapoly-glitch"
 
 [Setup]
@@ -54,6 +54,7 @@ Source: "ui\README.md"; DestDir: "{app}\ui"; Flags: ignoreversion
 Source: "installer\piven.iss"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "voice-engines\README.md"; DestDir: "{app}\voice-engines"; Flags: ignoreversion
 Source: "voice-engines\model_server.py"; DestDir: "{app}\voice-engines"; Flags: ignoreversion
+Source: "voice-engines\transcribe_server.py"; DestDir: "{app}\voice-engines"; Flags: ignoreversion
 Source: "voice-engines\qwen-tts\server.py"; DestDir: "{app}\voice-engines\qwen-tts"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "NOTICE"; DestDir: "{app}"; Flags: ignoreversion

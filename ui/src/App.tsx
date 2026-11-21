@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { isPhone, isUnchanged, waitForEngine, type ChatSummary, type EngineState, type SearchHit, type WebApi } from "./bridge";
 import { Lightbox } from "./cards";
 import { Composer } from "./composer";
@@ -6,14 +6,16 @@ import { CommandDialog, ConfirmDialog, DownloadDialog, HubDialog, SearchDialog }
 import { VoiceHubDialog } from "./voicehub";
 import { Icon } from "./icons";
 import { CallPanel } from "./call";
+import { KnowledgeDialog } from "./knowledge";
 import { ContextRing } from "./context";
 import { LinkContext } from "./markdown";
+import { CodeModeActivation, useSmoothWheel } from "./motion";
 import { SettingsDialog, FONT_CHOICES, prefetchSettings, type FontChoice } from "./settings";
 import { HelpDialog, type SlashCommand } from "./commands";
 import { translate } from "./i18n";
 import { Sidebar, type ChatActions } from "./sidebar";
 import { Transcript } from "./transcript";
-import { Decor, IconButton, groupModels, shortModel, thinkingName } from "./ui";
+import { Decor, IconButton, MenuButton, MotionPresence, fileName, groupModels, shortModel, thinkingName } from "./ui";
 import { MODES } from "./projects";
 import { THEME_IDS, THEMES, isLightTheme, type ThemeId } from "./themes";
 import { Workspace, type WorkspaceTab } from "./workspace";
@@ -71,43 +73,72 @@ export default function App() {
   const [state, setState] = useState<EngineState | null>(null);
   const [toast, setToast] = useState<{ text: string; kind: "info" | "error" } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 900);
-  const [dialog, setDialog] = useState<"" | "settings" | "search" | "hub" | "voice-asr" | "voice-tts" | "help">("");
+  const [dialog, setDialog] = useState<"" | "settings" | "search" | "hub" | "voice-asr" | "voice-tts" | "help" | "knowledge">("");
   const [deleting, setDeleting] = useState<ChatSummary | null>(null);
   const [lightbox, setLightbox] = useState("");
+  const [overlayPresent, setOverlayPresent] = useState(false);
   const [focusIndex, setFocusIndex] = useState<{ index: number; nonce: number } | null>(null);
   const [browserOpen, setBrowserOpen] = useState(() => readStored(BROWSER_KEY, ["1", "0"], "0") === "1");
 
+  const appRef = useRef<HTMLDivElement>(null);
+  useSmoothWheel(appRef, Boolean(state));
   const [workspaceMounted, setWorkspaceMounted] = useState(browserOpen);
-  useEffect(() => {
+  const inCall = Boolean(state?.listening.running);
+  const workspaceVisible = browserOpen || inCall;
+  const showWorkspace = browserOpen || workspaceMounted;
+  useLayoutEffect(() => {
     if (browserOpen) { setWorkspaceMounted(true); return; }
-    const timer = window.setTimeout(() => setWorkspaceMounted(false), 260);
-    return () => window.clearTimeout(timer);
-  }, [browserOpen]);
-  const workspaceClosing = workspaceMounted && !browserOpen && !state?.listening.running;
+    const slide = appRef.current?.getAnimations().find((animation) =>
+      animation instanceof CSSTransition && animation.transitionProperty === "--workspace-progress");
+    if (!slide || inCall) { setWorkspaceMounted(false); return; }
+    let cancelled = false;
+    const unmount = () => { if (!cancelled) setWorkspaceMounted(false); };
+    void slide.finished.then(unmount, unmount);
+    return () => { cancelled = true; };
+  }, [browserOpen, inCall]);
 
   const [workspaceWidth, setWorkspaceWidth] = useState(() => { try { return Number(localStorage.getItem(WIDTH_KEY)) || 0; } catch { return 0; } });
   const [resizing, setResizing] = useState(false);
   useEffect(() => { writeStored(WIDTH_KEY, String(Math.round(workspaceWidth))); }, [workspaceWidth]);
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
     const handle = event.currentTarget;
-    handle.setPointerCapture(event.pointerId);
-    setResizing(true);
-    document.body.classList.add("resizing");
+    const panel = handle.parentElement;
+    if (!panel || !event.isPrimary || event.button !== 0) return;
+    event.preventDefault();
+    const { clientX, pointerId } = event;
+    const initialWidth = panel.getBoundingClientRect().width;
+    let dragging = false;
+
     const move = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      const offset = clientX - moveEvent.clientX;
+      if (!dragging) {
+        if (Math.abs(offset) < 4 || !handle.isConnected) return;
+        dragging = true;
+        handle.setPointerCapture(pointerId);
+        setResizing(true);
+        document.body.classList.add("resizing");
+      }
       const max = Math.max(320, window.innerWidth - (sidebarOpen ? 260 : 0) - 380);
-      setWorkspaceWidth(Math.min(max, Math.max(320, window.innerWidth - moveEvent.clientX)));
+      setWorkspaceWidth(Math.min(max, Math.max(320, initialWidth + offset)));
     };
     const stop = () => {
-      setResizing(false);
-      document.body.classList.remove("resizing");
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", stop);
-      handle.removeEventListener("pointercancel", stop);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("blur", stop);
+      handle.removeEventListener("lostpointercapture", finish);
+      if (dragging) {
+        setResizing(false);
+        document.body.classList.remove("resizing");
+      }
     };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", stop);
-    handle.addEventListener("pointercancel", stop);
+    const finish = (finishEvent: PointerEvent) => { if (finishEvent.pointerId === pointerId) stop(); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    window.addEventListener("blur", stop);
+    handle.addEventListener("lostpointercapture", finish);
   };
   const [browserRequest, setBrowserRequest] = useState<{ url: string; nonce: number } | null>(null);
   useEffect(() => { writeStored(BROWSER_KEY, browserOpen ? "1" : "0"); }, [browserOpen]);
@@ -121,10 +152,12 @@ export default function App() {
   const modelBrowse = state?.browserRequest?.nonce;
   useEffect(() => { if (modelBrowse && state?.browserRequest) openLink(state.browserRequest.url); }, [modelBrowse]);
   const [pendingFocus, setPendingFocus] = useState<SearchHit | null>(null);
-  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  const [prefill, setPrefill] = useState<{ chatId: string; text: string; append?: boolean } | null>(null);
   const [theme, setTheme, resolvedTheme] = useTheme();
   const versionRef = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const draftChatIds = useRef<string[]>([]);
+  const updateDraftChatIds = useCallback((ids: string[]) => { draftChatIds.current = ids; }, []);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const engineReady = useCallback((engine: WebApi) => {
@@ -175,7 +208,18 @@ export default function App() {
     void api.select_chat(hit.chatId).then((result) => done(result.ok ? undefined : result.error));
   }, [api, done, state?.activeChatId]);
   const copy = useCallback((text: string) => { if (api) void api.copy_text(text).then(() => notify("Скопировано", "info")); }, [api, notify]);
-  const newChat = useCallback(() => { if (api) void api.new_chat().then((result) => { done(result.ok ? undefined : result.error); inputRef.current?.focus(); }); }, [api, done]);
+  const newChat = useCallback(() => { if (api) void api.new_chat(draftChatIds.current).then((result) => { done(result.ok ? undefined : result.error); inputRef.current?.focus(); }); }, [api, done]);
+  const forkChat = useCallback((chatId: string, index?: number, text?: string) => {
+    if (!api) return;
+    const request = index === undefined ? api.fork_chat(chatId) : api.fork_chat(chatId, index, text);
+    void request.then((result) => {
+      done(result.ok ? undefined : result.error);
+      if (result.ok) {
+        if (window.innerWidth <= 900) setSidebarOpen(false);
+        inputRef.current?.focus();
+      }
+    });
+  }, [api, done]);
   const stop = useCallback(() => { if (api) void api.interrupt().then(() => done()); }, [api, done]);
 
   useEffect(() => {
@@ -189,6 +233,7 @@ export default function App() {
     select: (chat) => { if (window.innerWidth <= 900) setSidebarOpen(false); if (chat.id !== state?.activeChatId) void api.select_chat(chat.id).then((result) => done(result.ok ? undefined : result.error)); },
     rename: (chat, title) => { void api.rename_chat(chat.id, title).then((result) => done(result.ok ? undefined : result.error)); },
     pin: (chat) => { void api.pin_chat(chat.id, !chat.pinned).then(() => done()); },
+    fork: (chat) => forkChat(chat.id),
     exportChat: (chat, markdown) => { void api.export_chat(chat.id, markdown).then((result) => { if (result.ok) notify(`Сохранено: ${result.path}`, "info"); else if (!result.cancelled) notify(result.error); }); },
     remove: (chat) => setDeleting(chat),
     project: (chat, action) => {
@@ -197,7 +242,7 @@ export default function App() {
         .then((result) => done(result.ok || result.cancelled ? undefined : result.error));
     },
     moveToProjects: (chat) => { void api.chat_kind(chat.id, !chat.code).then((result) => done(result.ok ? undefined : result.error)); },
-  }, [api, state?.activeChatId, done, notify]);
+  }, [api, state?.activeChatId, done, notify, forkChat]);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -357,28 +402,40 @@ export default function App() {
   if (!api || !state || !actions) {
     return <div className="splash"><Decor corner="br" /></div>;
   }
+  const active = state.chats.find((chat) => chat.id === state.activeChatId);
+  const parent = active?.branchOf ? state.chats.find((chat) => chat.id === active.branchOf) : undefined;
+  const children = state.chats.filter((chat) => chat.branchOf === state.activeChatId);
+  const projectRoot = state.code.on ? state.code.root : "";
+  const showWorkspaceToggle = !isPhone && !state.listening.running;
+  const workspaceToggleLabel = browserOpen ? "Скрыть панель (Ctrl+D)" : "Браузер и файлы (Ctrl+D)";
+  const overlayOpen = Boolean(dialog || deleting || lightbox || state.confirm);
 
   return (
     <LinkContext.Provider value={openLink}>
-    <div className={`app ${sidebarOpen ? "" : "sidebar-hidden"}`}>
-      <Sidebar api={api} state={state} actions={actions} searchRef={searchRef} onNewChat={newChat}
-        onOpenHit={openHit} searchPreset={searchPreset} onSettings={() => setDialog("settings")} onHide={() => setSidebarOpen(false)} />
+    <div ref={appRef} className={`app ${sidebarOpen ? "" : "sidebar-hidden"} ${workspaceVisible ? "workspace-open" : ""} ${showWorkspace ? "workspace-sliding" : ""}`}>
+      <Sidebar api={api} state={state} actions={actions} searchRef={searchRef} onNewChat={newChat} open={sidebarOpen}
+        onToggle={() => setSidebarOpen((open) => !open)}
+        onOpenHit={openHit} searchPreset={searchPreset} onSettings={() => setDialog("settings")} />
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
       <main className="main">
-        {!sidebarOpen && <div className="main-corner">
-          <IconButton icon="sidebarOpen" label="Показать панель (Ctrl+B)" onClick={() => setSidebarOpen(true)} />
-          <IconButton icon="compose" label="Новый чат (Ctrl+N)" onClick={newChat} />
+        {projectRoot && <div className="main-corner main-corner-left">
+          <span className="project-header-folder" title={projectRoot}>
+            <Icon name="folder" size={15} />
+            <span data-i18n-skip>{fileName(projectRoot.replace(/[\\/]+$/, ""))}</span>
+          </span>
         </div>}
-        {!isPhone && !browserOpen && !state.listening.running && <div className="main-corner main-corner-right">
-          <IconButton icon="workspaceOff" label="Браузер и файлы (Ctrl+D)" onClick={() => setBrowserOpen(true)} />
-        </div>}
-
-        <div className={`chat-tools ${!isPhone && !browserOpen && !state.listening.running ? "beside-corner" : ""}`}>
+        <div className={`chat-tools ${showWorkspaceToggle ? "with-workspace-toggle" : ""}`}>
+          {(parent || children.length > 0) && <MenuButton icon="branch" label="Ветки чата" items={[
+            ...(parent ? [{ icon: "chat" as const, label: "Исходный чат", hint: parent.title, onClick: () => actions.select(parent) }] : []),
+            ...children.map((chat) => ({ icon: "branch" as const, label: chat.title, onClick: () => actions.select(chat) })),
+          ]} />}
+          {!isPhone && <IconButton icon="database" label="База знаний" active={dialog === "knowledge"} onClick={() => setDialog("knowledge")} />}
           <button type="button" className={`code-toggle ${state.code.on ? "on" : ""}`} aria-pressed={state.code.on}
             title={state.code.on ? "Режим кода включён: слева проекты, агент сам пишет файлы и запускает команды. Нажми, чтобы вернуться к чатам" : "Включить режим кода: слева будут проекты, агент сам пишет файлы и запускает команды"}
             onClick={() => { void api.code_mode(!state.code.on).then((result) => done(result.ok ? undefined : result.error)); }}>
             <Icon name="code" size={15} /><span>Код</span>
+            <CodeModeActivation enabled={state.code.on} />
           </button>
           <ContextRing api={api} state={state} onOpen={() => { if (isPhone) return; setWorkspaceTab("context"); setBrowserOpen(true); }} />
         </div>
@@ -391,40 +448,55 @@ export default function App() {
               onCopy={copy} onView={setLightbox} onStop={stop}
               onRetry={() => { void api.retry_last().then((result) => done(result.ok ? undefined : result.error)); }}
               onEdit={(index, text) => { void api.edit_message(index, text).then((result) => done(result.ok ? undefined : result.error)); }}
-              onPrefill={(text) => setPrefill({ text, nonce: Date.now() })} onNotice={done} />
+              onFork={(index) => forkChat(state.activeChatId, index, state.items[index].text)}
+              onPrefill={(text) => setPrefill({ chatId: state.activeChatId, text })} onNotice={done} />
 
         <div className="composer-dock" ref={trackDockHeight}>
-          <Composer api={api} state={state} inputRef={inputRef} prefill={prefill} commands={commands} onStop={stop} onError={done} onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind = "tts") => setDialog(`voice-${kind}`)}
+          <Composer api={api} state={state} inputRef={inputRef} prefill={prefill} commands={commands} onDraftChats={updateDraftChatIds} onStop={stop} onError={done} onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind = "tts") => setDialog(`voice-${kind}`)}
             onSent={(queued) => { if (queued) notify("Отправится после текущего ответа", "info"); void poll(); }} />
         </div>
       </main>
 
-      {!isPhone && (workspaceMounted || state.listening.running) && (
-        <aside className={`workspace ${state.listening.running ? "in-call" : ""} ${workspaceClosing ? "closing" : ""}`} aria-label={state.listening.running ? "Звонок" : "Рабочая панель"}
+      {showWorkspaceToggle && (
+        <button type="button" className="icon-btn workspace-toggle" aria-expanded={browserOpen}
+          aria-controls="workspace-panel" aria-label={workspaceToggleLabel}
+          title={workspaceToggleLabel} onClick={() => setBrowserOpen((open) => !open)}>
+          <Icon name={browserOpen ? "workspace" : "workspaceOff"} size={18} />
+        </button>
+      )}
+
+      {!isPhone && (
+        <aside id="workspace-panel" className={`workspace ${inCall ? "in-call" : ""}`} aria-label={inCall ? "Звонок" : "Рабочая панель"} inert={!workspaceVisible}
           style={workspaceWidth ? { ["--ws-w" as string]: `${workspaceWidth}px` } : undefined}>
           <div className={`workspace-resize ${resizing ? "dragging" : ""}`} role="separator" aria-orientation="vertical" title="Потяни, чтобы изменить ширину; двойной щелчок — по умолчанию"
             onPointerDown={startResize} onDoubleClick={() => setWorkspaceWidth(0)} />
-          {state.listening.running && <CallPanel api={api} state={state} onError={done} />}
+          {inCall && <CallPanel api={api} state={state} onError={done} />}
 
-          {workspaceMounted && <div className={state.listening.running ? "workspace-hidden" : "workspace-slot"}>
+          {showWorkspace && <div className={inCall ? "workspace-hidden" : "workspace-slot"}>
             <Workspace api={api} state={state} tab={workspaceTab} setTab={setWorkspaceTab} browserRequest={browserRequest}
-              onClose={() => setBrowserOpen(false)} covered={Boolean(dialog || deleting || lightbox || state.confirm || state.listening.running || workspaceClosing)} />
+              onReference={(path) => setPrefill({ chatId: state.activeChatId, text: `\`${path}\` `, append: true })}
+              covered={overlayOpen || overlayPresent || inCall} />
           </div>}
         </aside>
       )}
 
-      {dialog === "settings" && <SettingsDialog state={state} api={api} theme={theme} setTheme={setTheme} fontChoice={fontChoice} setFontChoice={setFontChoice} language={language} setLanguage={setLanguageChoice} onClose={() => setDialog("")}
-        onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind) => setDialog(`voice-${kind}`)} />}
-      {dialog === "search" && <SearchDialog api={api} onClose={() => setDialog("")} onOpen={openHit} />}
-      {dialog === "help" && <HelpDialog commands={commands} onClose={() => setDialog("")} />}
-      {(dialog === "voice-asr" || dialog === "voice-tts") && <VoiceHubDialog api={api} initialKind={dialog === "voice-asr" ? "asr" : "tts"}
-        onClose={() => setDialog("settings")} onDone={() => notify("Голосовая модель скачана", "info")} />}
-      {dialog === "hub" && <HubDialog api={api} onClose={() => setDialog("")} onDone={() => { void poll(); notify("Модель скачана", "info"); }} />}
-      {deleting && <ConfirmDialog title="Удалить чат?" text={`«${deleting.title}» и вся его история будут удалены. Это нельзя отменить.`} confirmLabel="Удалить" danger
-        onClose={() => setDeleting(null)} onConfirm={() => { void api.delete_chat(deleting.id).then((result) => done(result.ok ? undefined : result.error)); }} />}
-      {state.confirm?.kind === "download" && <DownloadDialog confirm={state.confirm} api={api} />}
-      {state.confirm?.kind === "command" && <CommandDialog confirm={state.confirm} api={api} />}
-      {lightbox && <Lightbox api={api} path={lightbox} onClose={() => setLightbox("")} />}
+      <MotionPresence onPresentChange={setOverlayPresent}>
+        {overlayOpen && <>
+          {dialog === "settings" && <SettingsDialog state={state} api={api} theme={theme} setTheme={setTheme} fontChoice={fontChoice} setFontChoice={setFontChoice} language={language} setLanguage={setLanguageChoice} onClose={() => setDialog("")}
+            onOpenHub={() => setDialog("hub")} onOpenVoiceHub={(kind) => setDialog(`voice-${kind}`)} />}
+          {dialog === "search" && <SearchDialog api={api} onClose={() => setDialog("")} onOpen={openHit} />}
+          {dialog === "help" && <HelpDialog commands={commands} onClose={() => setDialog("")} />}
+          {dialog === "knowledge" && <KnowledgeDialog key={state.activeChatId} api={api} chatId={state.activeChatId} onClose={() => setDialog("")} />}
+          {(dialog === "voice-asr" || dialog === "voice-tts") && <VoiceHubDialog api={api} initialKind={dialog === "voice-asr" ? "asr" : "tts"}
+            onClose={() => setDialog("settings")} onDone={() => notify("Голосовая модель скачана", "info")} />}
+          {dialog === "hub" && <HubDialog api={api} onClose={() => setDialog("")} onDone={() => { void poll(); notify("Модель скачана", "info"); }} />}
+          {deleting && <ConfirmDialog title="Удалить чат?" text={`«${deleting.title}» и вся его история будут удалены. Это нельзя отменить.`} confirmLabel="Удалить" danger
+            onClose={() => setDeleting(null)} onConfirm={() => { void api.delete_chat(deleting.id).then((result) => done(result.ok ? undefined : result.error)); }} />}
+          {state.confirm?.kind === "download" && <DownloadDialog confirm={state.confirm} api={api} />}
+          {state.confirm?.kind === "command" && <CommandDialog confirm={state.confirm} api={api} />}
+          {lightbox && <Lightbox api={api} path={lightbox} onClose={() => setLightbox("")} />}
+        </>}
+      </MotionPresence>
       {toast && <div className={`toast ${toast.kind}`} role="status"><Icon name={toast.kind === "error" ? "alert" : "check"} size={16} />{toast.text}</div>}
     </div>
     </LinkContext.Provider>

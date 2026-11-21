@@ -1,33 +1,48 @@
-import { useEffect, useMemo, useState } from "react";
-import type { EngineState, Slide, WebApi } from "./bridge";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CodeFile, EngineState, Slide, WebApi } from "./bridge";
 import { BrowserPane } from "./browser";
 import { useImage } from "./cards";
 import { ContextTab } from "./context";
 import { Icon } from "./icons";
-import { Button, Decor, IconButton, fileName } from "./ui";
+import { Button, Decor, IconButton, SelectionMarker, fileName } from "./ui";
 
 export type WorkspaceTab = "browser" | "files" | "context";
 
-export function Workspace({ api, state, tab, setTab, browserRequest, covered, onClose }:
+export function Workspace({ api, state, tab, setTab, browserRequest, covered, onReference }:
   { api: WebApi; state: EngineState; tab: WorkspaceTab; setTab: (tab: WorkspaceTab) => void; browserRequest: { url: string; nonce: number } | null;
-    covered: boolean; onClose: () => void }) {
+    covered: boolean; onReference: (path: string) => void }) {
+  const [attachments, setAttachments] = useState(false);
+  const project = Boolean(state.code.on || state.code.root);
+  const fileTab = project && !attachments ? "project" : "attachments";
   return (
     <div className="workspace-body">
       <div className="workspace-tabs" role="tablist">
+        <SelectionMarker selected={tab} />
         {([["browser", "Браузер", "external"], ["files", "Файлы", "folder"], ["context", "Контекст", "database"]] as const).map(([id, label, icon]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
             <Icon name={icon} size={14} />{label}
           </button>
         ))}
-        <span className="topbar-spacer" />
-        <IconButton icon="workspace" label="Скрыть панель (Ctrl+D)" onClick={onClose} />
       </div>
 
-      <div className={tab === "browser" ? "workspace-slot" : "workspace-hidden"}>
-        <BrowserPane api={api} openRequest={browserRequest} covered={covered || tab !== "browser"} />
+      <div className="workspace-slot workspace-content">
+        <div className={`workspace-slot workspace-browser ${tab === "browser" ? "tab-view" : ""}`} inert={tab !== "browser"}>
+          <BrowserPane api={api} openRequest={browserRequest} covered={covered || tab !== "browser"} />
+        </div>
+        {tab === "files" && project && <div className="files-bar project-file-tabs" role="tablist" aria-label="Файлы и вложения">
+          <SelectionMarker selected={fileTab} />
+          <button type="button" role="tab" aria-selected={!attachments} aria-controls="workspace-file-view"
+            className={attachments ? "" : "on"} onClick={() => setAttachments(false)}>Проект</button>
+          <button type="button" role="tab" aria-selected={attachments} aria-controls="workspace-file-view"
+            className={attachments ? "on" : ""} onClick={() => setAttachments(true)}>Вложения</button>
+        </div>}
+        {tab === "files" && <div key={fileTab} id="workspace-file-view" className="workspace-slot tab-view" role={project ? "tabpanel" : undefined}>
+          {fileTab === "project"
+            ? <ProjectFiles key={JSON.stringify([state.activeChatId, state.code.root])} api={api} state={state} onReference={onReference} />
+            : <FilesTab api={api} state={state} />}
+        </div>}
+        {tab === "context" && <div className="workspace-slot tab-view"><ContextTab api={api} state={state} /></div>}
       </div>
-      {tab === "files" && <FilesTab api={api} state={state} />}
-      {tab === "context" && <ContextTab api={api} state={state} />}
     </div>
   );
 }
@@ -35,11 +50,100 @@ export function Workspace({ api, state, tab, setTab, browserRequest, covered, on
 const IMAGE = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const VIDEO = /\.(mp4|webm|mkv)$/i;
 
+function ProjectFiles({ api, state, onReference }: { api: WebApi; state: EngineState; onReference: (path: string) => void }) {
+  const chatId = state.activeChatId;
+  const [listing, setListing] = useState<{ root: string; files: CodeFile[]; limited?: boolean } | null>(null);
+  const [folder, setFolder] = useState("");
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState("");
+  const [preview, setPreview] = useState<Awaited<ReturnType<WebApi["code_read"]>> | null>(null);
+  const [memory, setMemory] = useState<Awaited<ReturnType<WebApi["code_project_memory"]>> | null>(null);
+  const [memoryError, setMemoryError] = useState("");
+  const [error, setError] = useState("");
+  const refreshFiles = useCallback(() => api.code_files(chatId).then((result) => {
+    setListing(result); setError("");
+  }).catch(() => setError("Не удалось открыть файлы проекта.")), [api, chatId]);
+  const refreshMemory = useCallback(async (action?: "refresh" | "forget", entry?: number) => {
+    try {
+      const reply = await api.code_project_memory(chatId, action, entry);
+      if (reply.ok) { setMemory(reply); setMemoryError(""); }
+      else setMemoryError(reply.error || "Память проекта недоступна.");
+    } catch { setMemoryError("Память проекта недоступна."); }
+  }, [api, chatId]);
+  useEffect(() => { if (state.code.root) void refreshFiles(); }, [state.busy, state.code.root, refreshFiles]);
+  useEffect(() => {
+    if (!state.code.root) return;
+    void refreshMemory();
+    const timer = window.setInterval(() => { void refreshMemory(); }, 2000);
+    return () => window.clearInterval(timer);
+  }, [state.code.root, refreshMemory]);
+  useEffect(() => {
+    if (!selected) return;
+    let current = true;
+    setPreview(null);
+    void api.code_read(selected, chatId).then((reply) => { if (current) setPreview(reply); })
+      .catch(() => { if (current) setPreview({ ok: false, error: "Не удалось прочитать файл." }); });
+    return () => { current = false; };
+  }, [api, chatId, selected, listing]);
+  const needle = query.trim().toLowerCase();
+  const files = (listing?.files ?? []).filter((item) =>
+    needle ? item.path.toLowerCase().includes(needle) : item.path.slice(0, Math.max(0, item.path.lastIndexOf("/"))) === folder);
+  const visibleFiles = files.sort((a,b) => Number(b.directory) - Number(a.directory) || a.path.localeCompare(b.path));
+  const parent = folder.split("/").slice(0, -1).join("/");
+  const index = memory?.index;
+
+  if (!state.code.root || listing?.root === "") return <div className="files-empty">
+    <p className="pane-note">Выбери папку, чтобы открыть файлы проекта.</p>
+    <Button icon="folder" onClick={() => { void api.code_pick_folder(); }}>Выбрать папку…</Button>
+  </div>;
+  if (selected) return <div className="workspace-slot files-view">
+    <div className="files-bar">
+      <IconButton icon="arrowRight" className="flip-x" label="К списку файлов" onClick={() => setSelected("")} />
+      <strong title={selected} data-i18n-skip>{selected}</strong>
+      <span className="topbar-spacer" />
+      <Button kind="ghost" onClick={() => onReference(selected)}>Указать в чате</Button>
+    </div>
+    {!preview ? <p className="pane-note files-empty">Загрузка…</p> : preview.ok ?
+      <><pre className="project-source" data-smooth-wheel data-i18n-skip>{preview.text}</pre>{preview.truncated && <p className="pane-note files-empty">Показано начало файла.</p>}</>
+      : <p className="pane-note files-empty">{preview.error}</p>}
+  </div>;
+  return <div className="workspace-slot files-list" data-smooth-wheel>
+    <div className="files-bar">
+      {folder && <IconButton icon="arrowRight" className="flip-x" label="На уровень выше" onClick={() => { setFolder(parent); setQuery(""); }} />}
+      <strong title={listing?.root} data-i18n-skip>{folder || fileName(listing?.root || state.code.root)}</strong>
+      <span className="topbar-spacer" />
+      <IconButton icon="folder" label="Открыть папку проекта" onClick={() => { void api.code_open_folder(); }} />
+      <IconButton icon="refresh" label="Обновить список" onClick={() => { void refreshFiles(); }} />
+    </div>
+    <input className="input project-file-search" aria-label="Найти файл проекта" placeholder="Найти файл проекта" value={query} onChange={(event) => setQuery(event.target.value)} />
+    <details className="project-memory">
+      <summary>Память проекта</summary>
+      {index && <p className="pane-note">{index.indexing ? "Индексирует документы…" : `Документов в индексе: ${index.files}`}</p>}
+      {(memoryError || index?.error) && <p className="pane-note">{memoryError || index?.error}</p>}
+      <Button kind="ghost" icon="refresh" disabled={index?.indexing} onClick={() => { void refreshMemory("refresh"); }}>Обновить индекс</Button>
+      {memory?.notes?.length === 0 && <p className="pane-note">Пока нет заметок проекта.</p>}
+      {memory?.notes?.map((note) => <div className="memory-fact" key={note.id}>
+        <div className="memory-fact-body" data-i18n-skip>{note.text}</div>
+        <IconButton icon="close" label="Забыть" onClick={() => { void refreshMemory("forget", note.id); }} />
+      </div>)}
+    </details>
+    {error && <p className="pane-note files-empty">{error}</p>}
+    {!listing && !error && <p className="pane-note files-empty">Загрузка…</p>}
+    {listing && !visibleFiles.length && <p className="pane-note files-empty">{needle ? "Ничего не найдено" : "Файлов пока нет"}</p>}
+    {listing?.limited && <p className="pane-note files-empty">Показана часть файлов проекта.</p>}
+    {visibleFiles.map((file) => <button key={file.path} type="button" className="file-row" title={file.path}
+      onClick={() => { if (file.directory) { setFolder(file.path); setQuery(""); } else setSelected(file.path); }}>
+      <Icon name={file.directory ? "folder" : "file"} size={16} />
+      <span className="file-name" data-i18n-skip>{needle ? file.path : fileName(file.path)}</span>
+    </button>)}
+  </div>;
+}
+
 function FilesTab({ api, state }: { api: WebApi; state: EngineState }) {
   const files = useMemo(() => {
     const seen = new Set<string>();
     const list: string[] = [];
-    [...state.items].reverse().forEach((item) => item.images.forEach((path) => { if (!seen.has(path)) { seen.add(path); list.push(path); } }));
+    [...state.items].reverse().forEach((item) => [...item.images, ...(item.files ?? [])].forEach((path) => { if (!seen.has(path)) { seen.add(path); list.push(path); } }));
     return list;
   }, [state.items]);
   const [open, setOpen] = useState("");
@@ -58,7 +162,7 @@ function FilesTab({ api, state }: { api: WebApi; state: EngineState }) {
     </div>
   );
   return (
-    <div className="workspace-slot files-list">
+    <div className="workspace-slot files-list" data-smooth-wheel>
       {!files.length && <div className="files-empty"><Decor corner="br" /><p className="pane-note">Файлов пока нет</p></div>}
       {files.map((path) => (
         <button key={path} type="button" className="file-row" onClick={() => setOpen(path)} title={path}>

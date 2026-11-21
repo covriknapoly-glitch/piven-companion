@@ -11,7 +11,7 @@ ICONS = {
     "retry": "cod-debug_rerun", "send": "cod-send", "spark": "cod-sparkle", "stop": "cod-debug_stop",
     "twitch": "fa-twitch", "user": "cod-account", "zoomIn": "cod-zoom_in", "zoomOut": "cod-zoom_out",
     "plus": "cod-add", "moon": "md-weather_night", "sun": "md-weather_sunny", "chat": "cod-comment",
-    "code": "cod-code", "copy": "cod-copy", "trash": "cod-trash", "box": "cod-package", "monitor": "cod-vm",
+    "branch": "cod-git_branch", "code": "cod-code", "copy": "cod-copy", "trash": "cod-trash", "box": "cod-package", "monitor": "cod-vm",
     "file": "cod-file", "edit": "cod-edit", "compose": "cod-comment_draft", "extension": "cod-extensions",
     "folder": "cod-folder", "headphones": "md-headphones", "image": "cod-file_media", "share": "cod-export",
     "pin": "cod-pin", "sidebar": "cod-layout_sidebar_left", "sidebarOpen": "cod-layout_sidebar_left_off",

@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
-SKIP = {"publish.py", "__pycache__"}
+SKIP = {"publish.py", "serve.py", "__pycache__"}
 
 
 def git(*args, cwd=ROOT):

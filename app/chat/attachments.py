@@ -23,7 +23,7 @@ class Unreadable(ValueError):
     """The file has no text the model could read; the message says why, in words for the user."""
 
 
-def read_text(path) -> str:
+def read_text(path, *, preserve_lines=False) -> str:
     path = Path(path)
     if path.stat().st_size > MAX_FILE_BYTES:
         raise Unreadable("файл больше 20 МБ")
@@ -36,10 +36,10 @@ def read_text(path) -> str:
         raise Unreadable("такие файлы читать не умею: подходят текст, код, PDF и документы Word (.docx)")
     else:
         text = _plain(path.read_bytes())
-    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not text:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if not text.strip():
         raise Unreadable("в файле нет текста" + (": похоже, это скан" if suffix == ".pdf" else ""))
-    return text
+    return text if preserve_lines else text.strip()
 
 
 def _plain(data: bytes) -> str:
@@ -72,16 +72,20 @@ def _docx(path: Path) -> str:
 _DOCX_TOKEN = re.compile(r"<w:t(?:\s[^>]*)?>(.*?)</w:t>|<w:tab/>|<w:br[^>]*/>|</w:p>", re.S)
 
 
-def _pdf(path: Path) -> str:
+def pdf_pages(path: Path) -> list[str]:
     try:
         from pypdf import PdfReader
     except ImportError as error:
         raise Unreadable("для PDF в программе пока нет модуля pypdf") from error
     try:
         reader = PdfReader(str(path))
-        return "\n\n".join((page.extract_text() or "").strip() for page in reader.pages)
+        return [(page.extract_text() or "").strip() for page in reader.pages]
     except Exception as error:
         raise Unreadable("PDF не открывается: возможно, он защищён паролем или повреждён") from error
+
+
+def _pdf(path: Path) -> str:
+    return "\n\n".join(pdf_pages(path))
 
 
 def prompt_block(paths, budget: int) -> str:

@@ -3,9 +3,11 @@ export type ChatRole = "user" | "assistant" | "system" | "computer" | "poll" | "
 export interface DialogueItem {
   role: ChatRole;
   text: string;
+  created?: number | null;
   images: string[];
   /** Text files, code, PDF or Word documents attached to the message; their text went to the model. */
   files?: string[];
+  sources?: KnowledgeSource[];
   undo?: number;
 }
 
@@ -21,7 +23,13 @@ export interface ChatSummary {
   updated?: number;
   code?: boolean;
   root?: string;
+  branchOf?: string;
 }
+
+export interface KnowledgeSource { path: string; section: string; start: number; end: number; page: number }
+export type KnowledgeStatus = {
+  ok: true; folder: string; files: number; skipped: number; limited: boolean; indexing: boolean; pendingFolder: string; error: string;
+} | { ok: false; error: string };
 
 export interface EngineSettings {
   model: string;
@@ -31,7 +39,6 @@ export interface EngineSettings {
   comfyUrl: string;
   voice: string;
   theme: string;
-  systemPrompt: string;
   integrations: Record<string, boolean>;
   thinkingLevel: string | boolean;
 }
@@ -42,7 +49,10 @@ export interface DownloadConfirm { id: string; kind: "download"; url: string; de
 export interface CommandConfirm { id: string; kind: "command"; command: string; reason: string; canTrust: boolean; folder: string; edit?: boolean }
 export type CodeMode = "ask" | "edits" | "plan" | "free";
 export interface CodeState { on: boolean; root: string; trusted: boolean; mode: CodeMode }
-export interface CodeFile { path: string; size: number }
+export interface CodeFile { path: string; size: number; directory: boolean }
+
+export interface PlanStep { text: string; status: "pending" | "in_progress" | "done" }
+export interface ActivePlan { planId: string; items: PlanStep[] }
 
 export interface EngineState {
   version: number;
@@ -51,6 +61,7 @@ export interface EngineState {
   items: DialogueItem[];
   chatTitle: string;
   busy: boolean;
+  activePlan?: ActivePlan | null;
   queue: { text: string; images: number; files?: string[] }[];
   busySince: number;
   listening: { running: boolean; options: ListenOptions };
@@ -79,8 +90,8 @@ export interface UpdateStatus {
 export type ParamValue = number | string | boolean;
 export interface ModelParams {
   model: string; defaults: Record<string, ParamValue>; limits: Record<string, [number, number]>; choices: Record<string, string[]>;
-  presets: Record<string, Record<string, ParamValue>>; serverKeys: string[]; all: Record<string, ParamValue>; own: Record<string, ParamValue>;
-  effective: Record<string, ParamValue>; autoTitles: boolean; cloud: boolean;
+  presets: Record<string, Record<string, ParamValue>>; serverKeys: string[]; own: Record<string, ParamValue>;
+  effective: Record<string, ParamValue>; autoTitles: boolean; cloud: boolean; systemPrompt: string;
 }
 export interface ProviderRow { errorKind: "" | "key" | "lost"; keyEnd: string; keyBroken: boolean; keyPage: string; id: string; title: string; local: boolean; needsKey: boolean; enabled: boolean; url: string; defaultUrl: string; hasKey: boolean; models: number; error: string; installed: boolean; site: string }
 export interface McpServer { name: string; command: string; url: string; env: Record<string, string>; enabled: boolean; error?: string; tools?: number | null }
@@ -89,12 +100,15 @@ export interface ToolsStatus { enabled: boolean; servers: McpServer[]; skills: S
 export interface CodeRun { ok: boolean; stdout?: string; stderr?: string; exitCode?: number | null; seconds?: number; error?: string }
 export interface Slide { title: string; texts: string[]; images: string[]; background: string }
 export interface MemoryStatus {
-  enabled: boolean; facts: { id: number; text: string; created: number }[]; counts: { facts: number; exchanges: number; withMeaning: number };
+  enabled: boolean; facts: { id: number; text: string; created: number; source?: "" | "manual" | "model" }[]; counts: { facts: number; exchanges: number; withMeaning: number };
   modelReady: boolean; modelSize: string; modelName: string; job: { state?: string; percent?: number; message?: string };
 }
 export interface DownloadRow { kind: "model" | "voice"; title: string; state: "running" | "done" | "error" | "cancelled"; percent: number; message: string }
 
 export type PollResult = EngineState | { version: number; unchanged: true };
+
+/** A call as it goes: microphone and voice levels (0..1), the user's words so far, PIVEN's words spoken so far and the piece now playing. */
+export interface CallLive { level: number; voice: number; heard: string; said: string; saying: string; speaking: boolean }
 
 export interface CommandResult {
   ok: boolean;
@@ -106,8 +120,6 @@ export interface CommandResult {
 }
 
 export interface SettingsDetails {
-  systemPrompt: string;
-  defaultSystemPrompt: string;
   speechEnabled: boolean;
   voice: string;
   voices: [string, string][];
@@ -139,10 +151,11 @@ export interface HfModel { id: string; downloads?: number; likes?: number; gated
 export interface HfFile { path: string; size?: number }
 export interface BrowserState { url: string; title: string; loading: boolean; canBack: boolean; canForward: boolean; notice: string }
 export type VoiceKind = "asr" | "tts";
-export interface DiskUsage { ok: boolean; error?: string; models: { name: string; bytes: number }[]; voiceModels: number; engines: { id: string; label: string; bytes: number; removable: boolean }[] }
+export interface DiskUsage { ok: boolean; error?: string; models: { name: string; bytes: number }[]; voiceModels: number; legacyVoiceModels?: { id: string; kind: VoiceKind; title: string; bytes: number }[]; engines: { id: string; label: string; bytes: number; removable: boolean }[] }
 export interface VoiceModel { id: string; title: string; note: string; license: string; source: string; size: string; memory: number; installed: boolean; custom: boolean; engine: string; bytes: number }
-export interface VoiceSearchHit { id: string; title?: string; note?: string; downloads: number; gated: boolean; engine: string; engineLabel: string; license?: string; nonCommercial?: boolean }
-export interface VoiceDetails { ok: boolean; error?: string; supported?: boolean; reason?: string; engine?: string; mode?: "custom" | "design"; voices?: string[]; files?: (HfFile & { label?: string })[]; bytes?: number; note?: string; license?: string; engineNote?: string }
+export interface VoiceSearchHit { id: string; title?: string; note?: string; downloads: number; gated: boolean; engine: string; engineLabel: string; license?: string; nonCommercial?: boolean; direct?: boolean; problem?: string }
+export interface VoiceDetails { ok: boolean; error?: string; supported?: boolean; reason?: string; engine?: string; voices?: string[]; files?: (HfFile & { label?: string; languages?: string[] })[]; bytes?: number; note?: string; license?: string; engineNote?: string; languages?: string[]; languagesComplete?: boolean }
+export interface VoiceFileCheck { ok: boolean; error?: string; supported?: boolean; engine?: string; engineName?: string; engineNote?: string; reason?: string; retryable?: boolean }
 export interface MemoryEstimate { total: number; weights: number; kv: number; other: number; speed?: number; measured?: boolean }
 export interface ModelFeatures { vision: boolean; thinking: boolean; context: number }
 export interface ModelMemory { gpu: number; context: number; models: Record<string, MemoryEstimate>; voiceReserved?: number; voiceCall?: number; features?: Record<string, ModelFeatures> }
@@ -163,10 +176,17 @@ interface WebApi {
   poll(knownVersion: number): Promise<PollResult>;
   state(): Promise<EngineState>;
   refresh_models(): Promise<EngineState>;
-  send_message(text: string, imagePaths: string[], filePaths?: string[]): Promise<CommandResult>;
+  send_message(text: string, imagePaths: string[], filePaths?: string[], chatId?: string): Promise<CommandResult>;
   interrupt(): Promise<CommandResult>;
   select_chat(chatId: string): Promise<CommandResult>;
-  new_chat(): Promise<CommandResult>;
+  new_chat(draftChatIds?: string[]): Promise<CommandResult>;
+  fork_chat(chatId: string, index?: number, text?: string): Promise<CommandResult>;
+  knowledge_status(chatId: string): Promise<KnowledgeStatus>;
+  knowledge_pick_folder(chatId: string): Promise<CommandResult>;
+  knowledge_refresh(chatId: string): Promise<CommandResult>;
+  knowledge_remove(chatId: string): Promise<CommandResult>;
+  knowledge_excerpt(chatId: string, index: number, number: number, path: string): Promise<{ ok: boolean; error?: string; text?: string }>;
+  knowledge_open_source(chatId: string, index: number, number: number, path: string): Promise<CommandResult>;
   code_mode(on: boolean): Promise<CommandResult>;
   answer_code_offer(index: number, accept: boolean): Promise<CommandResult>;
   answer_plan(index: number, accept: boolean): Promise<CommandResult>;
@@ -200,14 +220,17 @@ interface WebApi {
   code_set(values: { on?: boolean; root?: string; mode?: CodeMode }): Promise<CommandResult>;
   code_pick_folder(): Promise<CommandResult>;
   code_open_folder(): Promise<CommandResult>;
-  code_files(): Promise<{ root: string; files: CodeFile[] }>;
-  code_read(path: string): Promise<{ ok: boolean; text?: string; full?: string; error?: string }>;
+  code_files(chatId?: string): Promise<{ root: string; files: CodeFile[]; limited?: boolean }>;
+  code_read(path: string, chatId?: string): Promise<{ ok: boolean; text?: string; full?: string; truncated?: boolean; error?: string }>;
+  code_project_memory(chatId: string, action?: "refresh" | "forget", entry?: number):
+    Promise<CommandResult & { index?: Omit<Extract<KnowledgeStatus, { ok: true }>, "ok">; notes?: { id: number; text: string }[] }>;
   code_preview(path: string): Promise<{ ok: boolean; url?: string; error?: string }>;
   code_undo(index: number): Promise<CommandResult>;
   set_title_theme(caption: string, text: string, dark: boolean): Promise<CommandResult>;
   settings_details(): Promise<SettingsDetails>;
   update_settings(patch: Record<string, unknown>): Promise<SettingsResult>;
   set_mic_muted(muted: boolean): Promise<CommandResult>;
+  call_live(): Promise<CallLive>;
   thinking_options(model: string): Promise<ThinkingOptions>;
   set_thinking(model: string, value: ThinkingValue): Promise<CommandResult>;
   pick_path(kind: "folder" | "workflow" | "audio"): Promise<string>;
@@ -225,12 +248,14 @@ interface WebApi {
   hf_cancel(): Promise<CommandResult>;
   voice_status(): Promise<VoiceStatus>;
   voice_install(kind: VoiceKind, modelId: string, extra?: { file?: HfFile; repo?: string; size?: number; engine?: string; voices?: string[] }, token?: string): Promise<CommandResult>;
-  voice_search(kind: VoiceKind, query: string, token?: string): Promise<{ ok: boolean; error?: string; models: VoiceSearchHit[] }>;
+  voice_search(kind: VoiceKind, query: string, token?: string, recent?: boolean, cursor?: string): Promise<{ ok: boolean; error?: string; warning?: string; models: VoiceSearchHit[]; nextCursor?: string }>;
   voice_details(kind: VoiceKind, repo: string, engine: string, token?: string): Promise<VoiceDetails>;
+  voice_check_file(kind: VoiceKind, repo: string, filename: string, token?: string): Promise<VoiceFileCheck>;
   voice_select(kind: VoiceKind, modelId: string): Promise<CommandResult & { restart?: boolean }>;
   restart_app(): Promise<CommandResult>;
   model_params(model: string): Promise<ModelParams>;
-  set_model_params(scope: string, values: Record<string, ParamValue>, replace: boolean): Promise<CommandResult>;
+  set_model_prompt(model: string, prompt: string): Promise<CommandResult>;
+  set_model_params(scope: string, values: Record<string, ParamValue | null>, replace: boolean): Promise<CommandResult>;
   set_auto_titles(enabled: boolean): Promise<CommandResult>;
   reset_settings(): Promise<CommandResult>;
   set_language(language: string): Promise<CommandResult>;

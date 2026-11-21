@@ -28,6 +28,23 @@ class FileTools(unittest.TestCase):
         self.root.mkdir()
         self.tools = make_tools(self.root)
 
+    def test_task_context_prioritizes_traces_without_expanding_ambiguous_files_or_secrets(self):
+        for folder in ("src", "tests"):
+            (self.root / folder).mkdir()
+            (self.root / folder / "orders.py").write_text(
+                f"start = 1\nlocation = {folder!r}\nend = 3\n", encoding="utf-8")
+        (self.root / ".env").write_text("secret = fixture", encoding="utf-8")
+        path = self.root / "src" / "orders.py"
+        _, reference = agent_module.project_task_context(self.tools, f'Fix orders. File "{path}", line 2\n.env:1')
+        hints = json.loads(reference.split("\n")[-1])
+        self.assertEqual(hints[0]["path"], "src/orders.py")
+        self.assertEqual(hints[0]["reported_line"], 2)
+        self.assertIn("2|location = 'src'", hints[0]["excerpt"])
+        self.assertNotIn(".env", reference)
+        self.assertNotIn("location = 'tests'", reference)
+        _, ambiguous = agent_module.project_task_context(self.tools, "orders.py:2")
+        self.assertNotIn("reported_line", ambiguous)
+
     def test_write_makes_folders_and_reports_syntax_errors(self):
         self.assertIn("Wrote src/a.py", self.tools.run("write_file", {"path": "src/a.py", "content": "print(1)\n"}))
         self.assertEqual((self.root / "src" / "a.py").read_text(encoding="utf-8"), "print(1)\n")
@@ -463,17 +480,69 @@ class AgentLoop(unittest.TestCase):
     def test_a_question_may_be_answered_without_tools(self):
         self.assertEqual(self.agent(["Этот код считает сумму."], request="Что делает этот код?", may_only_answer=True).run(), "Этот код считает сумму.")
 
-    def test_unchecked_changes_get_one_reminder(self):
+    def test_unchecked_changes_cannot_be_reported_as_finished(self):
         seen = []
-        agent = self.agent([call("write_file", path="a.py", content="print(1)\n"), "Готово", "Проверить нечем, сказал как есть"], seen)
-        self.assertEqual(agent.run(), "Проверить нечем, сказал как есть")
-        self.assertIn("after the last successful check", seen[2][-1]["content"])
+        agent = self.agent([call("write_file", path="a.py", content="print(1)\n"), "Готово", "Всё работает", "Проверено"], seen)
+        self.assertIn("Работоспособность не подтверждена", agent.run())
+        self.assertIn("successful runtime check", seen[2][-1]["content"])
+        self.assertIn("successful runtime check", seen[3][-1]["content"])
+
+    def test_documentation_only_changes_do_not_require_a_program_run(self):
+        agent = self.agent([call("write_file", path="README.md", content="# Project\n"), "Готово"])
+        self.assertEqual(agent.run(), "Готово")
+
+    def test_a_failed_check_must_be_repeated_even_after_another_program_runs(self):
+        agent = self.agent([
+            call("write_file", path="a.py", content="raise SystemExit(1)\n"),
+            call("run_command", command="python a.py"),
+            call("write_file", path="b.py", content="print('ok')\n"),
+            call("run_command", command="python b.py"),
+            "Готово",
+            call("edit_file", path="a.py", old_text="raise SystemExit(1)", new_text="print('corrected')"),
+            call("run_command", command="python a.py"),
+            "Теперь проверено",
+        ])
+        self.assertEqual(agent.run(), "Теперь проверено")
+
+    def test_a_project_test_runs_even_if_the_model_tries_to_finish_without_it(self):
+        (self.root / "tests").mkdir()
+        (self.root / "tests" / "test_app.py").write_text(
+            "import unittest\nclass Smoke(unittest.TestCase):\n"
+            "    def test_import(self):\n        from app import value\n        self.assertEqual(value, 7)\n",
+            encoding="utf-8",
+        )
+        seen = []
+        agent = self.agent([call("write_file", path="app.py", content="value = 7\n"), "Готово", "Тест прошёл"], seen)
+        self.assertEqual(agent.run(), "Тест прошёл")
+        self.assertIn("Ran 1 test", seen[2][-1]["content"])
+        self.assertTrue(agent.tools.verified)
+
+    def test_renaming_a_file_invalidates_a_successful_run(self):
+        tools = make_tools(self.root, ask=lambda *args: "once")
+        tools.run("write_file", {"path": "a.py", "content": "print(1)\n"})
+        tools.run("run_command", {"command": "python a.py"})
+        self.assertTrue(tools.verified)
+        tools.run("move_file", {"source": "a.py", "destination": "b.py"})
+        self.assertFalse(tools.verified)
+
+    def test_browser_script_failure_does_not_verify_a_page(self):
+        from app.tools import preview
+        from unittest import mock
+        browser = mock.Mock()
+        browser.check_page.return_value = {"page": {"title": "Project"}, "errors": [], "after": "Script error: check failed"}
+        tools = make_tools(self.root, browser=browser, ask=lambda *args: "once")
+        tools.run("write_file", {"path": "index.html", "content": "<p>Test</p>"})
+        with mock.patch.object(preview, "url_for", return_value="http://127.0.0.1:8123/index.html"):
+            tools.run("check_page", {"path": "index.html"})
+        self.assertFalse(tools.verified)
+        self.assertIn("index.html", tools.failed_checks)
 
     def test_unfinished_plan_gets_a_reminder(self):
         seen = []
         agent = self.agent([call("update_plan", items=[{"text": "шаг", "status": "pending"}]), call("write_file", path="a.py", content="print(1)\n"),
                             call("run_command", command="python a.py"), "Готово", "Всё"], seen)
         self.assertEqual(agent.run(), "Всё")
+        self.assertIn("use update_plan now", seen[2][-1]["content"])
         self.assertIn("unfinished steps: шаг", seen[4][-1]["content"])
 
     def test_code_pasted_into_the_chat_is_sent_back(self):
@@ -516,6 +585,10 @@ class AgentLoop(unittest.TestCase):
         tools = make_tools(self.root, ask=lambda *args: "once")
         tools.run("write_file", {"path": "a.py", "content": "print(1)\n"})
         tools.run("run_command", {"command": "findstr print a.py"})
+        self.assertFalse(tools.verified)
+        tools.run("run_command", {"command": "python -m py_compile a.py"})
+        self.assertFalse(tools.verified)
+        tools.run("run_command", {"command": "python -m unittest discover"})
         self.assertFalse(tools.verified)
         tools.run("run_command", {"command": "python a.py"})
         self.assertTrue(tools.verified)
@@ -780,11 +853,6 @@ class Routing(unittest.TestCase):
         for text in ("Напиши отзыв про игру Ведьмак", "Посоветуй игру на вечер", "Напиши письмо другу", "Как дела?", "Что такое игра Го?", "Write a review about this game"):
             self.assertFalse(commands.asks_new_project(text), text)
             self.assertEqual(core.CompanionCore._detect_composer_route(text), "chat", text)
-
-    def test_project_names_are_safe_for_a_folder(self):
-        self.assertEqual(commands.project_name("Напиши игру змейка для браузера"), "zmeyka")
-        self.assertEqual(commands.project_name("write a snake game"), "snake")
-        self.assertEqual(commands.project_name("???"), "")
 
     def test_only_a_question(self):
         self.assertTrue(commands.asks_only_question("Что делает этот код?"))
@@ -1197,11 +1265,31 @@ class ProjectFolders(unittest.TestCase):
         self.core.settings = {"project_root": str(self.base)}
 
     def test_a_new_program_gets_its_own_folder_and_the_chat_keeps_it(self):
-        first = self.core._code_root({}, "Напиши игру змейка")
-        self.assertEqual(first, self.base / "zmeyka")
-        self.assertTrue(first.is_dir())
-        self.assertEqual(self.core._code_root({}, "Напиши игру змейка"), self.base / "zmeyka-2")
-        self.assertEqual(self.core._code_root({"code_root": str(first)}, "Напиши игру змейка"), first)
+        from unittest import mock
+        model = "custom:chat"
+        with mock.patch.object(core, "model_chat", return_value="`Pixel-Maze`") as name:
+            first = self.core._code_root({}, "Сделай игру", model)
+            self.assertEqual(first, self.base / "pixel-maze")
+            self.assertTrue(first.is_dir())
+            self.assertEqual(self.core._code_root({}, "Сделай игру", model), self.base / "pixel-maze-2")
+            self.assertEqual(self.core._code_root({"code_root": str(first)}, "Сделай игру", model), first)
+        self.assertEqual(name.call_count, 2)
+        self.assertEqual(name.call_args.args[0], model)
+
+    def test_invalid_model_names_fall_back_to_a_date_based_folder(self):
+        from unittest import mock
+        for answer in ("../other", "CON", "C:/Other", "", "here are some names"):
+            with self.subTest(answer=answer), mock.patch.object(core, "model_chat", return_value=answer):
+                folder = self.core._code_root({}, "Сделай игру", "custom:chat")
+                self.assertEqual(folder.parent, self.base)
+                self.assertRegex(folder.name, r"^project-\d{8}-\d{4}(?:-\d+)?$")
+
+    def test_cancelled_naming_creates_no_folder(self):
+        from unittest import mock
+        with mock.patch.object(core, "model_chat", side_effect=InterruptedError):
+            with self.assertRaises(InterruptedError):
+                self.core._code_root({}, "Сделай игру", "custom:chat", threading.Event())
+        self.assertEqual(list(self.base.iterdir()), [])
 
     def test_a_chat_without_a_folder_never_lands_in_another_project(self):
         (self.base / "companion-mod").mkdir()

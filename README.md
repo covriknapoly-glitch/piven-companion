@@ -29,7 +29,10 @@ You can download almost any model from Hugging Face right in the app. Before dow
 - Make presentations.
 - Draw pictures and short videos if you have ComfyUI.
 - Remember stuff between chats. You can see and delete everything it remembers.
-- Also, you can connect models from Ollama, LM Studio, OpenRouter, Google, OpenAI, Anthropic.
+- Continue from an earlier message in a separate chat branch.
+- Connect a folder of project documents and open the passages cited in answers.
+- Browse project files and reuse project notes across coding chats that use the same folder.
+- Connect models from Ollama, LM Studio, vLLM, Strata, Unsloth Studio, OpenRouter, Google, OpenAI, and Anthropic.
 
 Supported languages are English and Russian.
 
@@ -56,6 +59,25 @@ You need:
 - About 1.2 GB for the app and more for models.
 
 When you open it, it suggests a model for your pc. In case you want another model, you can go to settings and download any model from Hugging Face.
+
+### Coding projects
+
+Open a project in coding mode and choose its folder. In the right panel, **Files → Project** lets you browse folders, preview text files, and insert a file path into the chat draft.
+
+PIVEN reads the current file layout and the first available guide from `AGENTS.md`, `CLAUDE.md`, or `README.md`. It indexes project documentation and lets the agent save verified notes for future chats in the same folder. Open **Project memory** under **Files** to see notes, remove them, or refresh the document index after external changes. The index and notes are stored locally. When you select a cloud model, relevant excerpts can be included in its request.
+
+### Connect vLLM
+
+Start vLLM with a chat model. In PIVEN, open **Settings → Integrations → vLLM**, turn it on, and set the server address. The default is `http://127.0.0.1:8000/v1`. Enter an API key if the server requires one. The server's models will appear in the chat model picker. [vLLM server setup](https://docs.vllm.ai/en/stable/serving/online_serving/openai_compatible_server/)
+
+To use tools through vLLM, start the server with `--enable-auto-tool-choice` and `--tool-call-parser` for your model. [vLLM tool calling](https://docs.vllm.ai/en/stable/features/tool_calling/)
+
+### Connect Strata or Unsloth Studio
+
+Open **Settings → Integrations → Local models** in PIVEN and enable the server you want to use. Its models appear in the chat model picker.
+
+- **Strata** defaults to `http://127.0.0.1:8080/v1`. Start Strata with a chat model and enter the API key if you configured one. [Strata setup](https://github.com/Niko1221/Strata/blob/main/docs/INSTALL.md)
+- **Unsloth Studio** defaults to `http://127.0.0.1:8888/v1`. Load a chat model in Studio and copy the key from **Settings → API**. If Studio uses a different port, enter its address in PIVEN. After changing the loaded model, click **Reconnect** in PIVEN. [Unsloth Studio API](https://unsloth.ai/docs/basics/api)
 
 ## Your data
 

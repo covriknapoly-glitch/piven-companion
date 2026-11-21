@@ -10,7 +10,7 @@ import { UpdatePane } from "./update";
 import { IntegrationsPane } from "./providers";
 import { ToolsPane } from "./tools";
 import { MemoryPane } from "./memory";
-import { AdvancedHead, Button, callMemoryLabel, Decor, Field, gigabytes, groupModels, IconButton, MemoryBar, ModelLogo, prefetchShared, shortModel, Switch, TextSetting, Toggle, useOutsideClose, useShared } from "./ui";
+import { AdvancedHead, Button, callMemoryLabel, Decor, Field, gigabytes, groupModels, IconButton, MemoryBar, ModelLogo, MotionPresence, prefetchShared, SelectionMarker, shortModel, Switch, TextSetting, Toggle, useOutsideClose, useShared } from "./ui";
 import { THEMES, type ThemeId } from "./themes";
 type SectionId = "look" | "model" | "tools" | "memory" | "voice" | "images" | "code" | "integrations" | "phone" | "data";
 const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
@@ -58,13 +58,12 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedAt, setSavedAt] = useState(0);
   const [showSaved, setShowSaved] = useState(false);
-  const [prompt, setPrompt] = useState("");
   const model = state.settings.model;
   const [memory] = useShared<ModelMemory>(`model_memory:${model}`, () => api.model_memory(model ? [model] : []));
   useEffect(() => { prefetchSettings(api, model); }, [api]);
   const modelEstimate = memory?.models[model];
 
-  const reload = useCallback(() => api.settings_details().then((next) => { lastDetails = next; setDetails(next); setPrompt(next.systemPrompt); }), [api]);
+  const reload = useCallback(() => api.settings_details().then((next) => { lastDetails = next; setDetails(next); }), [api]);
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
     if (!savedAt) return;
@@ -84,14 +83,14 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
   });
 
   const d = details;
-  const promptDirty = d !== null && prompt.trim() !== d.systemPrompt.trim();
   return (
     <div className="modal-backdrop">
       <div className="modal settings" role="dialog" aria-modal="true" aria-label="Настройки" ref={ref}>
         <nav className="settings-nav">
           <h3>Настройки</h3>
+          <SelectionMarker selected={section} />
           {SECTIONS.filter((item) => !(isPhone && item.id === "phone")).map((item) => (
-            <button key={item.id} type="button" className={section === item.id ? "on" : ""} onClick={() => { setSection(item.id); setModelPage(null); }}>
+            <button key={item.id} type="button" aria-current={section === item.id ? "page" : undefined} className={section === item.id ? "on" : ""} onClick={() => { setSection(item.id); setModelPage(null); }}>
               <Icon name={item.icon} size={17} />{item.title}
             </button>
           ))}
@@ -100,17 +99,19 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
         </nav>
         <div className="settings-pane">
           <IconButton icon="close" label="Закрыть (Esc)" className="settings-close" onClick={onClose} />
-          {!d ? null : <div className="settings-fields">
+          {!d ? null : <div className="settings-fields tab-view" key={modelPage === null ? section : `model:${modelPage}`} data-smooth-wheel>
             {section === "look" && <>
               <Field label="Язык / Language" hint="Модель тоже будет отвечать на нём.">
-                <div className="segmented wrap">
+                <div className="segmented wrap sliding-selection">
+                  <SelectionMarker selected={language} />
                   {LANGUAGES.map(([value, label]) => (
                     <button key={value} type="button" className={language === value ? "on" : ""} onClick={() => setLanguage(value)} data-i18n-skip>{label}</button>
                   ))}
                 </div>
               </Field>
               {FONT_CHOICES.length > 1 && <Field label="Шрифт">
-                <div className="segmented wrap">
+                <div className="segmented wrap sliding-selection">
+                  <SelectionMarker selected={fontChoice} />
                   {FONT_CHOICES.map(([value, label, family]) => (
                     <button key={value} type="button" className={fontChoice === value ? "on" : ""} style={{ fontFamily: family }} onClick={() => setFontChoice(value)}>{label}</button>
                   ))}
@@ -134,7 +135,8 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
               </Field>
             </ToolsPane>}
             {section === "memory" && <MemoryPane api={api} />}
-            {section === "model" && modelPage !== null && <ModelSettingsPage api={api} scope={modelPage} onBack={() => setModelPage(null)} onSaved={() => setSavedAt(Date.now())} />}
+            {section === "model" && modelPage !== null && <ModelSettingsPage key={modelPage} api={api} scope={modelPage}
+              onBack={() => setModelPage(null)} onSaved={() => setSavedAt(Date.now())} />}
             {section === "model" && modelPage === null && <>
               <Field label="Модель" hint={state.status}>
                 <ModelList api={api} models={state.models} current={model} onOpenHub={onOpenHub}
@@ -143,16 +145,6 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
                   parts={{ ...modelEstimate, voice: memory.voiceCall }} />}
                 <div className="row model-tune-open">
                   {model && <Button kind="ghost" icon="settings" onClick={() => setModelPage(model)}>Настроить эту модель</Button>}
-                  <Button kind="ghost" onClick={() => setModelPage("*")}>Общие настройки</Button>
-                </div>
-              </Field>
-              <Field label="Системный промпт" hint="Как модель должна себя вести. Применяется к следующим сообщениям." error={errors.systemPrompt}>
-                <textarea className="textarea prompt-input" value={prompt} onChange={(event) => setPrompt(event.target.value)} spellCheck={false} />
-                <div className="prompt-actions">
-                  <span>{prompt.length.toLocaleString("ru-RU")} симв.</span>
-                  <Button kind="ghost" disabled={prompt.trim() === d.defaultSystemPrompt.trim()} onClick={() => setPrompt(d.defaultSystemPrompt)}>Вернуть стандартный</Button>
-                  <Button kind="ghost" disabled={!promptDirty} onClick={() => setPrompt(d.systemPrompt)}>Отменить</Button>
-                  <Button kind="primary" disabled={!promptDirty} onClick={() => { void save({ systemPrompt: prompt }); }}>Сохранить</Button>
                 </div>
               </Field>
               <Field label="Режим для тяжёлых моделей" hint="Для очень больших моделей: в памяти остаются только сама модель с её контекстом и модель долговременной памяти. Выключаются звонок, голосовой ввод, озвучка, картинки и видео, поиск в интернете, MCP-серверы и другие загруженные модели." error={errors.heavyMode}>
@@ -160,7 +152,8 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
               </Field>
               <ModelParamsPane api={api}>
               <Field label="Моделей в памяти одновременно" hint="У каждого чата своя модель. Несколько моделей держатся загруженными и могут отвечать в разных чатах одновременно; модель без дела выгружается, если следующая не помещается рядом с ней в видеопамять.">
-                <div className="segmented">
+                <div className="segmented sliding-selection">
+                  <SelectionMarker selected={String(d.heavyMode ? 1 : d.maxLoadedModels)} />
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
                     <button key={count} type="button" disabled={d.heavyMode} className={(d.heavyMode ? count === 1 : d.maxLoadedModels === count) ? "on" : ""} onClick={() => { void save({ maxLoadedModels: count }); }}>{count}</button>
                   ))}
@@ -278,7 +271,7 @@ function ThemeSelect({ theme, setTheme }: { theme: ThemeId; setTheme: (value: Th
       <button type="button" className="model-picker-btn" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         <ThemeChip colors={current[3]} /><span className="grow">{current[1]}</span><Icon name="chevronDown" size={14} />
       </button>
-      {open && (
+      <MotionPresence>{open && (
         <div className="menu menu-left theme-menu" role="listbox">
           <div className="menu-list">
             {THEMES.map(([value, label, , colors]) => (
@@ -288,7 +281,7 @@ function ThemeSelect({ theme, setTheme }: { theme: ThemeId; setTheme: (value: Th
             ))}
           </div>
         </div>
-      )}
+      )}</MotionPresence>
     </div>
   );
 }
@@ -299,12 +292,12 @@ function ResetButton({ api, onReset }: { api: WebApi; onReset: () => void }) {
   return <>
     <Button kind="danger" icon="refresh" onClick={() => setAsking(true)}>Сбросить все настройки</Button>
     {error && <p className="pane-note">{error}</p>}
-    {asking && <ConfirmDialog title="Сбросить настройки?" text="Все настройки вернутся к рекомендуемым. Чаты и скачанные модели не пострадают." confirmLabel="Сбросить" danger
-      onClose={() => setAsking(false)} onConfirm={() => { void api.reset_settings().then((result) => { setError(result.ok ? "" : result.error ?? ""); if (result.ok) onReset(); }); }} />}
+    <MotionPresence>{asking && <ConfirmDialog title="Сбросить настройки?" text="Все настройки вернутся к рекомендуемым. Чаты и скачанные модели не пострадают." confirmLabel="Сбросить" danger
+      onClose={() => setAsking(false)} onConfirm={() => { void api.reset_settings().then((result) => { setError(result.ok ? "" : result.error ?? ""); if (result.ok) onReset(); }); }} />}</MotionPresence>
   </>;
 }
 
-function DeleteButton({ onDelete, disabled = false, compact = false }: { onDelete: () => Promise<void>; disabled?: boolean; compact?: boolean }) {
+function DeleteButton({ onDelete, disabled = false }: { onDelete: () => Promise<void>; disabled?: boolean }) {
   const [armed, setArmed] = useState(false);
   const [working, setWorking] = useState(false);
   useEffect(() => {
@@ -313,13 +306,8 @@ function DeleteButton({ onDelete, disabled = false, compact = false }: { onDelet
     return () => window.clearTimeout(timer);
   }, [armed]);
   const remove = () => { setWorking(true); void onDelete().finally(() => { setWorking(false); setArmed(false); }); };
-  if (compact) {
-    return <IconButton icon="trash" size={15} className={armed ? "delete-armed" : ""} disabled={disabled || working}
-      label={armed ? "Нажми ещё раз, чтобы удалить" : "Удалить с диска"} onClick={() => { if (armed) remove(); else setArmed(true); }} />;
-  }
-  return armed
-    ? <Button kind="danger" icon="trash" disabled={working} onClick={() => { setWorking(true); void onDelete().finally(() => { setWorking(false); setArmed(false); }); }}>Точно удалить?</Button>
-    : <Button kind="ghost" icon="trash" disabled={disabled} title="Удалить с диска" onClick={() => setArmed(true)}>Удалить</Button>;
+  return <IconButton icon="trash" size={15} className={armed ? "delete-icon delete-armed" : "delete-icon"} disabled={disabled || working}
+    label={armed ? "Нажми ещё раз, чтобы удалить" : "Удалить с диска"} onClick={() => { if (armed) remove(); else setArmed(true); }} />;
 }
 
 function useDiskUsage(api: WebApi, revision: unknown) {
@@ -329,47 +317,71 @@ function useDiskUsage(api: WebApi, revision: unknown) {
   return usage;
 }
 
-function ModelList({ api, models, current, onPick, onTune, onOpenHub }: { api: WebApi; models: string[]; current: string; onPick: (name: string) => void; onTune: (name: string) => void; onOpenHub: () => void }) {
+type PickerModel = { id: string; name: string; logo: string; description?: string; size?: string; removable: boolean };
+
+function ModelPicker({ api, groups, current, onPick, onTune, onDelete, onOpenHub, hubLabel = "Скачать с Hugging Face…" }: {
+  api: WebApi; groups: [string, PickerModel[]][]; current?: PickerModel;
+  onPick: (id: string) => void; onTune?: (id: string) => void; onDelete: (id: string) => Promise<void>; onOpenHub: () => void; hubLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
-  const [revision, setRevision] = useState(0);
-  const [error, setError] = useState("");
   const ref = useOutsideClose(open, () => setOpen(false));
-  const usage = useDiskUsage(api, `${revision}-${models.length}`);
-  const sizes = new Map((usage?.models ?? []).map((item) => [item.name, item.bytes]));
-  const groups = groupModels(models);
   return (
     <div className="menu-anchor model-picker" ref={ref}>
-      <button type="button" className="model-picker-btn" onClick={() => setOpen((value) => !value)}>
-        <ModelLogo api={api} name={current} size={20} />
-        <span className="disk-name">{shortModel(current) || "Модель не выбрана"}</span>
-        {sizes.has(current) && <small className="model-size">{gigabytes(sizes.get(current)!)}</small>}
+      <button type="button" className="model-picker-btn" aria-expanded={open} title={current?.description} onClick={() => setOpen((value) => !value)}>
+        <ModelLogo api={api} name={current?.logo ?? ""} size={20} />
+        <span className="disk-name">{current?.name || "Модель не выбрана"}</span>
+        {current?.size && <small className="model-size">{current.size}</small>}
         <Icon name="chevronDown" size={14} />
       </button>
-      {open && (
+      <MotionPresence>{open && (
         <div className="menu menu-left model-picker-menu">
           <div className="menu-list">
-            {groups.map(([title, names]) => [
+            {groups.map(([title, models]) => [
               groups.length > 1 && <div key={title} className="menu-title">{title}</div>,
-              ...names.map((name) => (
-                <div key={name} className={`model-option ${name === current ? "on" : ""}`}>
-                  <button type="button" className="model-pick" title={name} onClick={() => { onPick(name); setOpen(false); }}>
-                    <ModelLogo api={api} name={name} size={18} />
-                    <span className="disk-name">{shortModel(name)}</span>
-                    {sizes.has(name) && <small className="model-size">{gigabytes(sizes.get(name)!)}</small>}
+              ...models.map((model) => (
+                <div key={model.id} className={`model-option ${model.id === current?.id ? "on" : ""}`}>
+                  <button type="button" className="model-pick" title={model.description ?? model.id}
+                    aria-current={model.id === current?.id ? "true" : undefined}
+                    onClick={() => { onPick(model.id); setOpen(false); }}>
+                    <ModelLogo api={api} name={model.logo} size={18} />
+                    <span className="disk-name">{model.name}</span>
+                    {model.size && <small className="model-size">{model.size}</small>}
                   </button>
-                  <IconButton icon="settings" size={15} className="model-tune" label="Настроить модель" onClick={() => { setOpen(false); onTune(name); }} />
-                  {sizes.has(name) && <DeleteButton compact onDelete={() => api.delete_model(name).then((reply) => { setError(reply.ok ? "" : reply.error ?? "Не удалось удалить."); setRevision((value) => value + 1); })} />}
+                  {onTune && <IconButton icon="settings" size={15} className="model-tune" label="Настроить модель" onClick={() => { setOpen(false); onTune(model.id); }} />}
+                  {model.removable && <DeleteButton onDelete={() => onDelete(model.id)} />}
                 </div>
               )),
             ])}
           </div>
           <div className="menu-divider" />
-          <button type="button" onClick={() => { setOpen(false); onOpenHub(); }}><Icon name="download" size={16} /><span>Скачать с Hugging Face…</span></button>
+          <button type="button" onClick={() => { setOpen(false); onOpenHub(); }}><Icon name="download" size={16} /><span>{hubLabel}</span></button>
         </div>
-      )}
-      {error && <p className="pane-note">{error}</p>}
+      )}</MotionPresence>
     </div>
   );
+}
+
+function ModelList({ api, models, current, onPick, onTune, onOpenHub }: { api: WebApi; models: string[]; current: string; onPick: (name: string) => void; onTune: (name: string) => void; onOpenHub: () => void }) {
+  const [revision, setRevision] = useState(0);
+  const [error, setError] = useState("");
+  const usage = useDiskUsage(api, `${revision}-${models.length}`);
+  const sizes = new Map((usage?.models ?? []).map((item) => [item.name, gigabytes(item.bytes)]));
+  const modelRow = (name: string): PickerModel => ({ id: name, name: shortModel(name), logo: name, size: sizes.get(name), removable: sizes.has(name) });
+  return <>
+    <ModelPicker api={api} groups={groupModels(models).map(([title, names]) => [title, names.map(modelRow)])}
+      current={current ? modelRow(current) : undefined} onPick={onPick} onTune={onTune} onOpenHub={onOpenHub}
+      onDelete={async (id) => {
+        const reply = await api.delete_model(id);
+        setError(reply.ok ? "" : reply.error ?? "Не удалось удалить.");
+        setRevision((value) => value + 1);
+      }} />
+    {error && <p className="pane-note">{error}</p>}
+  </>;
+}
+
+function voiceModelInfo(model: VoiceModel) {
+  return [model.engine, model.size, model.memory ? `в памяти ≈ ${gigabytes(model.memory)}` : "на процессоре", model.license, model.source]
+    .filter(Boolean).join(" · ");
 }
 
 function VoiceModels({ api, onOpenHub, chatMemory, context, onChanged }: { api: WebApi; onOpenHub: (kind: VoiceKind) => void; chatMemory?: MemoryEstimate | null; context: number; onChanged: () => void }) {
@@ -394,49 +406,55 @@ function VoiceModels({ api, onOpenHub, chatMemory, context, onChanged }: { api: 
       void load(); onChanged();
     });
   };
-  const row = (kind: VoiceKind, model: VoiceModel) => {
-    const selected = status[kind].selected === model.id;
-    return (
-      <div key={model.id} className={`voice-model ${selected ? "selected" : ""}`}>
-        <ModelLogo api={api} name={model.title} size={32} />
-        <div className="voice-model-copy">
-          <strong>{model.title}</strong>
-          <small>{model.note}</small>
-          <small className="voice-model-meta">{model.engine} · {model.size} · {model.memory ? `в памяти ≈ ${gigabytes(model.memory)}` : "на процессоре"} · {model.license} · {model.source}</small>
-        </div>
-        <div className="voice-model-action">
-          {selected ? <span className="unit"><Icon name="check" size={14} /> Используется</span>
-            : <Button onClick={() => select(kind, model.id)}>Использовать</Button>}
-          <DeleteButton onDelete={() => api.voice_delete(kind, model.id).then((reply) => {
-            setError(reply.ok ? "" : reply.error ?? "Не удалось удалить."); setRevision((value) => value + 1); void load(); onChanged();
-          })} />
-        </div>
-      </div>
-    );
-  };
   const inUse = (kind: VoiceKind) => status[kind].models.find((model) => model.id === status[kind].selected);
   const voice = (["asr", "tts"] as VoiceKind[]).map((kind) => inUse(kind)?.memory ?? 0).reduce((sum, bytes) => sum + bytes, 0);
   return <>
     {chatMemory && <MemoryBar gpu={status.gpu} speed={chatMemory} label={callMemoryLabel(context)} parts={{ ...chatMemory, voice }} />}
-    {VOICE_KINDS.map(({ kind, title, hint }) => (
-      <Field key={kind} label={title} hint={status[kind].engine ? hint : <>{hint} {status[kind].engineNote}</>}>
-        {status[kind].models.length > 0 && <div className="voice-models">{status[kind].models.map((model) => row(kind, model))}</div>}
-        <div className="voice-search-open"><Button icon="search" onClick={() => onOpenHub(kind)}>Найти модель на Hugging Face…</Button></div>
-      </Field>
-    ))}
+    {VOICE_KINDS.map(({ kind, title, hint }) => {
+      const group = status[kind];
+      const models: PickerModel[] = group.models.map((model) => ({
+        id: model.id, name: model.title, logo: model.title, size: model.size, removable: true,
+        description: [model.title, model.note, voiceModelInfo(model)].filter(Boolean).join("\n"),
+      }));
+      const active = inUse(kind);
+      return <Field key={kind} label={title} hint={group.engine ? hint : <>{hint} {group.engineNote}</>}>
+        <ModelPicker api={api} groups={[[title, models]]} current={models.find((model) => model.id === group.selected)}
+          onPick={(id) => { if (id !== group.selected) select(kind, id); }} onOpenHub={() => onOpenHub(kind)} hubLabel="Скачать модель…"
+          onDelete={async (id) => {
+            const reply = await api.voice_delete(kind, id);
+            setError(reply.ok ? "" : reply.error ?? "Не удалось удалить.");
+            setRevision((value) => value + 1);
+            void load();
+            onChanged();
+          }} />
+        {active && <p className="pane-note voice-model-info">{voiceModelInfo(active)}</p>}
+      </Field>;
+    })}
     {error && <p className="pane-note">{error}</p>}
-    {restartFor && <ConfirmDialog title="Нужен перезапуск"
+    <MotionPresence>{restartFor && <ConfirmDialog title="Нужен перезапуск"
       text={`Модель ${restartFor === "tts" ? "озвучки" : "распознавания"} сменена. Чтобы она заработала, программу нужно перезапустить. Чаты и настройки сохранятся.`}
       confirmLabel="Перезапустить сейчас" cancelLabel="Позже" onClose={() => setRestartFor(null)}
-      onConfirm={() => { void api.restart_app(); }} />}
+      onConfirm={() => { void api.restart_app(); }} />}</MotionPresence>
     {usage && (usage.voiceModels > 0 || usage.engines.length > 0) && (
-      <Field label="Место на диске" hint="Модели удаляются кнопкой «Удалить» выше. Движок, который не нужен ни одной скачанной модели, можно удалить: он скачается снова вместе с моделью для него.">
+      <Field label="Место на диске" hint="Чтобы удалить модель, нажми на корзину в раскрывающемся списке. Неиспользуемый движок можно удалить. Он скачается снова вместе с моделью для него.">
         <div className="disk-list">
           <div className="disk-row"><span className="disk-name">Голосовые модели</span><span className="disk-size">{gigabytes(usage.voiceModels)}</span></div>
+          {usage.legacyVoiceModels?.map((model) => (
+            <div key={`${model.kind}:${model.id}`} className="disk-row">
+              <span className="disk-name" title="Модель другого формата">{model.title}</span><span className="disk-size">{gigabytes(model.bytes)}</span>
+              <DeleteButton disabled={running} onDelete={async () => {
+                const reply = await api.voice_delete(model.kind, model.id);
+                setError(reply.ok ? "" : reply.error ?? "Не удалось удалить.");
+                setRevision((value) => value + 1);
+                void load();
+                onChanged();
+              }} />
+            </div>
+          ))}
           {usage.engines.map((item) => (
             <div key={item.id} className="disk-row">
               <span className="disk-name">Движок · {item.label}</span><span className="disk-size">{gigabytes(item.bytes)}</span>
-              {item.removable && <DeleteButton compact disabled={running} onDelete={() => api.voice_engine_delete(item.id).then((reply) => {
+              {item.removable && <DeleteButton disabled={running} onDelete={() => api.voice_engine_delete(item.id).then((reply) => {
                 setError(reply.ok ? "" : reply.error ?? "Не удалось удалить."); setRevision((value) => value + 1); void load();
               })} />}
             </div>

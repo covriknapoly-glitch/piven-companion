@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
+from app.models import integrations
 from app.models.llama import DATA_DIR
 
 CACHE_PATH = DATA_DIR / "model_logos.json"
@@ -52,7 +53,7 @@ def organisation(name, author="", architecture=""):
     text = str(name or "").lower()
     arch = str(architecture or "").lower()
     provider, _, rest = text.partition(":")
-    if rest and provider in ("openai", "anthropic", "gemini", "openrouter", "ollama", "lmstudio", "custom"):
+    if rest and provider in integrations.PROVIDERS:
         if provider in ("openai", "anthropic", "gemini"):
             return {"openai": "openai", "anthropic": "Anthropic", "gemini": "google"}[provider]
         text = rest.split("/", 1)[-1] if provider == "openrouter" else rest

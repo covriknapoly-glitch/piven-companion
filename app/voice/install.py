@@ -7,15 +7,17 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
 
 from app import paths, processes
 from app.models import download
+from app.models.huggingface import REPO_PATTERN
 from pathlib import Path
 
 from app.voice import engines as voice_engines
@@ -25,6 +27,7 @@ VOICE_DIR = APP_DIR / "voice-engines"
 ASR_DIR = VOICE_DIR / "nemo-speech"
 ASR_EXE = ASR_DIR / "bin" / "nemo-speech.exe"
 ASR_MODELS_DIR = VOICE_DIR / "models"
+VOSK_DIR = ASR_MODELS_DIR / "vosk"
 TTS_DIR = VOICE_DIR / "qwen-tts"
 TTS_PYTHON = VOICE_DIR / ".venv" / "Scripts" / "python.exe"
 TTS_HF_HOME = TTS_DIR / "models" / "hf"
@@ -65,10 +68,16 @@ ASR_MODELS = {
         "license": "NVIDIA Open Model License"},
 }
 DEFAULT_ASR = "parakeet-tdt"
+VOSK_DOWNLOADS = "https://alphacephei.com/vosk/models/"
+VOSK_MODELS = {
+    "vosk:vosk-model-small-ru-0.22": {
+        "title": "Vosk Small Russian", "language": "ru", "bytes": 46_236_750,
+        "note": "Лёгкое распознавание русской речи на процессоре.", "keywords": "russian русский русская речь"},
+    "vosk:vosk-model-small-en-us-0.15": {
+        "title": "Vosk Small English (US)", "language": "en", "bytes": 41_205_931,
+        "note": "Лёгкое распознавание английской речи на процессоре.", "keywords": "english английский английская речь"},
+}
 
-CUSTOM_SPEAKERS = {"ryan": "Ryan · мужской", "aiden": "Aiden · мужской", "uncle_fu": "Uncle Fu · мужской, низкий",
-                   "vivian": "Vivian · женский", "serena": "Serena · женский", "ono_anna": "Ono Anna · женский",
-                   "sohee": "Sohee · женский"}
 TTS_MODELS = {
     "voicedesign-1.7b": {
         "title": "Qwen3-TTS 1.7B VoiceDesign", "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign", "mode": "design",
@@ -81,6 +90,7 @@ TTS_MODELS = {
         "bytes": 2_498_388_392, "note": "Легче и быстрее, те же семь голосов.", "license": "Apache 2.0"},
 }
 DEFAULT_TTS = "voicedesign-1.7b"
+QWEN_TTS_MODES = {"custom_voice": "custom", "voice_design": "design", "base": "base"}
 
 ASR_RUNTIME_EXTRA = 400 * 2**20
 TTS_RUNTIME_EXTRA = 1200 * 2**20
@@ -134,16 +144,16 @@ def custom_tts_models():
             continue
         config = _tts_config(repo)
         kind = (config or {}).get("tts_model_type")
-        if not config or config.get("model_type") != "qwen3_tts" or kind not in ("custom_voice", "voice_design"):
+        if not config or config.get("model_type") != "qwen3_tts" or kind not in QWEN_TTS_MODES:
             continue
         found[f"{CUSTOM_PREFIX}{repo}"] = {
-            "title": repo.split("/")[-1], "repo": repo, "mode": "custom" if kind == "custom_voice" else "design",
+            "title": repo.split("/")[-1], "repo": repo, "mode": QWEN_TTS_MODES[kind],
             "bytes": _folder_size(cache), "note": f"С Hugging Face: {repo}.", "license": "см. страницу модели"}
     return found
 
 
 ENGINE_LABELS = {key: info["label"] for key, info in voice_engines.ENGINES.items()}
-CLONING_ENGINES = {"chatterbox", "f5-tts", "coqui", "voxcpm", "omnivoice"}
+CPU_ENGINES = {"piper", "vosk"}
 REGISTRY_PATH = paths.DATA_DIR / "voice_models.json"
 PIPER_DIR = VOICE_DIR / "piper"
 SNAPSHOT_DIR = VOICE_DIR / "hf-models"
@@ -221,9 +231,10 @@ def _registered(kind):
     found = {}
     for model_id, info in _registry()[kind].items():
         info = dict(info)
-        if info.get("engine") in ("piper", "audiocpp"):
+        if info.get("engine") in ("piper", "audiocpp", "transcribe"):
             info["path"] = _current_path(info["path"])
-            if not info["path"].is_file():
+            folder_package = info["engine"] == "audiocpp" and info["path"].is_dir() and any(info["path"].rglob("*.gguf"))
+            if not info["path"].is_file() and not folder_package:
                 continue
         elif info.get("path"):
             info["path"] = _current_path(info["path"])
@@ -249,8 +260,20 @@ def known(kind, model_id):
     return model_id in (asr_catalogue() if kind == "asr" else tts_catalogue())
 
 
+def supports_gguf(kind, info):
+    if kind == "asr" and info.get("engine") == "nemo":
+        return str(info.get("path") or info.get("file", "")).lower().endswith(".gguf")
+    if kind == "asr" and info.get("engine") == "transcribe":
+        return str(info.get("path", "")).lower().endswith(".gguf")
+    if info.get("engine") != "audiocpp" or not info.get("path"):
+        return False
+    path = Path(info["path"])
+    return path.suffix.lower() == ".gguf" if path.is_file() else path.is_dir() and any(path.rglob("*.gguf"))
+
+
 def chosen_model(kind, saved=""):
     catalogue, installed = (asr_catalogue(), _asr_installed) if kind == "asr" else (tts_catalogue(), _tts_installed)
+    catalogue = {key: info for key, info in catalogue.items() if supports_gguf(kind, info)}
     if saved in catalogue and installed(saved):
         return saved
     return next((key for key in catalogue if installed(key)), "")
@@ -270,22 +293,23 @@ def asr_model_path(model_id):
 
 
 def clone_only(info):
-    return info.get("engine") == "audiocpp" and info.get("family") == "qwen3_tts" and "base" in str(info.get("title", "")).lower()
+    if info.get("engine") != "audiocpp":
+        return False
+    family = info.get("family")
+    return family == "cosyvoice3" or (family == "qwen3_tts" and "base" in str(info.get("title", "")).lower())
 
 
 def tts_voices(model_id):
+    if not model_id:
+        return []
     info = tts_model(model_id)
+    if not supports_gguf("tts", info):
+        return []
     if clone_only(info):
         return [("sample", "Мой образец голоса")]
-    if info["engine"] != "qwen":
-        voices = [(name, name) for name in info.get("voices") or []]
-        sample = [("sample", "Мой образец голоса")] if info["engine"] in CLONING_ENGINES or info.get("clone") else []
-        return (voices or [("default", "Голос модели")]) + sample
-    if info["mode"] != "custom":
-        return [("Russian", "Русский мужской")]
-    if info["repo"] in {item["repo"] for item in TTS_MODELS.values()}:
-        return list(CUSTOM_SPEAKERS.items())
-    return [(name, CUSTOM_SPEAKERS.get(name, name.replace("_", " ").title())) for name in _speakers(_tts_config(info["repo"]))]
+    voices = [(name, name) for name in info.get("voices") or []]
+    sample = [("sample", "Мой образец голоса")] if info.get("clone") else []
+    return (voices or [("default", "Голос модели")]) + sample
 
 
 def _asr_installed(model_id):
@@ -306,9 +330,14 @@ def _tts_cache(repo):
 
 
 def _tts_installed(model_id):
-    if tts_model(model_id)["engine"] != "qwen":
+    info = tts_model(model_id)
+    if info["engine"] != "qwen":
         return model_id in _registered("tts")
-    snapshots = _tts_cache(tts_model(model_id)["repo"]) / "snapshots"
+    return _qwen_weights_ready(info["repo"])
+
+
+def _qwen_weights_ready(repo):
+    snapshots = _tts_cache(repo) / "snapshots"
     return snapshots.is_dir() and any((snapshot / "model.safetensors").is_file() for snapshot in snapshots.iterdir())
 
 
@@ -320,6 +349,8 @@ def ready(kind, model_id):
     if not known(kind, model_id):
         return False
     info = asr_model(model_id) if kind == "asr" else tts_model(model_id)
+    if not supports_gguf(kind, info):
+        return False
     installed = _asr_installed(model_id) if kind == "asr" else _tts_installed(model_id)
     return installed and voice_engines.ready(info["engine"])
 
@@ -355,7 +386,7 @@ def delete(kind, model_id):
         from app.voice import catalog
         path = Path(info["path"])
         folder = path if path.is_dir() else path.parent
-        inside = paths.inside(folder, [catalog.MODELS_DIR])
+        inside = paths.inside(folder, [catalog.MODELS_DIR, ASR_MODELS_DIR / "audiocpp"])
         targets = [folder if inside else path]
     elif info.get("path"):
         targets = [Path(info["path"])]
@@ -374,8 +405,14 @@ def delete(kind, model_id):
 
 def disk_usage():
     models = 0
+    legacy = []
     for kind, catalogue, installed in (("asr", asr_catalogue(), _asr_installed), ("tts", tts_catalogue(), _tts_installed)):
-        models += sum(info.get("bytes") or 0 for key, info in catalogue.items() if installed(key))
+        for key, info in catalogue.items():
+            if installed(key):
+                size = info.get("bytes") or 0
+                models += size
+                if not supports_gguf(kind, info):
+                    legacy.append({"id": key, "kind": kind, "title": info["title"], "bytes": size})
     engines = []
     if voice_engines.SHARED_VENV.is_dir():
         engines.append({"id": "shared", "label": "Общие пакеты (PyTorch и др.)", "bytes": _folder_size(voice_engines.SHARED_VENV)})
@@ -388,7 +425,7 @@ def disk_usage():
             label = voice_engines.ENGINES.get(folder.name, {}).get("label", folder.name)
             engines.append({"id": folder.name, "label": label, "bytes": size})
     used = _engines_in_use()
-    return {"models": models, "engines": [{**item, "removable": _engine_unused(item["id"], used)} for item in engines if item["bytes"]]}
+    return {"models": models, "legacy": legacy, "engines": [{**item, "removable": _engine_unused(item["id"], used)} for item in engines if item["bytes"]]}
 
 
 def _engines_in_use():
@@ -398,7 +435,7 @@ def _engines_in_use():
 
 def _engine_unused(engine, used):
     if engine == "shared":
-        return not used - {"nemo", "audiocpp"}
+        return not used - {"nemo", "audiocpp", "vosk", "transcribe"}
     return engine not in used
 
 
@@ -425,127 +462,209 @@ def _gigabytes(size):
 def status():
     def row(kind, key, info, installed):
         return {"id": key, "title": info["title"], "note": info["note"], "license": info["license"],
-                "source": f"huggingface.co/{info['repo']}", "size": _gigabytes(info["bytes"]), "engine": ENGINE_LABELS[info["engine"]],
-                "memory": 0 if info["engine"] == "piper" else info["bytes"] + RUNTIME_EXTRA.get((kind, info["engine"]), DEFAULT_EXTRA),
+                "source": info.get("source") or f"huggingface.co/{info['repo']}", "size": _gigabytes(info["bytes"]), "engine": ENGINE_LABELS[info["engine"]],
+                "memory": 0 if info["engine"] in CPU_ENGINES else info["bytes"] + RUNTIME_EXTRA.get((kind, info["engine"]), DEFAULT_EXTRA),
                 "installed": installed, "custom": key not in ASR_MODELS and key not in TTS_MODELS, "bytes": info["bytes"]}
-    asr = [row("asr", key, info, True) for key, info in asr_catalogue().items() if _asr_installed(key)]
-    tts = [row("tts", key, info, True) for key, info in tts_catalogue().items() if _tts_installed(key)]
+    asr = [row("asr", key, info, True) for key, info in asr_catalogue().items() if supports_gguf("asr", info) and _asr_installed(key)]
+    tts = [row("tts", key, info, True) for key, info in tts_catalogue().items() if supports_gguf("tts", info) and _tts_installed(key)]
     return {
-        "asr": {"models": asr, "engine": ASR_EXE.is_file(),
-                "engineNote": f"Программа NeMo-Speech ({_gigabytes(NEMO_SIZE)}, GitHub NVIDIA) скачается вместе с первой моделью."},
-        "tts": {"models": tts, "engine": tts_packages_ready(),
-                "engineNote": f"Python-пакеты PyTorch и qwen-tts ({TTS_PACKAGES_SIZE}, PyPI и download.pytorch.org) поставятся вместе с первой моделью."},
+        "asr": {"models": asr, "engine": bool(asr) or ASR_EXE.is_file(),
+                "engineNote": "Движок распознавания скачается вместе с выбранной моделью."},
+        "tts": {"models": tts, "engine": voice_engines.ready("audiocpp"),
+                "engineNote": "Движок audio.cpp установится вместе с первой моделью GGUF."},
     }
 
 
-def _hf_json(path, token=""):
+def _hf_json(path, token="", timeout=30, next_page=None):
     headers = {"User-Agent": USER_AGENT}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    with urllib.request.urlopen(urllib.request.Request("https://huggingface.co" + path, headers=headers), timeout=30) as response:
+    with urllib.request.urlopen(urllib.request.Request("https://huggingface.co" + path, headers=headers), timeout=timeout) as response:
+        if next_page is not None:
+            match = re.search(r'<([^>]+)>;\s*rel="next"', response.headers.get("Link", ""))
+            if match:
+                cursor, *_ = urllib.parse.parse_qs(urllib.parse.urlsplit(match[1]).query).get("cursor", [""])
+                if cursor:
+                    next_page.append(cursor)
         return json.loads(response.read().decode("utf-8"))
 
 
-def _repo_files(repo, token=""):
-    return [item for item in _hf_json(f"/api/models/{urllib.parse.quote(repo, safe='/')}/tree/main?recursive=1", token)
-            if item.get("type") == "file"]
+def _repo_files(repo, token="", timeout=30):
+    path = f"/api/models/{urllib.parse.quote(repo, safe='/')}/tree/main?recursive=1"
+    files, seen = [], set()
+    cursor = ""
+    while cursor not in seen:
+        seen.add(cursor)
+        page = []
+        query = path + ("&" + urllib.parse.urlencode({"cursor": cursor}) if cursor else "")
+        files.extend(item for item in _hf_json(query, token, timeout=timeout, next_page=page) if item.get("type") == "file")
+        if not page:
+            break
+        cursor = page[0]
+    return files
 
 
 def classify(kind, item):
-    engine, reason = voice_engines.engine_for(kind, item)
-    return engine or None, reason
+    task = item.get("pipeline_tag")
+    if kind == "asr" and task in ("text-to-speech", "text-to-audio"):
+        return None, "Эта модель генерирует аудио. Проверь её во вкладке озвучки."
+    if kind == "tts" and task == "automatic-speech-recognition":
+        return None, "Эта модель распознаёт речь. Проверь её во вкладке распознавания."
+    tags = item.get("tags") or []
+    names = [record.get("rfilename") or "" for record in item.get("siblings") or []]
+    if any(_is_gguf(name) for name in names) or (not names and "gguf" in tags):
+        return "auto", ""
+    return None, "Для голоса нужен совместимый GGUF-файл."
 
 
-def _has_runnable_files(engine, item):
-    names = [sibling.get("rfilename", "") for sibling in item.get("siblings") or []]
-    if not names:
-        return True
-    if engine == "nemo":
-        return any(name.lower().endswith(".gguf") and "mmproj" not in name.lower() for name in names)
-    if engine == "piper":
-        return any(name.endswith(".onnx") for name in names)
-    if engine == "qwen":
-        return "model.safetensors" in names
-    return any(entry["path"].endswith(WEIGHT_SUFFIXES) for entry in _snapshot_files(engine, [{"path": name} for name in names]))
-
-
-SEARCH_SCAN = 1000
-SEARCH_SHOWN = 100
-POPULAR_MIN_LIKES = 100
-SEARCH_MIN_LIKES = 5
-POPULAR_AT_LEAST = 30
-NOT_SPEECH_MODELS = ("tiny-random", "forced-aligner", "forcedaligner")
-LANGUAGE_FAMILY = re.compile(r"(facebook/mms-tts)-")
-_checked_repos = {}
-
-
-def _worth_showing(item, query):
-    if "/" in query:
-        return True
-    if any(mark in item["id"].lower() for mark in NOT_SPEECH_MODELS) or "generated_from_trainer" in item.get("tags", []):
-        return False
-    return bool(not query or (item.get("likes") or 0) >= SEARCH_MIN_LIKES)
-
-
-def _copies(items):
-    likes = {item["id"]: item.get("likes") or 0 for item in items}
-    found = set()
-    seen_families = set()
-    for item in sorted(items, key=lambda entry: -(entry.get("likes") or 0)):
-        author = item["id"].split("/")[0]
-        bases = [tag.split(":")[-1] for tag in item.get("tags", []) if tag.startswith("base_model:") and "/" in tag]
-        if any(base in likes and base.split("/")[0] != author and likes[base] >= likes[item["id"]] for base in bases):
-            found.add(item["id"])
-        family = LANGUAGE_FAMILY.match(item["id"])
-        if family:
-            if family.group(1) in seen_families:
-                found.add(item["id"])
-            seen_families.add(family.group(1))
-    return found
-
-
-def _opens_in_engine(kind, hit, token):
-    key = (hit["id"], hit["engine"])
-    if key not in _checked_repos:
-        try:
-            _checked_repos[key] = bool(_details(kind, hit["id"], hit["engine"], token).get("supported"))
-        except Exception:
-            return True
-    return _checked_repos[key]
-
-
-def search(kind, query, token=""):
-    text = urllib.parse.quote(str(query or "").strip())
-    tag = "automatic-speech-recognition" if kind == "asr" else "text-to-speech"
-    items = _hf_json(f"/api/models?search={text}&pipeline_tag={tag}&limit={SEARCH_SCAN}&full=true&config=true&sort=downloads&direction=-1", token)
-    wanted = str(query or "").strip()
-    copies = set() if wanted else _copies(items)
-    items = sorted((item for item in items if item["id"] not in copies and _worth_showing(item, wanted)), key=lambda item: -(item.get("likes") or 0))
-    hits = []
-    for item in items:
-        likes = item.get("likes") or 0
-        if len(hits) >= SEARCH_SHOWN or (not wanted and likes < POPULAR_MIN_LIKES and len(hits) >= POPULAR_AT_LEAST + 8):
-            break
-        engine, _ = classify(kind, item)
-        if not engine or not _has_runnable_files(engine, item):
-            continue
-        code = license_code(item)
-        if code:
-            _licenses[item["id"]] = license_text(code)
-        hits.append({"id": item["id"], "downloads": item.get("downloads", 0), "likes": likes, "gated": bool(item.get("gated")),
-                     "engine": engine, "engineLabel": ENGINE_LABELS.get(engine, ""),
-                     "license": license_text(code) if code else "", "nonCommercial": non_commercial(code)})
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        opens = list(pool.map(lambda hit: hit["engine"] not in ("nemo", "qwen") or _opens_in_engine(kind, hit, token), hits))
-    hits = [hit for hit, fits in zip(hits, opens) if fits]
-    if not wanted:
-        hits = [hit for rank, hit in enumerate(hits) if rank < POPULAR_AT_LEAST or hit["likes"] >= POPULAR_MIN_LIKES]
+def _hf_repo(query):
+    repo = query.rstrip("/")
+    if REPO_PATTERN.fullmatch(repo):
+        return repo
+    if "://" not in query:
+        query = "https://" + query
     try:
-        from app.voice import catalog
-        hits += catalog.search(kind, query)
-    except Exception:
-        pass
-    return hits
+        url = urllib.parse.urlsplit(query)
+    except ValueError:
+        return None
+    if url.scheme not in ("http", "https") or url.netloc.lower() not in ("huggingface.co", "www.huggingface.co", "hf.co"):
+        return None
+    parts = urllib.parse.unquote(url.path).strip("/").split("/")
+    if len(parts) == 2 or (len(parts) >= 4 and parts[2] in ("tree", "blob", "resolve") and parts[3] == "main"):
+        repo = "/".join(parts[:2])
+        if REPO_PATTERN.fullmatch(repo) and parts[0] not in ("spaces", "datasets", "collections"):
+            return repo
+    raise ValueError("Вставь ссылку на страницу модели Hugging Face или укажи автор/модель.")
+
+
+def _hf_hit(item, engine):
+    code = license_code(item)
+    if code:
+        _licenses[item["id"]] = license_text(code)
+    return {"id": item["id"], "downloads": item.get("downloads") or 0, "likes": item.get("likes") or 0,
+            "gated": bool(item.get("gated")), "engine": engine, "engineLabel": "GGUF" if engine == "auto" else ENGINE_LABELS.get(engine, ""),
+            "license": license_text(code) if code else "", "nonCommercial": non_commercial(code)}
+
+
+def _builtin_asr(repo):
+    return next(((key, info) for key, info in ASR_MODELS.items() if info["repo"].casefold() == repo.casefold()), (None, None))
+
+
+def _builtin_asr_hit(info):
+    return {**_hf_hit({"id": info["repo"]}, "nemo"),
+            "title": info["title"], "license": info["license"]}
+
+
+def _find_hf_repo(kind, repo, token):
+    encoded = urllib.parse.quote(repo, safe="/")
+    try:
+        item = _hf_json(f"/api/models/{encoded}", token)
+    except urllib.error.HTTPError as error:
+        if error.code not in (401, 403, 404):
+            raise
+        raise ValueError("Модель не найдена или для неё нужен токен Hugging Face.") from error
+    item = {**item, "id": item.get("id") or item.get("modelId") or repo}
+    engine, reason = classify(kind, item)
+    return {**_hf_hit(item, engine), "direct": True, "problem": reason}
+
+
+def search(kind, query, token="", recent=False, warnings=None, cursor="", next_page=None):
+    from app.voice import catalog
+    wanted = str(query or "").strip()
+    repo = _hf_repo(wanted)
+    if repo:
+        if kind == "asr":
+            _, source = _builtin_asr(repo)
+            if source:
+                return [{**_builtin_asr_hit(source), "direct": True, "problem": ""}]
+        try:
+            packaged = catalog.search(kind, "", cached_only=kind == "asr", repo=repo)
+        except OSError:
+            packaged = []
+        if packaged:
+            if any(repo.casefold() == source.casefold() for hit in packaged for source in hit["repositories"]):
+                return [{**hit, "direct": len(packaged) == 1} for hit in packaged]
+            return [_find_hf_repo(kind, repo, token), *packaged]
+        return [_find_hf_repo(kind, repo, token)]
+
+    hits = []
+    hf_failed = False
+    if kind in ("asr", "tts"):
+        task = "automatic-speech-recognition" if kind == "asr" else "text-to-speech"
+        params = {
+            "filter": ("gguf", task), "limit": 16,
+            "sort": "createdAt" if recent else "downloads", "direction": -1,
+        }
+        if wanted:
+            params["search"] = wanted
+        if cursor:
+            params["cursor"] = cursor
+        page = []
+
+        def listing():
+            return _hf_json("/api/models?" + urllib.parse.urlencode(params, doseq=True), token, timeout=12, next_page=page)
+
+        try:
+            try:
+                items = listing()
+            except (TimeoutError, urllib.error.URLError) as error:
+                if cursor or isinstance(error, urllib.error.HTTPError):
+                    raise
+                page.clear()
+                params.update({"filter": "gguf", "pipeline_tag": task, "limit": 8,
+                               "expand": ("tags", "pipeline_tag", "downloads", "likes", "gated")})
+                items = listing()
+            for item in items:
+                engine, reason = classify(kind, item)
+                if engine:
+                    hits.append(_hf_hit(item, engine))
+                elif kind == "tts" and "gguf" in (item.get("tags") or []):
+                    hits.append({**_hf_hit(item, None), "problem": reason})
+            if next_page is not None:
+                next_page.extend(page)
+        except (OSError, ValueError):
+            hf_failed = True
+            if warnings is not None:
+                warnings.append("Каталог Hugging Face не загрузился. Показаны доступные результаты.")
+
+    if kind == "asr" and not cursor and (wanted or not recent or hf_failed):
+        online = {row["id"].casefold(): row for row in hits}
+        official = []
+        terms = wanted.casefold().split()
+        for key, source in ASR_MODELS.items():
+            repo = source["repo"].casefold()
+            if repo in online or all(term in f"{key} {repo} {source['title'].casefold()}" for term in terms):
+                hit = _builtin_asr_hit(source)
+                row = online.pop(repo, hit)
+                official.append({**hit, "downloads": row["downloads"], "likes": row["likes"]})
+        hits = official + list(online.values())
+
+    packaged = []
+    try:
+        if not cursor and (not recent or hf_failed):
+            packaged = catalog.search(kind, wanted, cached_only=hf_failed)
+        if hits:
+            by_repo = {}
+            for package in catalog.search(kind, "", cached_only=True):
+                sources = [repo.casefold() for repo in package["repositories"]]
+                if kind == "asr":
+                    sources.extend(package.get("packageNames", []))
+                for source in sources:
+                    by_repo.setdefault(source, []).append(package)
+            routed = []
+            for hit in hits:
+                repo = hit["id"].casefold()
+                match = by_repo.get(repo) or by_repo.get(repo.rsplit("/", 1)[-1])
+                official = kind == "asr" and _builtin_asr(repo)[1] is not None
+                if match and not official:
+                    routed.extend(match)
+                routed.append(hit)
+            hits = routed
+    except (OSError, ValueError, KeyError):
+        if warnings is not None and not warnings:
+            warnings.append("Каталог GGUF-пакетов audio.cpp не загрузился.")
+    ordered = packaged + hits
+    return list({row["id"]: row for row in ordered}.values())
 
 
 WEIGHT_SUFFIXES = (".safetensors", ".bin", ".pt", ".pth", ".ckpt")
@@ -592,6 +711,10 @@ def engine_note(engine):
     if engine == "audiocpp":
         size = sum(asset[1] for asset in voice_engines.AUDIOCPP_ASSETS)
         return f"Движок {label} ещё не скачан: он поставится вместе с моделью ({_gigabytes(size)}, GitHub)."
+    if engine == "transcribe":
+        return "Движок transcribe.cpp и его пакеты установятся вместе с первой моделью."
+    if engine == "vosk":
+        return "Vosk установится вместе с моделью. Для распознавания достаточно процессора."
     if not voice_engines.shared_ready():
         return f"Движок {label} ещё не скачан: вместе с моделью поставятся PyTorch и пакеты голоса ({TTS_PACKAGES_SIZE}, PyPI и download.pytorch.org)."
     return f"Движок {label} ещё не скачан: его пакеты поставятся вместе с моделью (PyPI)."
@@ -599,7 +722,23 @@ def engine_note(engine):
 
 def details(kind, repo, engine, token=""):
     found = _details(kind, repo, engine, token)
-    found["engineNote"] = engine_note(found.get("engine") or engine)
+    found["engineNote"] = engine_note(found.get("engine") or engine) if found.get("supported") else ""
+    if found.get("supported") and REPO_PATTERN.fullmatch(repo):
+        try:
+            item = _hf_json(f"/api/models/{urllib.parse.quote(repo, safe='/')}?expand=cardData&expand=tags", token, timeout=8)
+            card = item.get("cardData")
+            declared = card.get("language") if isinstance(card, dict) else None
+            languages = [declared] if isinstance(declared, str) else declared
+            if isinstance(languages, list) and languages and all(isinstance(code, str) for code in languages):
+                found.update(languages=languages, languagesComplete=True)
+            else:
+                found["languages"] = [tag.removeprefix("language:") for tag in item.get("tags") or []
+                                      if isinstance(tag, str) and (tag.startswith("language:") or re.fullmatch(r"[a-z]{2}", tag))]
+            code = license_code(item)
+            if code:
+                _licenses[repo] = license_text(code)
+        except (OSError, ValueError):
+            pass
     if "license" not in found:
         source = repo if engine != "audiocpp" else found.get("licenseRepo", "")
         found["license"] = repo_license(source, token) if source else ""
@@ -607,62 +746,46 @@ def details(kind, repo, engine, token=""):
 
 
 def _details(kind, repo, engine, token=""):
-    if engine == "audiocpp":
+    if engine == "audiocpp" and repo.startswith("audiocpp:"):
         from app.voice import catalog
-        return catalog.details(repo.split(":", 1)[1])
-    files = _repo_files(repo, token)
-    if engine == "nemo":
+        return catalog.details(repo.split(":", 1)[1], kind)
+    if kind in ("asr", "tts") and REPO_PATTERN.fullmatch(repo):
+        _, source = _builtin_asr(repo) if kind == "asr" else (None, None)
+        try:
+            files = _repo_files(repo, token, timeout=8 if source else 30)
+        except (OSError, ValueError):
+            if not source:
+                raise
+            files = []
         ggufs = [{"path": item["path"], "size": item.get("size") or 0} for item in files
-                 if item["path"].lower().endswith(".gguf") and "mmproj" not in item["path"].lower()]
+                 if _is_gguf(item["path"])]
+        if source:
+            ggufs = [{"path": source["file"], "size": source["bytes"]}] + [
+                item for item in ggufs if item["path"] != source["file"]]
+            return {"supported": True, "engine": "nemo", "files": ggufs, "bytes": source["bytes"], "license": source["license"]}
         if not ggufs:
             return {"supported": False, "reason": "В репозитории нет GGUF-файлов."}
-        from app.models import memory_fit
-        smallest = min(ggufs, key=lambda item: item["size"])
-        arch = memory_fit.remote_metadata(repo, smallest["path"], token).get("general.architecture", "")
-        if arch != "asr":
-            return {"supported": False, "reason": f"Этот GGUF сделан для другой программы (архитектура «{arch or 'неизвестна'}»), NeMo-Speech его не откроет. "
-                                                  "Поищи ту же модель в формате Transformers, обычно это репозиторий без «gguf» в названии."}
         ggufs.sort(key=lambda item: (0 if "q8_0" in item["path"].lower() else 1, item["path"]))
-        return {"supported": True, "engine": "nemo", "files": ggufs, "bytes": ggufs[0]["size"]}
-    if engine == "qwen":
-        result = tts_details(repo, token)
-        return {**result, "engine": "qwen"}
-    if engine == "piper":
-        paths = {item["path"] for item in files}
-        voices = [{"path": item["path"], "size": (item.get("size") or 0)} for item in files
-                  if item["path"].endswith(".onnx") and (item["path"] + ".json" in paths
-                                                        or str(Path(item["path"]).parent / "config.json").replace("\\", "/").lstrip("./") in paths)]
-        if not voices:
-            return {"supported": False, "reason": "В репозитории нет голоса Piper (файла .onnx с настройками .json)."}
-        return {"supported": True, "engine": "piper", "files": voices, "bytes": voices[0]["size"]}
-    if engine in voice_engines.ENGINES:
-        keep = _snapshot_files(engine, files)
-        if not any(item["path"].endswith(WEIGHT_SUFFIXES) for item in keep):
-            formats = sorted({Path(item["path"]).suffix for item in files if Path(item["path"]).suffix in (".gguf", ".onnx", ".mlmodel", ".tflite")})
-            return {"supported": False, "reason": "В репозитории нет весов safetensors или PyTorch, которые нужны движку "
-                    + ENGINE_LABELS.get(engine, engine) + (f" (здесь только {', '.join(formats)})." if formats else ".")}
-        voices = sorted(Path(item["path"]).stem for item in files if engine == "kokoro" and item["path"].startswith("voices/") and item["path"].endswith(".pt"))
-        return {"supported": True, "engine": engine, "voices": voices, "bytes": sum(item.get("size") or 0 for item in keep)}
-    return {"supported": False, "reason": "Для этой модели нет движка."}
+        return {"supported": True, "engine": "auto", "files": ggufs, "bytes": ggufs[0]["size"]}
+    return {"supported": False, "reason": "Для голоса поддерживаются только совместимые модели GGUF.", "license": ""}
 
 
 def tts_details(repo, token=""):
     files = _repo_files(repo, token)
     config = _hf_json(f"/{urllib.parse.quote(repo, safe='/')}/raw/main/config.json", token)
     kind = config.get("tts_model_type")
-    supported = config.get("model_type") == "qwen3_tts" and kind in ("custom_voice", "voice_design") \
+    supported = config.get("model_type") == "qwen3_tts" and kind in QWEN_TTS_MODES \
         and any(item["path"] == "model.safetensors" for item in files)
-    reason = "" if supported else ("Это Base-модель: она клонирует голос по образцу записи, такое пока не поддерживается."
-                                   if kind == "base" else "Эта модель не в формате Qwen3-TTS, который умеет запускать программа.")
-    return {"supported": supported, "reason": reason, "mode": "custom" if kind == "custom_voice" else "design",
+    reason = "" if supported else "Эта модель не в формате Qwen3-TTS, который умеет запускать программа."
+    return {"supported": supported, "reason": reason, "mode": QWEN_TTS_MODES.get(kind, "design"),
             "voices": _speakers(config), "bytes": sum(item.get("size") or 0 for item in files)}
 
 
-def _download(url, destination, size, sha256, cancel_event, on_bytes, token="", on_wait=None):
+def _download(url, destination, size, sha256, cancel_event, on_bytes, token="", on_wait=None, validate=None):
     partial = destination.with_name(destination.name + ".download")
     headers = {"User-Agent": USER_AGENT, **({"Authorization": f"Bearer {token}"} if token else {})}
     try:
-        received = download.fetch(url, partial, headers, cancel_event, on_bytes, on_wait or _wait_note)
+        received = download.fetch(url, partial, headers, cancel_event, on_bytes, on_wait or _wait_note, expected_size=size)
         if size and received != size:
             raise RuntimeError(f"Файл {destination.name} скачался не полностью: {received} из {size} байт.")
         if sha256:
@@ -672,6 +795,8 @@ def _download(url, destination, size, sha256, cancel_event, on_bytes, token="", 
                     digest.update(block)
             if digest.hexdigest() != sha256:
                 raise RuntimeError(f"Контрольная сумма {destination.name} не совпала, файл повреждён.")
+        if validate:
+            validate(partial)
         os.replace(partial, destination)
     except (InterruptedError, RuntimeError):
         partial.unlink(missing_ok=True)
@@ -703,7 +828,7 @@ def _install_nemo(progress, cancel_event, share):
     archive.unlink(missing_ok=True)
 
 
-def install_asr(model_id, progress, cancel_event, file=None, token=""):
+def install_asr(model_id, progress, cancel_event, file=None, token="", staged=None):
     if file:
         repo = model_id
         path = CUSTOM_ASR_DIR / repo.replace("/", "--") / Path(file["path"]).name
@@ -712,6 +837,11 @@ def install_asr(model_id, progress, cancel_event, file=None, token=""):
                 "url": f"https://huggingface.co/{urllib.parse.quote(repo, safe='/')}/resolve/main/{quoted}"}
         model_id = f"{CUSTOM_PREFIX}{repo}/{path.name}"
         installed = path.is_file() and path.stat().st_size == info["bytes"]
+        if installed:
+            try:
+                _validate_nemo_file(path)
+            except RuntimeError:
+                installed = False
     else:
         info = asr_model(model_id)
         path = asr_model_path(model_id)
@@ -722,9 +852,14 @@ def install_asr(model_id, progress, cancel_event, file=None, token=""):
         share = 100 * NEMO_SIZE / (NEMO_SIZE + info["bytes"])
         _install_nemo(progress, cancel_event, share)
     if not installed:
-        _download(info["url"], path, info["bytes"], info["sha256"], cancel_event,
-                  lambda received: progress(share + (100 - share) * received / max(info["bytes"], 1),
-                                            f"Скачивание {info['title']}: {received / 2**20:.0f} из {info['bytes'] / 2**20:.0f} МБ"), token)
+        if staged is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staged, path)
+        else:
+            _download(info["url"], path, info["bytes"], info["sha256"], cancel_event,
+                      lambda received: progress(share + (100 - share) * received / max(info["bytes"], 1),
+                                                f"Скачивание {info['title']}: {received / 2**20:.0f} из {info['bytes'] / 2**20:.0f} МБ"), token,
+                      validate=_validate_nemo_file if file else None)
     progress(100, f"{info['title']} готова")
     return model_id
 
@@ -816,7 +951,7 @@ def install_tts(model_id, progress, cancel_event, repo=None, size=0, token=""):
     if repo:
         info = {"title": repo.split("/")[-1], "repo": repo, "bytes": int(size or 0) or 1}
         model_id = f"{CUSTOM_PREFIX}{repo}"
-        installed = (_tts_cache(repo) / "snapshots").is_dir() and _tts_config(repo) is not None
+        installed = _qwen_weights_ready(repo) and _tts_config(repo) is not None
     else:
         info = tts_model(model_id)
         installed = _tts_installed(model_id)
@@ -848,6 +983,42 @@ def install_snapshot(kind, repo, engine, size, progress, cancel_event, token="",
     return model_id
 
 
+def install_vosk(model_id, progress, cancel_event):
+    if model_id not in VOSK_MODELS:
+        raise ValueError("Неизвестная модель Vosk.")
+    info = VOSK_MODELS[model_id]
+    slug = model_id.removeprefix("vosk:")
+    folder = VOSK_DIR / slug
+    start = _ensure_packages(progress, cancel_event, "vosk")
+    if not (folder / ".piven-complete").is_file():
+        VOSK_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="download-", dir=VOSK_DIR) as staging:
+            staging = Path(staging)
+            archive = staging / (slug + ".zip")
+            _download(VOSK_DOWNLOADS + archive.name, archive, info["bytes"], "", cancel_event,
+                      lambda received: progress(start + (94 - start) * min(received / info["bytes"], 1),
+                                                f"Скачивание {info['title']}: {received / 2**20:.0f} МБ"))
+            progress(95, f"Распаковываю {info['title']}")
+            with zipfile.ZipFile(archive) as bundle:
+                for item in bundle.infolist():
+                    if cancel_event.is_set():
+                        raise InterruptedError("Установка отменена.")
+                    if item.filename.startswith(slug + "/"):
+                        bundle.extract(item, staging)
+            extracted = staging / slug
+            if not (extracted / "am" / "final.mdl").is_file() or not (extracted / "conf" / "model.conf").is_file():
+                raise RuntimeError("В архиве нет файлов модели Vosk.")
+            if cancel_event.is_set():
+                raise InterruptedError("Установка отменена.")
+            (extracted / ".piven-complete").write_text("ok\n", encoding="utf-8")
+            os.replace(extracted, folder)
+    _register("asr", model_id, {"engine": "vosk", "path": folder, "title": info["title"], "bytes": _folder_size(folder),
+                                "language": info["language"], "note": info["note"], "license": "Apache 2.0",
+                                "source": "alphacephei.com/vosk/models"})
+    progress(100, f"{info['title']} готова")
+    return model_id
+
+
 def install_piper(repo, file, progress, cancel_event, token=""):
     start = _ensure_packages(progress, cancel_event, "piper")
     folder = PIPER_DIR / repo.replace("/", "--")
@@ -871,29 +1042,233 @@ def install_piper(repo, file, progress, cancel_event, token=""):
     return model_id
 
 
+def _safe_relative(path):
+    return bool(isinstance(path, str) and not re.search(r'[\\:<>|?*"\x00-\x1f]', path)
+                and all(part and part == part.rstrip(". ") for part in path.split("/")))
+
+
+def _is_gguf(path):
+    return _safe_relative(path) and path.lower().endswith(".gguf") and "mmproj" not in path.lower()
+
+
+def validate_install(kind, model_id, extra):
+    engine = extra.get("engine", "")
+    file = extra.get("file")
+    path = file.get("path", "") if isinstance(file, dict) else ""
+    if kind in ("asr", "tts") and engine == "audiocpp" and model_id.startswith("audiocpp:") and isinstance(path, str) and path:
+        return
+    if kind == "asr" and not file and model_id in ASR_MODELS:
+        return
+    if (kind in ("asr", "tts") and engine in ("", "auto", "nemo", "transcribe", "audiocpp")
+            and _is_gguf(path) and REPO_PATTERN.fullmatch(model_id)
+            and all(part == part.rstrip(".") for part in model_id.split("/"))):
+        return
+    raise ValueError("Для голоса поддерживаются только совместимые модели GGUF.")
+
+
+def _nemo_compatibility(metadata):
+    architecture = metadata.get("general.architecture")
+    if architecture == "asr":
+        head = metadata.get("asr.head_type", "ctc")
+        return "" if head in ("ctc", "rnnt", "tdt") else f"NeMo-Speech не поддерживает тип распознавания {head}."
+    if architecture == "parakeet-ctc" or (not architecture and any(key.startswith("parakeet-ctc.") for key in metadata)):
+        return ""
+    if architecture == "nemo":
+        return "Это старый GGUF NeMo. Нужна версия модели, экспортированная в формат ASR для NeMo-Speech.cpp."
+    if architecture:
+        return f"Выбранный GGUF-файл несовместим с NeMo-Speech. Архитектура файла: {architecture}."
+    return None
+
+
+def _validate_nemo_file(path):
+    from app.models import memory_fit
+    error = _nemo_compatibility(memory_fit.local_metadata(path, prefix_bytes=16 << 20))
+    if error is None:
+        raise RuntimeError("Скачанный файл не содержит читаемого заголовка GGUF для NeMo-Speech.")
+    if error:
+        raise RuntimeError(error)
+
+
+TRANSCRIBE_ASR_ARCHITECTURES = {
+    "whisper", "parakeet", "cohere_asr", "canary", "canary_qwen", "qwen3_asr",
+    "moonshine", "moonshine_streaming", "sensevoice", "funasr_nano", "gigaam", "medasr",
+    "moss", "granite_speech", "granite_speech_nar", "granite_speech5_ctc", "voxtral", "voxtral_realtime",
+}
+
+
+def _gguf_runtime(kind, metadata):
+    from app.voice import catalog
+
+    architecture = metadata.get("general.architecture")
+    family = metadata.get("audiocpp.model_spec.family")
+    if isinstance(family, str) and re.fullmatch(r"[a-z0-9_]+", family):
+        spec = catalog.specs().get(family) or {}
+        if set(spec.get("tasks") or []) & catalog.TASKS[kind]:
+            embedded = metadata.get("audiocpp.embedded_files.names")
+            sidecars = catalog.required_sidecars(spec, embedded if isinstance(embedded, list) else [])
+            return {"engine": "audiocpp", "family": family, "sidecars": sidecars}
+        return {"reason": f"Семейство audio.cpp «{family}» недоступно для этой задачи."}
+    if kind == "asr" and _nemo_compatibility(metadata) == "":
+        return {"engine": "nemo"}
+    if kind == "asr" and isinstance(architecture, str) and architecture in TRANSCRIBE_ASR_ARCHITECTURES:
+        return {"engine": "transcribe"}
+    if architecture in ("audiocpp", None):
+        return {"retryable": True, "reason": "Не удалось определить движок по заголовку GGUF. Повтори проверку."}
+    return {"reason": f"Для архитектуры «{architecture}» нет подходящего движка в PIVEN для этой задачи."}
+
+
+def _resolve_voice_file(kind, repo, path, token):
+    from app.models import memory_fit
+    from app.voice import catalog
+
+    builtin_id, source = _builtin_asr(repo) if kind == "asr" else (None, None)
+    if source and source["file"] == path:
+        return {"engine": "nemo", "builtin": builtin_id}
+    package = catalog.file_package(kind, repo, path)
+    if package:
+        return {"engine": "audiocpp", "family": package[0], "package": package[1]}
+    if re.search(r"-\d{5}-of-\d{5}\.gguf$", path, re.IGNORECASE):
+        return {"reason": "Для этого GGUF нужны все части модели. Выбери цельный файл или готовый пакет."}
+    route = _gguf_runtime(kind, memory_fit.remote_metadata(repo, path, token, prefix_bytes=2 << 20))
+    return _voice_sidecars(repo, path, route, token)
+
+
+def _voice_sidecars(repo, path, route, token):
+    required = route.get("sidecars")
+    if not required:
+        return route
+    directory = path.rpartition("/")[0]
+    prefix = f"{directory}/" if directory else ""
+    sizes = {item["path"]: item.get("size") or 0 for item in _repo_files(repo, token, timeout=8)}
+    missing = [name for name in required if not _safe_relative(name) or prefix + name not in sizes]
+    if missing:
+        return {"reason": f"Для audio.cpp не хватает файлов: {', '.join(missing)}."}
+    return {**route, "sidecars": [(name, prefix + name, sizes[prefix + name]) for name in required]}
+
+
+def check_file(kind, repo, path, token=""):
+    validate_install(kind, repo, {"engine": "auto", "file": {"path": path}})
+    route = _resolve_voice_file(kind, repo, path, token)
+    engine = route.get("engine", "")
+    return {"supported": bool(engine), "engine": engine, "engineName": ENGINE_LABELS.get(engine, ""),
+            "engineNote": engine_note(engine) if engine else "", "reason": route.get("reason", ""),
+            "retryable": bool(route.get("retryable"))}
+
+
+def _voice_file_url(repo, path):
+    return f"https://huggingface.co/{urllib.parse.quote(repo, safe='/')}/resolve/main/{urllib.parse.quote(path, safe='/')}"
+
+
+def install_external_gguf(kind, repo, file, route, progress, cancel_event, token, staged=None):
+    from app.models import memory_fit
+    from app.voice import catalog
+
+    engine = route["engine"]
+    relative_path = file["path"]
+    size = int(file.get("size") or 0)
+    repo_key = repo.casefold()
+    if engine == "transcribe" and repo_key.startswith("handy-computer/"):
+        repo_key = repo_key.split("/", 1)[1]
+    target = ASR_MODELS_DIR / engine / repo_key / relative_path
+    if engine == "audiocpp":
+        relative = Path(relative_path)
+        target = ASR_MODELS_DIR / engine / kind / repo_key / relative.parent / (relative.stem + ".package") / relative.name
+    installed_id = f"{engine}:{repo_key}/{relative_path}"
+    ensure = voice_engines.ensure_transcribe if engine == "transcribe" else voice_engines.ensure_audiocpp
+    start = ensure(progress, cancel_event)
+
+    def validate(path):
+        confirmed = _gguf_runtime(kind, memory_fit.local_metadata(path, prefix_bytes=16 << 20))
+        staged_dependencies = {name for name, _, _ in route.get("sidecars", [])}
+        if (confirmed.get("engine") != engine or confirmed.get("family") != route.get("family")
+                or set(confirmed.get("sidecars", [])) - staged_dependencies):
+            raise RuntimeError("Заголовок скачанного GGUF не совпал с результатом проверки совместимости.")
+
+    if not (_registered(kind).get(installed_id) and target.stat().st_size == size):
+        if staged is not None:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staged, target)
+        else:
+            _download(_voice_file_url(repo, relative_path), target, size, "", cancel_event,
+                      lambda received: progress(start + (99 - start) * received / max(size, received, 1),
+                                                f"Скачивание {target.stem}: {received / 2**20:.0f} МБ"), token, validate=validate)
+    for name, source, expected_size in route.get("sidecars", []):
+        dependency = target.parent / name
+        if not dependency.is_file() or dependency.stat().st_size != expected_size:
+            _download(_voice_file_url(repo, source), dependency, expected_size, "", cancel_event,
+                      lambda received: progress(99, f"Скачивание {name}: {received / 2**20:.0f} МБ"), token)
+    info = {"engine": engine, "path": target, "repo": repo, "title": target.stem,
+            "bytes": target.stat().st_size + sum(size for _, _, size in route.get("sidecars", [])), "language": "auto",
+            "note": f"GGUF · {ENGINE_LABELS[engine]}", "license": repo_license(repo, token)}
+    if engine == "audiocpp":
+        family = route["family"]
+        spec = catalog.specs()[family]
+        info.update(family=family, task=catalog.task_for(spec, kind), language=catalog.language(spec),
+                    voices=catalog.voices(spec), clone=catalog.can_clone(spec))
+    _register(kind, installed_id, info)
+    progress(100, f"{target.stem} готова")
+    return installed_id
+
+
+def _install_audio_package(kind, family, package, progress, cancel_event, token):
+    from app.voice import catalog
+
+    entry = catalog.install(kind, family, package, progress, cancel_event, token)
+    installed_id = f"audiocpp:{family}/{entry['package']}"
+    _register(kind, installed_id, entry)
+    progress(100, f"{entry['title']} готова")
+    return installed_id
+
+
+def _install_after_header_check(kind, repo, file, progress, cancel_event, token):
+    from app.models import memory_fit
+
+    ASR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".voice-gguf-", dir=ASR_MODELS_DIR) as temporary:
+        staged = Path(temporary) / "weights.gguf"
+        size = int(file.get("size") or 0)
+        _download(_voice_file_url(repo, file["path"]), staged, size, "", cancel_event,
+                  lambda received: progress(80 * received / max(size, received, 1),
+                                            f"Скачивание GGUF для проверки: {received / 2**20:.0f} МБ"), token)
+        route = _voice_sidecars(repo, file["path"],
+                                _gguf_runtime(kind, memory_fit.local_metadata(staged, prefix_bytes=16 << 20)), token)
+        if not route.get("engine"):
+            raise ValueError(route.get("reason", "Не удалось проверить совместимость GGUF."))
+        if cancel_event.is_set():
+            raise InterruptedError("Установка отменена.")
+        file = {**file, "size": staged.stat().st_size}
+
+        def finishing(percent, message):
+            progress(80 + 0.2 * percent, message)
+
+        if route["engine"] == "nemo":
+            return install_asr(repo, finishing, cancel_event, file, token, staged=staged)
+        return install_external_gguf(kind, repo, file, route, finishing, cancel_event, token, staged=staged)
+
+
 def install(kind, model_id, progress, cancel_event, extra=None, token=""):
     extra = extra or {}
+    validate_install(kind, model_id, extra)
     reported, report = [0], progress
 
     def progress(percent, message):
         reported[0] = percent
         report(percent, message)
     _wait_note.progress = lambda message: report(reported[0], message)
-    engine = extra.get("engine", "")
-    if engine == "audiocpp":
-        from app.voice import catalog
-        family = model_id.split(":", 1)[1]
-        entry = catalog.install(kind, family, extra["file"]["path"], progress, cancel_event, token)
-        installed_id = f"audiocpp:{family}/{entry['package']}"
-        _register(kind, installed_id, entry)
-        progress(100, f"{entry['title']} готова")
-        return installed_id
-    if engine in voice_engines.ENGINES and engine not in ("nemo", "qwen", "piper"):
-        return install_snapshot(kind, model_id, engine, extra.get("size", 0), progress, cancel_event, token, extra.get("voices"))
-    if engine == "piper" and kind == "tts":
-        return install_piper(model_id, extra["file"], progress, cancel_event, token)
-    if kind == "asr" and (model_id in ASR_MODELS or extra.get("file")):
-        return install_asr(model_id, progress, cancel_event, extra.get("file"), token)
-    if kind == "tts" and (model_id in TTS_MODELS or extra.get("repo")):
-        return install_tts(model_id, progress, cancel_event, extra.get("repo"), extra.get("size", 0), token)
-    raise ValueError(f"Неизвестная модель: {kind}/{model_id}")
+    file = extra.get("file")
+    if model_id.startswith("audiocpp:"):
+        return _install_audio_package(kind, model_id.split(":", 1)[1], file["path"], progress, cancel_event, token)
+    if not file:
+        return install_asr(model_id, progress, cancel_event, token=token)
+    route = _resolve_voice_file(kind, model_id, file["path"], token)
+    if route.get("builtin"):
+        return install_asr(route["builtin"], progress, cancel_event, token=token)
+    if route.get("package"):
+        return _install_audio_package(kind, route["family"], route["package"], progress, cancel_event, token)
+    if route.get("engine") == "nemo":
+        return install_asr(model_id, progress, cancel_event, file, token)
+    if route.get("engine"):
+        return install_external_gguf(kind, model_id, file, route, progress, cancel_event, token)
+    if route.get("retryable"):
+        return _install_after_header_check(kind, model_id, file, progress, cancel_event, token)
+    raise ValueError(route["reason"])

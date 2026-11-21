@@ -97,12 +97,6 @@ NEW_PROGRAM = (r"(?:напиши|написать|сделай|сделать|с
                r"\s+(?:[\w-]+\s+){0,5}?(?:игр\w*|игруш\w*|сайт\w*|страниц\w*|веб-\w+|лендинг\w*|приложени\w*|программ\w*|калькулятор\w*|таймер\w*|бот\w*|скрипт\w*|утилит\w*|" + GAME_WORDS + r"|"
                r"games?|websites?|sites?|web ?pages?|pages?|apps?|applications?|programs?|calculators?|timers?|bots?|scripts?|juegos?|sitio|aplicacion|programa|calculadora|temporizador)\b")
 NOT_A_PROGRAM = r"\b(?:про|о|об|обзор\w*|отзыв\w*|about|review|sobre)\s+(?:[\w-]+\s+){0,3}?(?:игр\w*|сайт\w*|приложени\w*|программ\w*|games?|apps?|websites?|" + GAME_WORDS + r")"
-TRANSLIT = str.maketrans({"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p",
-                          "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya"})
-NAME_FILLER = {"напиши", "написать", "сделай", "сделать", "создай", "создать", "разработай", "запрограммируй", "собери", "простую", "простой", "простое", "мне", "пожалуйста", "небольшую", "красивую", "для", "на", "в", "и", "с",
-               "браузера", "write", "make", "create", "build", "develop", "a", "an", "the", "simple", "me", "please", "small", "for", "in", "with", "and", "игру", "game"}
-
-
 MAKE_VERB = r"\b(?:напиши|написать|сделай|сделать|создай|создать|разработай|разработать|запрограммируй|собери|собрать|закодь|write|make|create|build|develop|escribe|haz|crea|programa|desarrolla)\b"
 
 
@@ -142,12 +136,6 @@ def asks_new_project(text):
     if re.search(MAKE_VERB, lowered) and re.search(CODE_LANGUAGE, lowered) and not re.search(NOT_A_PROGRAM, lowered):
         return True
     return bool(re.search(NEW_PROGRAM, lowered) or re.search(NEW_PROGRAM, clean(text)) or re.search(r"(?:写|做|创建|开发|制作).{0,20}(?:游戏|网站|应用|程序|计算器|计时器|番茄钟)", lowered)) and not re.search(NOT_A_PROGRAM, lowered)
-
-
-def project_name(text):
-    words = [word for word in re.findall(r"[\w-]+", str(text or "").lower().replace("ё", "е")) if word not in NAME_FILLER and not word.isdigit()]
-    name = "-".join(words[:3]).translate(TRANSLIT)
-    return re.sub(r"[^a-z0-9-]+", "", name).strip("-")[:40]
 
 
 def asks_only_question(text):

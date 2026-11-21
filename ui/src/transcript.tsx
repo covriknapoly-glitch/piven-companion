@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { DialogueItem, EngineState, HfFile, WebApi } from "./bridge";
 import { Attachment } from "./cards";
-import { CodeCard, parseCard } from "./codecards";
+import { CodeCard, CodePlan, isFailedCheck, parseCard } from "./codecards";
 import { Icon } from "./icons";
 import { translate } from "./i18n";
 import { Markdown } from "./markdown";
+import { KnowledgeExcerpt } from "./knowledge";
 import { ProjectStart } from "./projects";
-import { Decor, IconButton, Logo, formatElapsed } from "./ui";
+import { Decor, IconButton, Logo, MotionPresence, formatElapsed } from "./ui";
 
 const SUGGESTIONS: { label: string; texts: string[] }[] = [
   { label: "объяснить", texts: [
@@ -61,6 +63,7 @@ interface MessageProps {
   api: WebApi;
   item: DialogueItem;
   index: number;
+  chatId: string;
   answered: boolean;
   pollAnswers?: string[];
   canRetry: boolean;
@@ -69,6 +72,7 @@ interface MessageProps {
   onView: (path: string) => void;
   onRetry: () => void;
   onEdit: (index: number, text: string) => void;
+  onFork?: (index: number) => void;
 }
 
 function UndoFiles({ api, index, count }: { api: WebApi; index: number; count: number }) {
@@ -236,9 +240,20 @@ function PollCard({ api, text, index, answered, answers }: { api: WebApi; text: 
 
 
 const PROGRAM_NOTE = /^(Презентация готова · .+|Видео готово\.)$/;
+const MESSAGE_CLOCK = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
-function Message({ api, item, index, answered, pollAnswers, canRetry, canEdit, onCopy, onView, onRetry, onEdit }: MessageProps) {
+function MessageTime({ created }: { created?: number | null }) {
+  if (typeof created !== "number" || created <= 0) return null;
+  const date = new Date(created * 1000);
+  if (!Number.isFinite(date.getTime())) return null;
+  return <time className="msg-time" dateTime={date.toISOString()} title={date.toLocaleString()}>{MESSAGE_CLOCK.format(date)}</time>;
+}
+
+function Message({ api, item, index, chatId, answered, pollAnswers, canRetry, canEdit, onCopy, onView, onRetry, onEdit, onFork }: MessageProps) {
   const [editing, setEditing] = useState(false);
+  const [sourceNumber, setSourceNumber] = useState(0);
+  const source = item.sources?.[sourceNumber - 1];
+  const fork = onFork && <IconButton icon="branch" label="Создать ветку отсюда" size={14} className="msg-action branch-action" onClick={() => onFork(index)} />;
   const attached = [...item.images, ...(item.files ?? [])];
   const attachments = attached.length > 0 && (
     <div className="attachments">{attached.map((path) => <Attachment key={path} api={api} path={path} onView={onView} />)}</div>
@@ -246,7 +261,7 @@ function Message({ api, item, index, answered, pollAnswers, canRetry, canEdit, o
   if (item.role === "poll") return <PollCard api={api} text={item.text} index={index} answered={answered} answers={pollAnswers} />;
   if (item.role === "code") {
     const card = parseCard(item.text);
-    return card && <div className="msg msg-code" id={`msg-${index}`}><CodeCard api={api} card={card} index={index} onCopy={onCopy} /></div>;
+    return card && <div className={`msg msg-code${card.kind === "plan" ? " msg-plan" : ""}`} id={`msg-${index}`}><CodeCard api={api} card={card} index={index} onCopy={onCopy} /></div>;
   }
   if (item.role === "system" || item.role === "error") {
     return <div className={`msg msg-system ${item.role === "error" ? "msg-error" : ""}`} id={`msg-${index}`}><span className="msg-mark">#</span><p className="plain">{item.text}</p>{attachments}</div>;
@@ -262,42 +277,94 @@ function Message({ api, item, index, answered, pollAnswers, canRetry, canEdit, o
         {!editing && <div className="msg-actions">
           {item.role === "user" && canEdit && <IconButton icon="edit" label="Изменить" size={14} className="msg-action" onClick={() => setEditing(true)} />}
           <IconButton icon="copy" label="Копировать" size={14} className="msg-action" onClick={() => onCopy(item.text)} />
+          {fork}
         </div>}
+        <MessageTime created={item.created} />
       </div>
     );
   }
   return (
     <div className="msg msg-assistant" id={`msg-${index}`}>
-      {item.text && (PROGRAM_NOTE.test(item.text) ? <p className="plain">{item.text}</p> : <Markdown text={item.text} onCopy={onCopy} />)}
+      {item.text && (PROGRAM_NOTE.test(item.text) ? <p className="plain">{item.text}</p> : <Markdown text={item.text} onCopy={onCopy}
+        citations={item.sources?.length ? { count: item.sources.length, open: setSourceNumber } : null} />)}
       {attachments}
+      {Boolean(item.sources?.length) && <div className="knowledge-sources" aria-label="Фрагменты из базы знаний">
+        {item.sources?.map((entry, i) => (
+          <button key={i} type="button" className="chip-btn" title={[entry.path, entry.section].filter(Boolean).join(" · ")}
+            onClick={() => setSourceNumber(i + 1)}><Icon name="file" size={13} /><span data-i18n-skip>{`[${i + 1}] ${entry.path}`}</span></button>
+        ))}
+      </div>}
+      {item.sources?.length ? createPortal(<MotionPresence>{source && <KnowledgeExcerpt key={sourceNumber} source={source} api={api} chatId={chatId}
+        index={index} number={sourceNumber} onClose={() => setSourceNumber(0)} />}</MotionPresence>, document.body) : null}
       <div className="msg-actions">
         <IconButton icon="copy" label="Копировать ответ" size={14} className="msg-action" onClick={() => onCopy(item.text)} />
         <IconButton icon="volume" label="Озвучить" size={14} className="msg-action" onClick={() => { void api.speak(item.text); }} />
         {canRetry && <IconButton icon="retry" label="Ответить заново" size={14} className="msg-action" onClick={onRetry} />}
+        {fork}
+        <MessageTime created={item.created} />
       </div>
       {Boolean(item.undo) && <UndoFiles api={api} index={index} count={item.undo ?? 0} />}
     </div>
   );
 }
 
-const STEP_KINDS = new Set(["read", "write", "edit", "command", "page", "note", "plan"]);
-const LIVE_STEPS = 6;
+const STEP_KINDS = new Set(["read", "write", "edit", "command", "page", "note"]);
 const STALLED = /^(Модель перестала отвечать|Работа остановлена после)/;
 
-/** Steps of the agent in one block: folded when the work is over, the latest few while it goes on. */
-function StepGroup({ indexes, live, focused, render }: { indexes: number[]; live: boolean; focused: boolean; render: (index: number) => ReactNode }) {
+const STEP_CATEGORIES = {
+  command: { icon: "keyboard", label: (count: number) => `Команд: ${count}` },
+  file: { icon: "file", label: (count: number) => `Операций с файлами: ${count}` },
+  page: { icon: "globe", label: (count: number) => `Проверок: ${count}` },
+  failed: { icon: "alert", label: (count: number) => `Ошибок: ${count}` },
+} as const;
+
+type StepCategory = keyof typeof STEP_CATEGORIES;
+type CodeStep = { index: number; category?: StepCategory };
+type StepRunData = { category: StepCategory; indexes: number[] };
+
+function StepRun({ run, focusIndex, render }: { run: StepRunData; focusIndex?: number; render: (index: number) => ReactNode }) {
   const [open, setOpen] = useState(false);
-  const all = open || focused;
-  const shown = all ? indexes : live ? indexes.slice(-LIVE_STEPS) : [];
-  const canFold = live ? indexes.length > LIVE_STEPS : indexes.length > 1;
-  if (!canFold && !all && live) return <>{shown.map(render)}</>;
-  if (indexes.length === 1) return <>{indexes.map(render)}</>;
+  const { icon, label } = STEP_CATEGORIES[run.category];
+  const count = run.indexes.length;
+  const focused = focusIndex !== undefined && run.indexes.includes(focusIndex) ? focusIndex : undefined;
+  return (
+    <div className="step-run">
+      {count > 1 && <button type="button" className={`step-toggle step-run-toggle${run.category === "failed" ? " failed" : ""}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <Icon name="chevronRight" size={13} className="disclosure-chevron" /><Icon name={icon} size={13} /><span>{label(count)}</span>
+      </button>}
+      {count === 1 ? render(run.indexes[0]) : <MotionPresence kind="collapse" instant={focused !== undefined}>{(open || focused !== undefined) && <div className="step-run-list">
+        {open ? run.indexes.map(render) : focused !== undefined && render(focused)}
+      </div>}</MotionPresence>}
+    </div>
+  );
+}
+
+function StepGroup({ steps, focusIndex, render }: { steps: CodeStep[]; focusIndex?: number; render: (index: number) => ReactNode }) {
+  const [open, setOpen] = useState(false);
+  let count = 0;
+  const rows: (number | StepRunData)[] = [];
+  for (const { index, category } of steps) {
+    if (!category) rows.push(index);
+    else {
+      if (category !== "failed") count++;
+      const last = rows[rows.length - 1];
+      if (typeof last === "object" && last.category === category) last.indexes.push(index);
+      else rows.push({ category, indexes: [index] });
+    }
+  }
   return (
     <div className="step-group">
-      <button type="button" className="step-toggle" aria-expanded={all} onClick={() => setOpen((value) => !value)}>
-        <Icon name="chevronRight" size={13} className={all ? "rot90" : ""} /><span>{all ? "Скрыть шаги" : `Шагов: ${indexes.length}`}</span>
-      </button>
-      {shown.map(render)}
+      {count > 0 && <button type="button" className="step-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <Icon name="chevronRight" size={13} className="disclosure-chevron" /><span>{open ? "Скрыть шаги" : `Шагов: ${count}`}</span>
+      </button>}
+      {rows.map((row) => {
+        if (typeof row === "number") return render(row);
+        if (row.category === "failed") return <StepRun key={row.indexes[0]} run={row} focusIndex={focusIndex} render={render} />;
+        const focused = focusIndex !== undefined && row.indexes.includes(focusIndex);
+        return <MotionPresence key={row.indexes[0]} kind="collapse" instant={focused}>
+          {open ? <StepRun run={row} focusIndex={focusIndex} render={render} /> : focused && render(focusIndex)}
+        </MotionPresence>;
+      })}
     </div>
   );
 }
@@ -330,36 +397,33 @@ function Working({ state, onStop }: { state: EngineState; onStop: () => void }) 
       </div>
       {state.reasoning && (
         <>
-          <button type="button" className="text-btn" onClick={() => setExpanded((value) => !value)}>
-            <Icon name="chevronRight" size={13} className={expanded ? "rot90" : ""} /> рассуждения
+          <button type="button" className="text-btn" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+            <Icon name="chevronRight" size={13} className="disclosure-chevron" /> рассуждения
           </button>
-          {expanded && <pre className="reasoning">{state.reasoning.slice(-4000)}</pre>}
+          <MotionPresence kind="collapse">{expanded && <pre className="reasoning">{state.reasoning.slice(-4000)}</pre>}</MotionPresence>
         </>
       )}
     </div>
   );
 }
 
-export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, onEdit, onStop, onPrefill, onNotice }:
+export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, onEdit, onFork, onStop, onPrefill, onNotice }:
   { api: WebApi; state: EngineState; focusIndex: { index: number; nonce: number } | null;
     onCopy: (text: string) => void; onView: (path: string) => void; onRetry: () => void; onStop: () => void;
-    onEdit: (index: number, text: string) => void; onPrefill: (text: string) => void; onNotice: (error?: string) => void }) {
+    onEdit: (index: number, text: string) => void; onFork: (index: number) => void; onPrefill: (text: string) => void; onNotice: (error?: string) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const [awayFromEnd, setAwayFromEnd] = useState(false);
   const lastAssistant = state.items.map((item) => item.role).lastIndexOf("assistant");
   const lastUser = state.items.map((item) => item.role).lastIndexOf("user");
   const polls = useMemo(() => pollReplies(state.items), [state.items]);
-  const stalePlans = useMemo(() => {
-    const plans = state.items.flatMap((item, index) => (item.role === "code" && parseCard(item.text)?.kind === "plan" ? [index] : []));
-    return new Set(plans.slice(0, -1));
-  }, [state.items]);
-
   useLayoutEffect(() => {
     const element = scrollRef.current;
     if (element && stickToBottom.current) element.scrollTop = element.scrollHeight;
-  }, [state.items.length, state.busy, state.activity, state.reasoning]);
+  }, [state.items.length, state.busy, state.activity, state.reasoning, state.activePlan]);
   useLayoutEffect(() => {
     stickToBottom.current = true;
+    setAwayFromEnd(false);
     const element = scrollRef.current;
     if (!element) return;
     element.scrollTop = element.scrollHeight;
@@ -370,7 +434,7 @@ export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, on
     if (!focusIndex) return;
     const element = document.getElementById(`msg-${focusIndex.index}`);
     if (!element) return;
-    element.scrollIntoView({ block: "center", behavior: "smooth" });
+    element.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
     element.classList.remove("flash");
     void element.offsetWidth;
     element.classList.add("flash");
@@ -393,35 +457,68 @@ export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, on
     const render = (index: number) => {
       const item = state.items[index];
       return (
-        <Message key={index} api={api} item={item} index={index} answered={index < lastUser} pollAnswers={polls.answers.get(index)}
+        <Message key={`${state.activeChatId}-${index}`} api={api} item={item} index={index} chatId={state.activeChatId} answered={index < lastUser} pollAnswers={polls.answers.get(index)}
           canRetry={index === lastAssistant && !state.busy} canEdit={!state.busy}
-          onCopy={onCopy} onView={onView} onRetry={onRetry} onEdit={onEdit} />
+          onCopy={onCopy} onView={onView} onRetry={onRetry} onEdit={onEdit} onFork={!state.busy && !state.listening.running ? onFork : undefined} />
       );
     };
-    const segments: (number | number[])[] = [];
+    const segments: (number | CodeStep[])[] = [];
+    let pendingPlan: number | undefined;
+    const flushPlan = () => {
+      if (pendingPlan !== undefined) segments.push(pendingPlan);
+      pendingPlan = undefined;
+    };
     state.items.forEach((item, index) => {
-      if (polls.replies.has(index) || stalePlans.has(index)) return;
+      if (polls.replies.has(index)) return;
       const card = item.role === "code" ? parseCard(item.text) : null;
-      if (!card || !STEP_KINDS.has(card.kind)) { segments.push(index); return; }
+      if (card?.kind === "plan") {
+        if (!card.planId || card.planId !== state.activePlan?.planId) pendingPlan = index;
+        return;
+      }
+      if (!card || !STEP_KINDS.has(card.kind)) {
+        if (item.role === "user") flushPlan();
+        segments.push(index);
+        if (item.role === "assistant") flushPlan();
+        return;
+      }
+      let category: StepCategory | undefined;
+      if (isFailedCheck(card)) category = "failed";
+      else if (card.kind === "command" || card.kind === "page") {
+        if (card.exit === 0 && !card.denied && !card.stopped && !card.background) category = card.kind;
+      } else if (card.kind !== "note") category = "file";
+      const step = { index, category };
       const last = segments[segments.length - 1];
-      if (Array.isArray(last)) last.push(index); else segments.push([index]);
+      if (Array.isArray(last)) last.push(step); else segments.push([step]);
     });
+    flushPlan();
     const stalled = !state.busy && lastAssistant > lastUser && STALLED.test(state.items[lastAssistant]?.text ?? "");
     body = (
       <>
-        {segments.map((segment, position) => (Array.isArray(segment)
-          ? <StepGroup key={`steps-${segment[0]}`} indexes={segment} live={state.busy && position === segments.length - 1} focused={Boolean(focusIndex && segment.includes(focusIndex.index))} render={render} />
+        {segments.map((segment) => (Array.isArray(segment)
+          ? <StepGroup key={`steps-${segment[0].index}`} steps={segment} focusIndex={focusIndex?.index} render={render} />
           : render(segment)))}
         {state.busy && <Working state={state} onStop={onStop} />}
+        {state.activePlan && <div className="msg msg-code msg-plan" key={state.activePlan.planId}><CodePlan items={state.activePlan.items} live /></div>}
         <Queue api={api} state={state} />
         {stalled && <div className="msg msg-continue"><button type="button" className="btn btn-primary" onClick={() => { void api.send_message("Продолжай", []).then((result) => onNotice(result.ok ? undefined : result.error)); }}><Icon name="play" size={14} /> Продолжить</button></div>}
       </>
     );
   }
-  return (
-    <div className="transcript" ref={scrollRef}
-      onScroll={(event) => { const el = event.currentTarget; stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
-      <div className="transcript-inner" key={state.activeChatId}>{body}</div>
+  return <>
+    <div className="transcript" ref={scrollRef} data-smooth-wheel onScroll={(event) => {
+      const el = event.currentTarget;
+      const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      stickToBottom.current = atEnd;
+      setAwayFromEnd(!atEnd);
+    }}>
+      <div className="transcript-inner tab-view" key={state.activeChatId}>{body}</div>
     </div>
-  );
+    {awayFromEnd && <button type="button" className="btn btn-secondary transcript-latest" onClick={() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+      stickToBottom.current = true;
+      setAwayFromEnd(false);
+    }}><Icon name="arrowDown" size={15} /><span>К последнему сообщению</span></button>}
+  </>;
 }
