@@ -194,7 +194,7 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
       </div>
       <div key={kind} id="voice-model-results" role="tabpanel" className="tab-view">
         {hits && hits.length > 0 && (
-          <div className="hub-list" data-smooth-wheel>
+          <div className="hub-list">
             {hits.map((item) => (
               <button key={item.id} type="button" className={item.id === repo ? "selected" : ""} disabled={running}
                 title={item.problem || (item.engineLabel === "GGUF" ? "Совместимость зависит от выбранного GGUF-файла." : `Запустится через ${item.engineLabel}`)} onClick={() => setHit(item)}>

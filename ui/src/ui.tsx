@@ -389,11 +389,18 @@ function memoryDetail(estimate: MemoryEstimate, context: number) {
   return parts.join(" + ");
 }
 
-export const speedText = (estimate: MemoryEstimate) =>
-  estimate.speed ? `${estimate.measured ? "" : "≈ "}${Math.round(estimate.speed)} ток/с` : "";
 const speedHint = (estimate: MemoryEstimate) => !estimate.speed ? "" : estimate.measured
   ? `Скорость ${Math.round(estimate.speed)} токенов в секунду, измерено на последних ответах.`
   : `Скорость ≈ ${Math.round(estimate.speed)} токенов в секунду, оценка по пропускной способности памяти; после первых ответов покажется измеренная.`;
+
+function SpeedBadge({ estimate }: { estimate?: MemoryEstimate | null }) {
+  if (!estimate?.speed || !Number.isFinite(estimate.speed) || estimate.speed < 0) return null;
+  const speed = Math.round(estimate.speed);
+  const band = speed < 10 ? "slow" : speed < 30 ? "moderate" : speed <= 100 ? "fast" : "very-fast";
+  return <span className={`speed-badge ${estimate.measured ? `measured ${band}` : "estimated"}`} title={speedHint(estimate)}>
+    {estimate.measured ? "" : "≈ "}{speed} ток/с
+  </span>;
+}
 
 export function MemoryBadge({ estimate, gpu, context = 0 }: { estimate?: MemoryEstimate | null; gpu: number; context?: number }) {
   if (!estimate) return null;
@@ -401,7 +408,7 @@ export function MemoryBadge({ estimate, gpu, context = 0 }: { estimate?: MemoryE
   return (
     <span className={`mem-badge ${tooBig ? "warn" : ""}`} title={`При запуске ≈ ${gigabytes(estimate.total)} видеопамяти: ${memoryDetail(estimate, context)}
 ${speedHint(estimate)}`}>
-      ≈ {gigabytes(estimate.total)}{estimate.speed ? <span className={`speed-badge ${estimate.measured ? "measured" : ""}`}>{speedText(estimate)}</span> : null}
+      ≈ {gigabytes(estimate.total)}<SpeedBadge estimate={estimate} />
     </span>
   );
 }
@@ -417,7 +424,7 @@ export function MemoryBar({ parts: sizes, gpu, label, speed }: { parts: { weight
   const tooBig = gpu > 0 && total > gpu * 0.95;
   return (
     <div className={`mem-bar ${tooBig ? "warn" : ""}`}>
-      <div className="mem-bar-head"><span>{label}</span><strong>≈ {gigabytes(total)}{gpu ? ` из ${gigabytes(gpu)}` : ""}{speed?.speed ? <span className={`speed-badge ${speed.measured ? "measured" : ""}`} title={speedHint(speed)}>{speedText(speed)}</span> : null}</strong></div>
+      <div className="mem-bar-head"><span>{label}</span><strong>≈ {gigabytes(total)}{gpu ? ` из ${gigabytes(gpu)}` : ""}<SpeedBadge estimate={speed} /></strong></div>
       <div className="mem-bar-track">{parts.map((part) => <i key={part.label} className={part.color} style={{ width: `${(100 * part.bytes) / scale}%` }} title={`${part.label}: ${gigabytes(part.bytes)}`} />)}</div>
       <div className="mem-bar-legend">{parts.map((part) => <span key={part.label}><b className={part.color} />{part.label} {gigabytes(part.bytes)}</span>)}</div>
     </div>

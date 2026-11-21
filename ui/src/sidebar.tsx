@@ -195,7 +195,7 @@ export function Sidebar({ api, state, actions, searchRef, onNewChat, onOpenHit, 
         </label>
       </div>
 
-      <nav className="chat-nav" data-smooth-wheel>
+      <nav className="chat-nav">
         {pinned.length > 0 && <><div className="nav-caption">Закреплённые</div>{pinned.map((chat) => renderChat(chat, 0, parents.has(chat.id)))}</>}
         {groups.map(([caption, chats]) => <div key={caption} className="nav-group"><div className="nav-caption">{caption}</div>{chats.map((chat) => renderChat(chat))}</div>)}
         {!filtered.length && !messageHits.length && <div className="nav-empty">{query.trim() ? "Ничего не найдено" : projects ? "Проектов пока нет" : "Чатов пока нет"}</div>}
