@@ -99,7 +99,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
         </nav>
         <div className="settings-pane">
           <IconButton icon="close" label="Закрыть (Esc)" className="settings-close" onClick={onClose} />
-          {!d ? null : <div className="settings-fields tab-view" key={modelPage === null ? section : `model:${modelPage}`} data-smooth-wheel>
+          {!d ? null : <div className="settings-fields tab-view" key={modelPage === null ? section : `model:${modelPage}`}>
             {section === "look" && <>
               <Field label="Язык / Language" hint="Модель тоже будет отвечать на нём.">
                 <div className="segmented wrap sliding-selection">

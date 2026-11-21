@@ -505,7 +505,7 @@ export function Transcript({ api, state, focusIndex, onCopy, onView, onRetry, on
     );
   }
   return <>
-    <div className="transcript" ref={scrollRef} data-smooth-wheel onScroll={(event) => {
+    <div className="transcript" ref={scrollRef} onScroll={(event) => {
       const el = event.currentTarget;
       const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
       stickToBottom.current = atEnd;

@@ -1015,15 +1015,17 @@ button.md-link { padding: 0; font: inherit; cursor: pointer; }
 .mem-bar .seg1 { background: var(--ok); }
 .mem-bar .seg2 { background: var(--warn); }
 .mem-bar .seg3 { background: color-mix(in srgb, var(--danger) 55%, var(--blue)); }
-:root[data-theme="light"] .mem-bar .seg0 { background: #16954b; }
-:root[data-theme="light"] .mem-bar .seg1 { background: #1685d9; }
-:root[data-theme="light"] .mem-bar .seg2 { background: #d06a00; }
-:root[data-theme="light"] .mem-bar .seg3 { background: #9d4ed4; }
+:root[data-theme="light"] .mem-bar .seg0 { background: #10a953; }
+:root[data-theme="light"] .mem-bar .seg1 { background: #1397ef; }
+:root[data-theme="light"] .mem-bar .seg2 { background: #ee8200; }
+:root[data-theme="light"] .mem-bar .seg3 { background: #aa50e8; }
 .mem-bar-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; color: var(--muted); font-size: 11.5px; }
 .mem-bar-legend span { display: flex; align-items: center; gap: 6px; }
 .mem-bar-legend b { width: 8px; height: 8px; border-radius: 2px; }
 .mem-bar small { display: block; margin-top: 8px; color: var(--warn, #e5c07b); font-size: 12px; }
 .mem-bar.warn .mem-bar-head strong { color: var(--warn, #e5c07b); }
+:root[data-theme="light"] .mem-bar.warn .mem-bar-head strong { color: #ba5100; font-weight: 600; }
+:root[data-theme="light"] .mem-bar .speed-badge.measured { font-weight: 600; }
 
 .voice-hub-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .voice-hub-toolbar .select { width: auto; }
@@ -1039,7 +1041,15 @@ button.md-link { padding: 0; font: inherit; cursor: pointer; }
 code, pre, textarea.prompt-input { font-family: var(--mono); }
 .speed-badge { margin-left: 8px; }
 .speed-badge::before { content: "· "; color: var(--muted); }
-.speed-badge.measured { color: var(--ok); }
+.speed-badge.estimated { color: #a0a0a0; }
+.speed-badge.slow { color: var(--danger); }
+.speed-badge.moderate { color: #f4cc63; }
+.speed-badge.fast { color: var(--ok); }
+.speed-badge.very-fast { color: #72b6ff; }
+:root[data-theme="light"] .speed-badge.moderate { color: #886100; }
+:root[data-theme="light"] .speed-badge.fast { color: #008135; }
+:root[data-theme="light"] .speed-badge.very-fast { color: #0968c9; }
+:root[data-theme="light"] .speed-badge.estimated { color: #666; }
 .hub-title { display: flex; flex-direction: column; min-width: 0; }
 .hub-title small { overflow: hidden; color: var(--muted); font-size: 11.5px; white-space: nowrap; text-overflow: ellipsis; }
 

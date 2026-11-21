@@ -108,7 +108,7 @@ export function ContextTab({ api, state }: { api: WebApi; state: EngineState }) 
   const level = share > 0.9 ? "full" : share > usage.historyShare ? "high" : "";
   const histBudget = Math.round(limit * usage.historyShare);
   return (
-    <div className="workspace-slot context-tab" aria-busy={loaded ? undefined : true} data-smooth-wheel>
+    <div className="workspace-slot context-tab" aria-busy={loaded ? undefined : true}>
       <Decor corner="br" />
       <div className="context-total">
         <strong className={`${level} ctx-value ${ready ? "" : "waiting"}`}><Line>{limit ? `${share < 0.1 ? (share * 100).toFixed(1) : Math.min(999, Math.round(share * 100))}%` : count(usage.used)}</Line></strong>

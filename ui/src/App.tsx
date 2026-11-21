@@ -9,7 +9,7 @@ import { CallPanel } from "./call";
 import { KnowledgeDialog } from "./knowledge";
 import { ContextRing } from "./context";
 import { LinkContext } from "./markdown";
-import { CodeModeActivation, useSmoothWheel } from "./motion";
+import { CodeModeActivation } from "./motion";
 import { SettingsDialog, FONT_CHOICES, prefetchSettings, type FontChoice } from "./settings";
 import { HelpDialog, type SlashCommand } from "./commands";
 import { translate } from "./i18n";
@@ -81,7 +81,6 @@ export default function App() {
   const [browserOpen, setBrowserOpen] = useState(() => readStored(BROWSER_KEY, ["1", "0"], "0") === "1");
 
   const appRef = useRef<HTMLDivElement>(null);
-  useSmoothWheel(appRef, Boolean(state));
   const [workspaceMounted, setWorkspaceMounted] = useState(browserOpen);
   const inCall = Boolean(state?.listening.running);
   const workspaceVisible = browserOpen || inCall;

@@ -104,10 +104,10 @@ function ProjectFiles({ api, state, onReference }: { api: WebApi; state: EngineS
       <Button kind="ghost" onClick={() => onReference(selected)}>Указать в чате</Button>
     </div>
     {!preview ? <p className="pane-note files-empty">Загрузка…</p> : preview.ok ?
-      <><pre className="project-source" data-smooth-wheel data-i18n-skip>{preview.text}</pre>{preview.truncated && <p className="pane-note files-empty">Показано начало файла.</p>}</>
+      <><pre className="project-source" data-i18n-skip>{preview.text}</pre>{preview.truncated && <p className="pane-note files-empty">Показано начало файла.</p>}</>
       : <p className="pane-note files-empty">{preview.error}</p>}
   </div>;
-  return <div className="workspace-slot files-list" data-smooth-wheel>
+  return <div className="workspace-slot files-list">
     <div className="files-bar">
       {folder && <IconButton icon="arrowRight" className="flip-x" label="На уровень выше" onClick={() => { setFolder(parent); setQuery(""); }} />}
       <strong title={listing?.root} data-i18n-skip>{folder || fileName(listing?.root || state.code.root)}</strong>
@@ -162,7 +162,7 @@ function FilesTab({ api, state }: { api: WebApi; state: EngineState }) {
     </div>
   );
   return (
-    <div className="workspace-slot files-list" data-smooth-wheel>
+    <div className="workspace-slot files-list">
       {!files.length && <div className="files-empty"><Decor corner="br" /><p className="pane-note">Файлов пока нет</p></div>}
       {files.map((path) => (
         <button key={path} type="button" className="file-row" onClick={() => setOpen(path)} title={path}>
