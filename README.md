@@ -7,7 +7,7 @@
 
 # PIVEN Companion
 
-AI chat and coding on your own Windows PC.
+An AI agent for Windows that runs on your own PC.
 
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
@@ -18,19 +18,21 @@ AI chat and coding on your own Windows PC.
 
 </div>
 
-I wanted something like OpenCode that felt at home on my Windows desktop. I wanted to open it, pick a model, and get back to whatever I was building. So I made PIVEN Companion.
+I wanted an AI agent like OpenCode that was easy to use on my Windows PC. So I made one.
 
-## Give it a project
+## Coding
 
-Turn on **Code**, pick a folder, and try asking, “Where does this app save its settings?” PIVEN can look through the project to find out. If you ask it to change something, you can see which files it touched and what happened when it ran the tests. Open **Files → Project** if you want to read a file yourself or drop its path into the chat.
+Turn on **Code** and pick your project folder. You can ask it something like “Where does this app save its settings?” or ask it to fix a bug. It can read and change files and run tests. You can see what it did in the chat. Open **Files → Project** to see the files or add a file path to your message.
 
-When you come back to the same folder in a new chat, PIVEN can reuse its project notes. It also looks for a guide in `AGENTS.md`, `CLAUDE.md`, or `README.md`. You can see the notes under **Files → Project memory**, remove them, or refresh the document index after editing files outside PIVEN.
+PIVEN looks for `AGENTS.md`, `CLAUDE.md`, or `README.md` in the project. It can save notes and use them again when you open the same folder in a new chat. You can see or delete the notes in **Project memory** under **Files**. You can also refresh the list of docs it can search there.
 
-## You can just talk to it, too
+## Chat and voice
 
-There’s a mic in the chat box for dictation and a phone button for a call. Speech recognition and the voice that reads replies can use different models or services. If you get halfway through a chat and want to try a different idea, branch from an earlier message and take it from there.
+You can type, use the mic, or just call it and talk. You can pick one model for speech recognition and another one to read the answers out loud. If you want to try a different idea, you can start a new branch from an earlier message.
 
-You can give PIVEN a folder full of documents and click a citation to see where an answer came from. Facts it remembers between chats show up in **Settings → Memory**, where you can delete them. It can also look things up, open programs, make a presentation, or generate pictures and video through ComfyUI or a connected provider.
+You can give it a folder of docs and open the part it used in an answer. It can also remember things between chats. You can see what it saved and delete it in **Settings → Memory**.
+
+It can search the web, open programs, and make presentations. For pictures and video, you can use ComfyUI or a cloud service you connect.
 
 <table>
 <tr>
@@ -45,13 +47,13 @@ You can give PIVEN a folder full of documents and click a citation to see where 
 
 ## Install it
 
-Grab `PIVEN-Companion-<version>-Setup.exe` under **Assets** and run it on Windows 10 or 11. The app is available in English and Russian. [Latest release](https://github.com/covriknapoly-glitch/piven-companion/releases/latest)
+Download `PIVEN-Companion-<version>-Setup.exe` under **Assets** and run it. It works on Windows 10 and 11. The app is in English and Russian. [Latest release](https://github.com/covriknapoly-glitch/piven-companion/releases/latest)
 
-If you’re starting from scratch, try the model PIVEN suggests. You can also look for a compatible GGUF on Hugging Face inside the app. PIVEN shows roughly how much memory each model needs and how fast it might run on your PC. The files can be several gigabytes each, so check the size before you hit download. An NVIDIA GPU helps with speed, and you can run models on the CPU too.
+Try the model the app suggests when you open it. You can also find and download other compatible GGUF models from Hugging Face in the app. Before you download one, PIVEN shows how much memory it might need and how fast it might run. Models can take up a few GB each. An NVIDIA GPU helps with speed. You can run models on the CPU too.
 
 ## Connect a model you already use
 
-Already running Ollama or LM Studio? Open **Settings → Integrations**, connect your server, and its models will show up in the chat picker. The same menu has OpenRouter, Google, OpenAI, and Anthropic if you have an API key. You can set a different system prompt for each chat model.
+If you already use Ollama or LM Studio, you can connect it in **Settings → Integrations**. Its models will show up in the chat picker. You can also use your own API key for OpenRouter, Google, OpenAI, or Anthropic. Each chat model can have its own system prompt.
 
 <details>
 <summary>vLLM, Strata, and Unsloth Studio</summary>
@@ -64,7 +66,7 @@ Already running Ollama or LM Studio? Open **Settings → Integrations**, connect
 
 ## Your data
 
-Your chats, settings, and models live in `%LOCALAPPDATA%\PIVEN`. A request to a cloud model can include your message and relevant excerpts from your files. Cloud speech services receive the audio to transcribe or the text to read out loud. If you share your screen in a call with a cloud model, the request can include screenshots too.
+Your chats, settings, and models are saved in `%LOCALAPPDATA%\PIVEN`. When you use a cloud model, it gets your message and can get parts of your files. A cloud speech service gets the audio you want to turn into text or the text you want read out loud. If you turn on screen sharing in a call with a cloud model, it can get screenshots too.
 
 ## Run from source
 
