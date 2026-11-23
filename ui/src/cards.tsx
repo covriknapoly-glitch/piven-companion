@@ -5,16 +5,50 @@ import { Markdown } from "./markdown";
 import { IconButton, Logo, fileName, formatElapsed } from "./ui";
 
 const IMAGE_PATTERN = /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i;
+const mediaCache = new WeakMap<WebApi, Map<string, Promise<string>>>();
+
+function loadMedia(api: WebApi, path: string, thumbnail: boolean) {
+  if (!thumbnail) return api.image_data(path).catch(() => "");
+  let cache = mediaCache.get(api);
+  if (!cache) { cache = new Map(); mediaCache.set(api, cache); }
+  const previous = cache.get(path);
+  if (previous) {
+    cache.delete(path);
+    cache.set(path, previous);
+    return previous;
+  }
+  const request = api.image_data(path, true).then(async (src) => {
+    if (!src) return "";
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    return src;
+  }).catch(() => "");
+  cache.set(path, request);
+  void request.then((src) => { if (!src && cache.get(path) === request) cache.delete(path); });
+  if (cache.size > 12) cache.delete(cache.keys().next().value!);
+  return request;
+}
+
+export function prefetchChatImages(api: WebApi, items: DialogueItem[]) {
+  const paths = [...new Set(items.slice(-16).reverse().flatMap((item) => [...item.images, ...(item.files ?? [])]))];
+  return Promise.allSettled(paths.filter((path) => IMAGE_PATTERN.test(path)).slice(0, 6).map((path) => loadMedia(api, path, true)));
+}
+
+function useMedia(api: WebApi, path: string, enabled: boolean, thumbnail = false) {
+  const [result, setResult] = useState<{ api: WebApi; path: string; src: string } | null>(null);
+  useEffect(() => {
+    if (!enabled || (!IMAGE_PATTERN.test(path) && !/\.(mp4|webm|mkv)$/i.test(path))) return;
+    let alive = true;
+    void loadMedia(api, path, thumbnail).then((src) => { if (alive) setResult({ api, path, src }); });
+    return () => { alive = false; };
+  }, [api, path, enabled, thumbnail]);
+  const current = enabled && result?.api === api && result.path === path ? result : null;
+  return { src: current?.src ?? "", loading: enabled && !current };
+}
 
 export function useImage(api: WebApi, path: string, enabled = true) {
-  const [src, setSrc] = useState("");
-  useEffect(() => {
-    let alive = true;
-    setSrc("");
-    if (enabled && (IMAGE_PATTERN.test(path) || /\.(mp4|webm|mkv)$/i.test(path))) void api.image_data(path).then((data) => { if (alive) setSrc(data); });
-    return () => { alive = false; };
-  }, [api, path, enabled]);
-  return src;
+  return useMedia(api, path, enabled).src;
 }
 
 function VideoAttachment({ api, path }: { api: WebApi; path: string }) {
@@ -32,8 +66,8 @@ function VideoAttachment({ api, path }: { api: WebApi; path: string }) {
 
 export function Attachment({ api, path, onView }: { api: WebApi; path: string; onView: (path: string) => void }) {
   const isImage = IMAGE_PATTERN.test(path);
-  const src = useImage(api, path, isImage);
-  if (isImage) {
+  const { src, loading } = useMedia(api, path, isImage, isImage);
+  if (isImage && (src || loading)) {
     return (
       <button type="button" className={`attachment-image ${src ? "" : "loading"}`} title="Открыть просмотр" onClick={() => onView(path)}>
         {src && <img src={src} alt={fileName(path)} />}
@@ -42,7 +76,7 @@ export function Attachment({ api, path, onView }: { api: WebApi; path: string; o
   }
   if (/\.(mp4|webm|mkv)$/i.test(path)) return <VideoAttachment api={api} path={path} />;
   const isDeck = /\.pptx$/i.test(path);
-  const kind = isDeck ? "Презентация PowerPoint" : /\.pdf$/i.test(path) ? "Документ PDF" : /\.docx$/i.test(path) ? "Документ Word" : "Файл";
+  const kind = isImage ? "Изображение" : isDeck ? "Презентация PowerPoint" : /\.pdf$/i.test(path) ? "Документ PDF" : /\.docx$/i.test(path) ? "Документ Word" : "Файл";
   return (
     <div className="attachment-file">
       <span className="attachment-icon"><Icon name={isDeck ? "presentation" : "file"} size={20} /></span>
@@ -56,7 +90,9 @@ export function Attachment({ api, path, onView }: { api: WebApi; path: string; o
 }
 
 export function Lightbox({ api, path, onClose }: { api: WebApi; path: string; onClose: () => void }) {
-  const src = useImage(api, path);
+  const original = useMedia(api, path, true);
+  const preview = useMedia(api, path, IMAGE_PATTERN.test(path), true);
+  const src = original.src || preview.src;
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const frame = useRef<HTMLDivElement>(null);
@@ -93,7 +129,7 @@ export function Lightbox({ api, path, onClose }: { api: WebApi; path: string; on
           onMouseDown={(event) => { drag.current = { x: event.clientX, y: event.clientY, ox: offset.x, oy: offset.y }; }}
           onMouseMove={(event) => { const start = drag.current; if (start && event.buttons === 1) setOffset({ x: start.ox + event.clientX - start.x, y: start.oy + event.clientY - start.y }); }}
           onMouseUp={() => { drag.current = null; }} />
-      ) : <div className="lightbox-loading">Загрузка…</div>}
+      ) : <div className="lightbox-loading">{original.loading || preview.loading ? "Загрузка…" : "Не удалось открыть изображение."}</div>}
     </div>
   );
 }

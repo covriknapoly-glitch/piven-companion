@@ -25,7 +25,7 @@ POLL_RULE = ("\n\nУточнения: если без ответа пользо�
 BUILTIN_SKILLS = [
     ("Computer control", "Opens programs, folders and websites, clicks, types and works with files, only on an explicit request."),
     ("Browser and search", "Opens websites in the built-in browser, searches the internet and reads pages."),
-    ("Images", "Draws images from a description through ComfyUI."),
+    ("Images", "Draws images from a description using the selected image model."),
     ("Video", "Makes videos through ComfyUI using your workflow, from text or from an image."),
     ("Presentations", "Builds PowerPoint presentations and picks the design itself."),
     ("Project work", "Reads and edits files in the project folder and runs checks."),

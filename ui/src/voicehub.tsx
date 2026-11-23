@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { VoiceDetails, VoiceFileCheck, VoiceKind, VoiceSearchHit, VoiceStatus, WebApi } from "./bridge";
 import { Icon } from "./icons";
 import { currentLanguage } from "./i18n";
-import { Button, Field, gigabytes, MemoryBar, Modal, ModelDescription, ModelLogo, SelectionMarker } from "./ui";
+import { Dropdown, Button, Field, gigabytes, MemoryBar, Modal, ModelDescription, ModelLogo, SelectionMarker } from "./ui";
 
 const KINDS: { kind: VoiceKind; title: string }[] = [
   { kind: "asr", title: "Распознавание речи" },
@@ -182,11 +182,9 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
           {KINDS.map((item) => <button key={item.kind} type="button" role="tab" aria-selected={kind === item.kind}
             aria-controls="voice-model-results" className={kind === item.kind ? "on" : ""} disabled={running} onClick={() => switchKind(item.kind)}>{item.title}</button>)}
         </div>
-        <select className="select" aria-label="Сортировка моделей" value={recent ? "recent" : "popular"} disabled={running}
-          onChange={(event) => setRecent(event.target.value === "recent")}>
-          <option value="popular">По загрузкам</option>
-          <option value="recent">Новые</option>
-        </select>
+        <Dropdown label="Сортировка моделей" value={recent ? "recent" : "popular"} disabled={running}
+          options={[{ value: "popular", label: "По загрузкам" }, { value: "recent", label: "Новые" }]}
+          onChange={value => setRecent(value === "recent")} />
       </div>
       <div className="hub-search">
         <label className="search-field"><Icon name="search" size={16} /><input autoFocus placeholder="Название, автор/модель или ссылка Hugging Face" value={query} disabled={running} onChange={(event) => setQuery(event.target.value)} /></label>
@@ -222,9 +220,9 @@ export function VoiceHubDialog({ api, initialKind, onClose, onDone }: { api: Web
               : <>
                 {details.files && details.files.length > 0 && (
                   <Field label={checkRequired ? "GGUF-файл" : "GGUF-пакет"}>
-                    <select className="select" value={file?.path ?? ""} disabled={running} onChange={(event) => setFile(details.files?.find((item) => item.path === event.target.value) ?? null)}>
-                      {details.files.map((item) => <option key={item.path} value={item.path}>{item.label ?? item.path} ({sizeText(item.size ?? 0)})</option>)}
-                    </select>
+                    <Dropdown label={checkRequired ? "GGUF-файл" : "GGUF-пакет"} value={file?.path ?? ""} disabled={running}
+                      options={details.files.map(item => ({ value: item.path, label: `${item.label ?? item.path} (${sizeText(item.size ?? 0)})` }))}
+                      onChange={path => setFile(details.files?.find(item => item.path === path) ?? null)} />
                   </Field>
                 )}
                 <VoiceModelLanguages languages={file?.languages ?? details.languages ?? []} />

@@ -158,7 +158,7 @@ class StreamedSpeech(unittest.TestCase):
         names = ("_synthesize_stream", "_tts_format", "_synthesize")
         Voice = type("Voice", (), {name: getattr(core.CompanionCore, name) for name in names})
         self.voice = Voice()
-        self.voice.__dict__.update(_tts_streams=True, _tts_url=f"http://127.0.0.1:{self.server.server_address[1]}", _tts_key=("audiocpp", "x"),
+        self.voice.__dict__.update(settings={}, _tts_streams=True, _tts_url=f"http://127.0.0.1:{self.server.server_address[1]}", _tts_key=("audiocpp", "x"),
                                    tts_cancel=threading.Event(), _active_tts_response=None, voice_used_at=0.0,
                                    _tts_request=lambda text: {"model": "m", "input": text})
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { isPhone } from "./bridge";
-import type { DiskUsage, EngineState, MemoryEstimate, ModelMemory, SettingsDetails, VoiceKind, VoiceModel, VoiceStatus, WebApi } from "./bridge";
+import type { AudioProvider, DiskUsage, EngineState, MemoryEstimate, ModelMemory, SettingsDetails, VoiceKind, VoiceModel, VoiceStatus, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
 import { ConfirmDialog, ListenSettings } from "./dialogs";
 import { LANGUAGES, type Language } from "./i18n";
@@ -8,9 +8,10 @@ import { ModelParamsPane, ModelSettingsPage } from "./params";
 import { PhonePane } from "./pairing";
 import { UpdatePane } from "./update";
 import { IntegrationsPane } from "./providers";
+import { MediaField, VisualMediaField } from "./media";
 import { ToolsPane } from "./tools";
 import { MemoryPane } from "./memory";
-import { AdvancedHead, Button, callMemoryLabel, Decor, Field, gigabytes, groupModels, IconButton, MemoryBar, ModelLogo, MotionPresence, prefetchShared, SelectionMarker, shortModel, Switch, TextSetting, Toggle, useOutsideClose, useShared } from "./ui";
+import { Dropdown, AdvancedHead, Button, callMemoryLabel, Decor, Field, gigabytes, groupModels, IconButton, MemoryBar, ModelLogo, MotionPresence, prefetchShared, SelectionMarker, shortModel, Switch, TextSetting, Toggle, useOutsideClose, useShared } from "./ui";
 import { THEMES, type ThemeId } from "./themes";
 type SectionId = "look" | "model" | "tools" | "memory" | "voice" | "images" | "code" | "integrations" | "phone" | "data";
 const SECTIONS: { id: SectionId; title: string; icon: IconName }[] = [
@@ -30,8 +31,8 @@ let lastDetails: SettingsDetails | null = null;
 
 /** Fetches what every settings tab shows, so tabs open filled. Called once after start and whenever settings open. */
 export function prefetchSettings(api: WebApi, model: string) {
-  void api.settings_details().then((next) => { lastDetails = next; }).catch(() => {});
-  prefetchShared([
+  const details = api.settings_details().then((next) => { lastDetails = next; });
+  const tabs = prefetchShared([
     [`model_memory:${model}`, () => api.model_memory(model ? [model] : [])],
     ["disk", () => api.disk_usage()],
     ["voice", () => api.voice_status()],
@@ -41,6 +42,7 @@ export function prefetchSettings(api: WebApi, model: string) {
     ["params:", () => api.model_params("")],
     ["update", () => api.update_status()],
   ]);
+  return Promise.allSettled([details, tabs]);
 }
 
 export type FontChoice = "lack";
@@ -59,8 +61,8 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
   const [savedAt, setSavedAt] = useState(0);
   const [showSaved, setShowSaved] = useState(false);
   const model = state.settings.model;
-  const [memory] = useShared<ModelMemory>(`model_memory:${model}`, () => api.model_memory(model ? [model] : []));
-  useEffect(() => { prefetchSettings(api, model); }, [api]);
+  const [memory, loadMemory] = useShared<ModelMemory>(`model_memory:${model}`, () => api.model_memory(model ? [model] : []));
+  useEffect(() => { void prefetchSettings(api, model); }, [api]);
   const modelEstimate = memory?.models[model];
 
   const reload = useCallback(() => api.settings_details().then((next) => { lastDetails = next; setDetails(next); }), [api]);
@@ -78,7 +80,11 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
       Object.keys(patch).forEach((key) => { delete next[key]; });
       return { ...next, ...result.errors };
     });
-    if (result.saved.length) { setSavedAt(Date.now()); void reload(); }
+    if (result.saved.length) {
+      setSavedAt(Date.now());
+      void reload();
+      if ("asrMedia" in patch || "ttsMedia" in patch) void loadMemory();
+    }
     return result;
   });
 
@@ -99,7 +105,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
         </nav>
         <div className="settings-pane">
           <IconButton icon="close" label="Закрыть (Esc)" className="settings-close" onClick={onClose} />
-          {!d ? null : <div className="settings-fields tab-view" key={modelPage === null ? section : `model:${modelPage}`}>
+          {!d ? null : <div className="settings-fields" key={modelPage === null ? section : `model:${modelPage}`}>
             {section === "look" && <>
               <Field label="Язык / Language" hint="Модель тоже будет отвечать на нём.">
                 <div className="segmented wrap sliding-selection">
@@ -173,19 +179,22 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
               <Field label="Перебивать голосом" hint="Если заговорить, пока модель отвечает, она замолчит и выслушает. С колонками вместо наушников может срабатывать от её собственного голоса — тогда выключи.">
                 <Switch label="Перебивать голосом" checked={d.bargeIn} onChange={(value) => { void save({ bargeIn: value }); }} />
               </Field>
-              <Field label="Голос">
-                <select className="select" value={d.voice} onChange={(event) => { void save({ voice: event.target.value }); }}>
-                  {d.voices.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </Field>
+              {!d.ttsMedia && <Field label="Голос">
+                <Dropdown label="Голос" placeholder="Голос модели" value={d.voice}
+                  options={d.voices.map(([value, label]) => ({ value, label }))}
+                  onChange={voice => { void save({ voice }); }} />
+              </Field>}
               <Field label="Микрофон" hint={d.micError || "Используется, когда включено прослушивание."}>
-                <select className="select" value={d.micDevice} onChange={(event) => { void save({ micDevice: event.target.value }); }}>
-                  <option value="">Как в Windows</option>
-                  {d.microphones.map((name) => <option key={name} value={name}>{name}</option>)}
-                  {d.micDevice && !d.microphones.includes(d.micDevice) && <option value={d.micDevice}>{d.micDevice} (не подключён)</option>}
-                </select>
+                <Dropdown label="Микрофон" value={d.micDevice} onChange={micDevice => { void save({ micDevice }); }}
+                  options={[
+                    { value: "", label: "Как в Windows" },
+                    ...d.microphones.map(name => ({ value: name, label: name })),
+                    ...(d.micDevice && !d.microphones.includes(d.micDevice)
+                      ? [{ value: d.micDevice, label: `${d.micDevice} (не подключён)` }] : []),
+                  ]} />
               </Field>
-              <VoiceModels api={api} onOpenHub={onOpenVoiceHub} chatMemory={modelEstimate} context={memory?.context ?? 0} onChanged={() => { setSavedAt(Date.now()); void reload(); }} />
+              <VoiceModels api={api} details={d} save={save} errors={errors} integrations={() => setSection("integrations")}
+                onOpenHub={onOpenVoiceHub} chatMemory={modelEstimate} context={memory?.context ?? 0} onChanged={() => { setSavedAt(Date.now()); void reload(); }} />
               <AdvancedHead />
               <Field label="Чувствительность микрофона" hint="Чем выше, тем тише голос он услышит, но и шум тоже.">
                 <div className="range-row">
@@ -199,7 +208,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
               <Field label="Смотреть на экран раз в" hint="Интервал снимков экрана для комментариев, от 10 до 600 секунд.">
                 <div className="row"><div className="narrow"><TextSetting value={String(d.screenInterval)} onCommit={(value) => { void save({ screenInterval: Number(value) }); }} /></div><span className="unit">сек.</span></div>
               </Field>
-              <Field label="Образец голоса" error={errors.voiceSample}
+              {!d.ttsMedia && <><Field label="Образец голоса" error={errors.voiceSample}
                 hint="Запись WAV на 5–15 секунд. Модели с клонированием (XTTS, Chatterbox, F5-TTS, VoxCPM, OmniVoice, IndexTTS2 и другие) будут говорить этим голосом, если в поле «Голос» выбрать «Мой образец голоса». Используй только свой голос или голос человека, который на это согласился.">
                 <div className="row grow">
                   <TextSetting mono value={d.voiceSample} placeholder="Файл не выбран" onCommit={(value) => { void save({ voiceSample: value }); }} />
@@ -208,10 +217,12 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
               </Field>
               <Field label="Что сказано в образце" hint="Точный текст записи. Части моделей он нужен, чтобы лучше скопировать голос.">
                 <TextSetting value={d.voiceSampleText} placeholder="Например: Привет, это мой голос для озвучки." onCommit={(value) => { void save({ voiceSampleText: value }); }} />
-              </Field>
+              </Field></>}
             </>}
 
             {section === "images" && <>
+              {d.integrations.comfyui === false ? <VisualMediaField api={api} image={d.imageMedia} video={d.videoMedia}
+                error={errors.visualMedia} save={save} integrations={() => setSection("integrations")} /> : <>
               <Field label="Адрес ComfyUI" error={errors.comfyUrl} hint="Если ComfyUI запущен на этом компьютере, обычно это http://127.0.0.1:8188.">
                 <TextSetting mono value={d.comfyUrl} placeholder="http://127.0.0.1:8188" onCommit={(value) => { void save({ comfyUrl: value }); }} />
               </Field>
@@ -227,7 +238,7 @@ export function SettingsDialog({ state, api, theme, setTheme, language, setLangu
                   <TextSetting mono value={d.comfyVideoWorkflow} placeholder="не выбран" onCommit={(value) => { void save({ comfyVideoWorkflow: value }); }} />
                   <Button onClick={() => { void api.pick_path("workflow").then((path) => { if (path) void save({ comfyVideoWorkflow: path }); }); }}>Выбрать…</Button>
                 </div>
-              </Field>
+              </Field></>}
             </>}
 
             {section === "integrations" && <IntegrationsPane api={api} d={d} save={save} onChanged={() => setSavedAt(Date.now())} />}
@@ -384,8 +395,19 @@ function voiceModelInfo(model: VoiceModel) {
     .filter(Boolean).join(" · ");
 }
 
-function VoiceModels({ api, onOpenHub, chatMemory, context, onChanged }: { api: WebApi; onOpenHub: (kind: VoiceKind) => void; chatMemory?: MemoryEstimate | null; context: number; onChanged: () => void }) {
+function VoiceModels({ api, details, save, errors, integrations, onOpenHub, chatMemory, context, onChanged }: {
+  api: WebApi; details: SettingsDetails; save: (patch: Record<string, unknown>) => Promise<unknown>;
+  errors: Record<string, string>; integrations: () => void; onOpenHub: (kind: VoiceKind) => void;
+  chatMemory?: MemoryEstimate | null; context: number; onChanged: () => void;
+}) {
   const [status, load] = useShared<VoiceStatus>("voice", () => api.voice_status());
+  const [audioProviders, setAudioProviders] = useState<AudioProvider[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    void api.audio_providers().then(rows => { if (active) setAudioProviders(rows); })
+      .catch(() => { if (active) setAudioProviders([]); });
+    return () => { active = false; };
+  }, [api]);
   const [error, setError] = useState("");
   const [restartFor, setRestartFor] = useState<VoiceKind | null>(null);
   const [revision, setRevision] = useState(0);
@@ -407,7 +429,7 @@ function VoiceModels({ api, onOpenHub, chatMemory, context, onChanged }: { api: 
     });
   };
   const inUse = (kind: VoiceKind) => status[kind].models.find((model) => model.id === status[kind].selected);
-  const voice = (["asr", "tts"] as VoiceKind[]).map((kind) => inUse(kind)?.memory ?? 0).reduce((sum, bytes) => sum + bytes, 0);
+  const voice = (details.asrMedia ? 0 : inUse("asr")?.memory ?? 0) + (details.ttsMedia ? 0 : inUse("tts")?.memory ?? 0);
   return <>
     {chatMemory && <MemoryBar gpu={status.gpu} speed={chatMemory} label={callMemoryLabel(context)} parts={{ ...chatMemory, voice }} />}
     {VOICE_KINDS.map(({ kind, title, hint }) => {
@@ -417,7 +439,10 @@ function VoiceModels({ api, onOpenHub, chatMemory, context, onChanged }: { api: 
         description: [model.title, model.note, voiceModelInfo(model)].filter(Boolean).join("\n"),
       }));
       const active = inUse(kind);
-      return <Field key={kind} label={title} hint={group.engine ? hint : <>{hint} {group.engineNote}</>}>
+      const setting = kind === "asr" ? "asrMedia" : "ttsMedia";
+      return <MediaField key={kind} api={api} providers={audioProviders} setting={setting} title={title} current={details[setting]} error={errors[setting]}
+        save={(value) => save({ [setting]: value })} integrations={integrations}>
+        <small>{hint} {!group.engine && group.engineNote}</small>
         <ModelPicker api={api} groups={[[title, models]]} current={models.find((model) => model.id === group.selected)}
           onPick={(id) => { if (id !== group.selected) select(kind, id); }} onOpenHub={() => onOpenHub(kind)} hubLabel="Скачать модель…"
           onDelete={async (id) => {
@@ -428,7 +453,7 @@ function VoiceModels({ api, onOpenHub, chatMemory, context, onChanged }: { api: 
             onChanged();
           }} />
         {active && <p className="pane-note voice-model-info">{voiceModelInfo(active)}</p>}
-      </Field>;
+      </MediaField>;
     })}
     {error && <p className="pane-note">{error}</p>}
     <MotionPresence>{restartFor && <ConfirmDialog title="Нужен перезапуск"

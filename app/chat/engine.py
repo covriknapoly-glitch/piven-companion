@@ -105,7 +105,7 @@ from app.models import llama
 from app.tools import mcp
 from app.chat import attachments, commands, knowledge
 from app.chat import memory as long_memory
-from app.models import integrations
+from app.models import integrations, media
 from app.tools import toolbox as tools
 from app import processes
 from app.voice import engines
@@ -278,21 +278,9 @@ def comfy_json_request(url, data=None, timeout=30):
 
 
 def parakeet_transcribe(audio, np, language="ru", url=ASR_URL):
-    import wave
-    samples = np.clip(audio, -1.0, 1.0)
-    pcm = (samples * 32767).astype("<i2").tobytes()
-    wav = io.BytesIO()
-    with wave.open(wav, "wb") as out:
-        out.setnchannels(1); out.setsampwidth(2); out.setframerate(16000); out.writeframes(pcm)
-    boundary = "----PivenParakeetBoundary"
-    body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\n"
-            "Content-Type: audio/wav\r\n\r\n").encode() + wav.getvalue() + (
-            f"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nm\r\n"
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\n{language}\r\n"
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"response_format\"\r\n\r\njson\r\n"
-            f"--{boundary}--\r\n").encode()
-    req = urllib.request.Request(url + "/v1/audio/transcriptions", data=body,
-                                 headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    audio = turns.to_wav(audio.reshape(-1, 1), 16000, np)
+    body, content_type = media.transcription_body(audio, "m", language)
+    req = urllib.request.Request(url + "/v1/audio/transcriptions", data=body, headers={"Content-Type": content_type})
     with urllib.request.urlopen(req, timeout=45) as response:
         result = json.loads(response.read().decode("utf-8"))
     return result.get("text", "").strip()
@@ -951,6 +939,11 @@ class CompanionCore:
                                 if isinstance(saved.get("thinking_learned"), dict) else {},
             "integrations_enabled": self._load_integrations(saved.get("integrations_enabled")),
         }
+        for key in media.TASKS.values():
+            try:
+                self.settings[key] = media.selection(saved.get(key), task=key)
+            except ValueError:
+                self.settings[key] = None
         # Preserve the old user text for recovery without assigning it to any model.
         legacy_prompt = saved.get("legacy_system_prompt", saved.get("system_prompt"))
         if isinstance(legacy_prompt, str) and self._current_system_prompt(legacy_prompt) != COMPANION_SYSTEM_PROMPT:
@@ -1222,7 +1215,7 @@ class CompanionCore:
         except Exception:
             return 0
         for kind, used, key in (("asr", hearing, "asr_model"), ("tts", speaking, "tts_model")):
-            if used:
+            if used and not self.settings.get(kind + "_media"):
                 row = next((item for item in catalogue[kind]["models"] if item["id"] == self.settings.get(key)), None)
                 total += row["memory"] if row else 0
         return total
@@ -1239,7 +1232,7 @@ class CompanionCore:
                 parts.append((model, estimate["total"]))
             catalogue = install.status()
             for kind, used, key in (("asr", hearing, "asr_model"), ("tts", speaking, "tts_model")):
-                if used:
+                if used and not self.settings.get(kind + "_media"):
                     row = next((item for item in catalogue[kind]["models"] if item["id"] == self.settings.get(key)), None)
                     if row and row["memory"]:
                         parts.append((row["title"], row["memory"]))
@@ -1440,8 +1433,7 @@ class CompanionCore:
         saved = saved if isinstance(saved, dict) else {}
         if "models" not in saved and "ollama" in saved:
             saved = {**saved, "models": saved["ollama"]}
-        # ComfyUI no longer has its own switch: pictures need it anyway, and a switch left off had no way back.
-        return {"models": bool(saved.get("models", True)), "comfyui": True}
+        return {"models": bool(saved.get("models", True)), "comfyui": bool(saved.get("comfyui", True))}
 
     def _save_conversation(self):
         try:
@@ -1590,6 +1582,11 @@ class CompanionCore:
         if self.heavy_mode:
             raise RuntimeError(HEAVY_MODE_NOTE)
         self.voice_used_at = time.monotonic()
+        target = self.settings.get("asr_media")
+        if target:
+            media.connection(target)
+            self._stop_owned_model_process("asr_process", "распознавание речи")
+            return None
         stop = stop or self.stop_event
         model_id = self.settings.get("asr_model")
         if not install.ready("asr", model_id):
@@ -1612,10 +1609,24 @@ class CompanionCore:
         self._asr_key = wanted
         return process
 
+    def _recognize_phrase(self, samples, np, stop=None):
+        target = self.settings.get("asr_media")
+        if target:
+            return media.transcribe(target, turns.to_wav(samples.reshape(-1, 1), 16000, np))
+        if self.asr_process is None or self.asr_process.poll() is not None:
+            self.asr_process = self._ensure_asr(stop)
+        return parakeet_transcribe(samples, np, install.asr_model(self.settings.get("asr_model")).get("language", "ru"),
+                                   getattr(self, "_asr_url", ASR_URL))
+
     def _ensure_tts(self):
         if self.heavy_mode:
             raise RuntimeError(HEAVY_MODE_NOTE)
         self.voice_used_at = time.monotonic()
+        target = self.settings.get("tts_media")
+        if target:
+            media.connection(target)
+            self._stop_owned_model_process("tts_process", "озвучка")
+            return
         model_id = self.settings.get("tts_model")
         if not install.ready("tts", model_id):
             raise RuntimeError("Скачай GGUF-модель озвучки в Настройки → Голос и микрофон.")
@@ -1714,6 +1725,27 @@ class CompanionCore:
         A server that streams (audio.cpp in streaming mode) sends the first slice within a few hundredths of a second;
         any other gives the whole phrase as one slice."""
         import numpy as np
+        target = self.settings.get("tts_media")
+        if target:
+            limit = {"groq": 200, "deepgram": 2000}.get(target["provider"], 4096)
+            while text:
+                if self.tts_cancel.is_set():
+                    raise InterruptedError("Озвучивание прервано пользователем")
+                end = len(text)
+                if end > limit:
+                    space = text.rfind(" ", 0, limit + 1)
+                    end = space if space > 0 else limit
+                with media.speech(target, text[:end]) as response:
+                    self._active_tts_response = response
+                    try:
+                        audio = response.read()
+                    finally:
+                        self._active_tts_response = None
+                if self.tts_cancel.is_set():
+                    raise InterruptedError("Озвучивание прервано пользователем")
+                yield turns.read_wav(media.speech_wav(target, audio), np)
+                text = text[end:].lstrip()
+            return
         if not getattr(self, "_tts_streams", False):
             yield turns.read_wav(self._synthesize(text), np)
             return
@@ -1786,12 +1818,33 @@ class CompanionCore:
         self._active_comfy_prompt_id=None
         self._active_comfy_url=None
         self.busy=True
-        self.events.put(("activity","Освобождает память для генерации видео"))
-        threading.Thread(target=self.generate_video_via_comfyui,args=(prompt,image_path),daemon=True).start()
+        self.events.put(("activity","Готовит видео"))
+        chat_id, cancel = self.active_chat_id, self.action_cancel
+        def run():
+            _request.chat_id, _request.cancel = chat_id, cancel
+            self.generate_video_via_comfyui(prompt, image_path)
+        threading.Thread(target=run, daemon=True).start()
 
     def generate_video_via_comfyui(self, text, image_path=""):
         from app.tools import video
+        cloud = not self._integration_enabled("comfyui")
         try:
+            if cloud:
+                target = self.settings.get("video_media")
+                if not target:
+                    raise ValueError("Выбери провайдера в разделе «Картинки и видео».")
+                if self.heavy_mode:
+                    raise RuntimeError(HEAVY_MODE_NOTE)
+                data = media.video(target, text, image_path, self.action_cancel)
+                if self.action_cancel.is_set():
+                    raise InterruptedError()
+                folder = DATA_DIR / "generated_videos"
+                folder.mkdir(parents=True, exist_ok=True)
+                path = folder / f"{uuid.uuid4().hex}.mp4"
+                path.write_bytes(data)
+                ai_mark.mark_file(path)
+                self.events.put(("generated_video", str(path)))
+                return
             base_url = self.settings.get("comfy_url", "http://127.0.0.1:8188").strip().rstrip("/")
             if not base_url.startswith(("http://", "https://")):
                 base_url = "http://" + base_url
@@ -1845,7 +1898,7 @@ class CompanionCore:
                 return
             log(f"ComfyUI video generation error: {error}")
             detail = str(error)
-            if isinstance(error, urllib.error.URLError):
+            if not cloud and isinstance(error, urllib.error.URLError):
                 detail = f"Не удалось подключиться к ComfyUI по адресу {self.settings.get('comfy_url', 'http://127.0.0.1:8188')}. ({error})"
             self.events.put(("error", f"Не удалось создать видео: {detail}"))
         finally:
@@ -1864,12 +1917,17 @@ class CompanionCore:
         return (reply.get("subfolder") + "/" if reply.get("subfolder") else "") + reply["name"]
 
     def _start_image_generation(self, prompt):
-        self.action_cancel.clear()
-        self._active_comfy_prompt_id=None
-        self._active_comfy_url=None
+        cancel = self.action_cancel
+        cancel.clear()
+        chat_id = self.active_chat_id
         self.busy=True
-        self.events.put(("activity","Освобождает память для генерации изображения"))
-        threading.Thread(target=self.generate_image_via_comfyui,args=(prompt,),daemon=True).start()
+        self.events.put(("activity","Готовит изображение"))
+
+        def run():
+            _request.chat_id, _request.cancel = chat_id, cancel
+            self.generate_image(prompt)
+
+        threading.Thread(target=run, daemon=True).start()
 
     def _release_memory_for_image_generation(self, base_url):
         self.events.put(("activity", "Освобождает память для ComfyUI"))
@@ -1973,63 +2031,77 @@ class CompanionCore:
             r"code|repository|repo|project|bug|feature|function|class|script|app)\b", normalized)
         return "code" if (asks_to_change and project_concept) or commands.asks_code(text) or commands.asks_new_project(text) or commands.code_file_names(text) else "chat"
 
-    def generate_image_via_comfyui(self, text, finish_request=True):
-        try:
-            self.events.put(("generation_started", text))
-            if self.action_cancel.is_set():
-                raise InterruptedError("Запрос прерван пользователем")
-            base_url = self.settings.get("comfy_url", "http://127.0.0.1:8188").strip().rstrip("/")
-            if not base_url.startswith(("http://", "https://")):
-                base_url = "http://" + base_url
-            self._release_memory_for_image_generation(base_url)
-            if self.action_cancel.is_set():
-                raise InterruptedError("Запрос прерван пользователем")
-            self._ensure_comfyui(base_url)
-            workflow_path = Path(self.settings.get("comfy_workflow", str(COMFY_DEFAULT_WORKFLOW))).expanduser()
-            workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
-            api_prompt = comfy_workflow_to_api(workflow, text)
-            self.events.put(("activity", "Загружает workflow в ComfyUI"))
-            result = comfy_json_request(base_url + "/prompt", {"prompt": api_prompt, "client_id": str(uuid.uuid4())})
-            prompt_id = result.get("prompt_id")
-            if not prompt_id:
-                errors = result.get("node_errors") or result.get("error") or result
-                raise RuntimeError(f"ComfyUI не приняла workflow: {errors}")
-            self._active_comfy_prompt_id = str(prompt_id)
-            self._active_comfy_url = base_url
+    def _comfy_image(self, text):
+        base_url = self.settings.get("comfy_url", "http://127.0.0.1:8188").strip().rstrip("/")
+        if not base_url.startswith(("http://", "https://")):
+            base_url = "http://" + base_url
+        self._release_memory_for_image_generation(base_url)
+        if self.action_cancel.is_set():
+            raise InterruptedError("Запрос прерван пользователем")
+        self._ensure_comfyui(base_url)
+        workflow_path = Path(self.settings.get("comfy_workflow", str(COMFY_DEFAULT_WORKFLOW))).expanduser()
+        workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
+        api_prompt = comfy_workflow_to_api(workflow, text)
+        self.events.put(("activity", "Загружает workflow в ComfyUI"))
+        result = comfy_json_request(base_url + "/prompt", {"prompt": api_prompt, "client_id": str(uuid.uuid4())})
+        prompt_id = result.get("prompt_id")
+        if not prompt_id:
+            errors = result.get("node_errors") or result.get("error") or result
+            raise RuntimeError(f"ComfyUI не приняла workflow: {errors}")
+        self._active_comfy_prompt_id = str(prompt_id)
+        self._active_comfy_url = base_url
+        if self.action_cancel.is_set():
+            self._cancel_comfy_prompt(base_url, str(prompt_id))
+            raise InterruptedError("Запрос прерван пользователем")
+        self.events.put(("activity", "ComfyUI генерирует изображение"))
+        deadline = time.monotonic() + 3600
+        history_entry = None
+        while time.monotonic() < deadline:
             if self.action_cancel.is_set():
                 self._cancel_comfy_prompt(base_url, str(prompt_id))
                 raise InterruptedError("Запрос прерван пользователем")
-            self.events.put(("activity", "ComfyUI генерирует изображение"))
-            deadline = time.monotonic() + 3600
-            history_entry = None
-            while time.monotonic() < deadline:
-                if self.action_cancel.is_set():
-                    self._cancel_comfy_prompt(base_url, str(prompt_id))
-                    raise InterruptedError("Запрос прерван пользователем")
-                time.sleep(1.5)
-                history = comfy_json_request(base_url + "/history/" + urllib.parse.quote(str(prompt_id), safe=""), timeout=10)
-                history_entry = history.get(str(prompt_id))
-                if history_entry is not None and history_entry.get("outputs"):
-                    break
+            time.sleep(1.5)
+            history = comfy_json_request(base_url + "/history/" + urllib.parse.quote(str(prompt_id), safe=""), timeout=10)
+            history_entry = history.get(str(prompt_id))
+            if history_entry is not None and history_entry.get("outputs"):
+                break
+        else:
+            raise RuntimeError("ComfyUI не завершила генерацию за 60 минут.")
+        image_records = []
+        for node_output in history_entry.get("outputs", {}).values():
+            image_records.extend(node_output.get("images", []))
+        if not image_records:
+            status = history_entry.get("status", {}).get("messages", [])
+            raise RuntimeError(f"ComfyUI завершила workflow без выходного изображения. {status}")
+        image_record = image_records[0]
+        query = urllib.parse.urlencode({"filename": image_record.get("filename", ""),
+                                        "subfolder": image_record.get("subfolder", ""),
+                                        "type": image_record.get("type", "output")})
+        request = urllib.request.Request(base_url + "/view?" + query)
+        with urllib.request.urlopen(request, timeout=90) as response:
+            image_bytes = response.read()
+        return image_bytes, Path(image_record.get("filename", "generated.png")).suffix or ".png"
+
+    def generate_image(self, text, finish_request=True):
+        cloud = not self._integration_enabled("comfyui")
+        target = self.settings.get("image_media") if cloud else None
+        try:
+            if cloud and not target:
+                raise ValueError("Выбери провайдера в разделе «Картинки и видео».")
+            self.events.put(("generation_started", text))
+            if self.heavy_mode:
+                raise RuntimeError(HEAVY_MODE_NOTE)
+            if self.action_cancel.is_set():
+                raise InterruptedError("Запрос прерван пользователем")
+            if target:
+                self.events.put(("activity", f"Генерирует изображение · {target['model']}"))
+                image_bytes, suffix = media.image(target, text, self.action_cancel)
             else:
-                raise RuntimeError("ComfyUI не завершила генерацию за 60 минут.")
-            image_records = []
-            for node_output in history_entry.get("outputs", {}).values():
-                image_records.extend(node_output.get("images", []))
-            if not image_records:
-                status = history_entry.get("status", {}).get("messages", [])
-                raise RuntimeError(f"ComfyUI завершила workflow без выходного изображения. {status}")
+                image_bytes, suffix = self._comfy_image(text)
+            if self.action_cancel.is_set():
+                raise InterruptedError("Запрос прерван пользователем")
             output_dir = DATA_DIR / "generated_images"
             output_dir.mkdir(parents=True, exist_ok=True)
-            image_record = image_records[0]
-            query = urllib.parse.urlencode({"filename": image_record.get("filename", ""),
-                                            "subfolder": image_record.get("subfolder", ""),
-                                            "type": image_record.get("type", "output")})
-            request = urllib.request.Request(base_url + "/view?" + query)
-            with urllib.request.urlopen(request, timeout=90) as response:
-                image_bytes = response.read()
-            if self.action_cancel.is_set(): raise InterruptedError("Запрос прерван пользователем")
-            suffix = Path(image_record.get("filename", "generated.png")).suffix or ".png"
             output_path = output_dir / f"{datetime.now():%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:8]}{suffix}"
             output_path.write_bytes(image_bytes)
             ai_mark.mark_file(output_path)
@@ -2038,15 +2110,17 @@ class CompanionCore:
             if self.action_cancel.is_set() or isinstance(error, InterruptedError):
                 self.events.put(("action_interrupted", None))
                 return
-            log(f"ComfyUI image generation error: {error}")
+            log(f"Image generation error: {error}")
             detail = str(error)
-            if isinstance(error, urllib.error.URLError):
+            if not target and isinstance(error, urllib.error.URLError):
                 detail = f"Не удалось подключиться к ComfyUI по адресу {self.settings.get('comfy_url', 'http://127.0.0.1:8188')}. Запустите ComfyUI и проверьте адрес API. ({error})"
-            self.events.put(("error", f"Не удалось создать изображение через ComfyUI: {detail}"))
+            self.events.put(("error", f"Не удалось создать изображение: {detail}"))
         finally:
-            self._active_comfy_prompt_id = None
-            self._active_comfy_url = None
-            if finish_request: self.events.put(("request_done", None))
+            if not target:
+                self._active_comfy_prompt_id = None
+                self._active_comfy_url = None
+            if finish_request:
+                self.events.put(("request_done", None))
 
     def _ensure_comfyui(self, base_url):
         if self.heavy_mode:
@@ -3063,8 +3137,8 @@ class CompanionCore:
             if generated_prompt:
                 self.messages=saved_context
                 self.events.put(("reasoning_remove",None))
-                self.events.put(("activity","Модель запросила генерацию изображения · ComfyUI"))
-                self.generate_image_via_comfyui(generated_prompt,finish_request=False)
+                self.events.put(("activity","Модель запросила генерацию изображения"))
+                self.generate_image(generated_prompt,finish_request=False)
                 return
             computer_action = self._extract_computer_action(answer)
             is_how_to = bool(re.search(r"\b(?:как|каким образом|подскажи|объясни)\b", prompt.lower().replace("ё", "е"))) or commands.asks_how_to(prompt)
@@ -3246,11 +3320,12 @@ class CompanionCore:
             except Exception as e:
                 log(f"loopback initialization error: {e}"); self.events.put(("error",f"Не удалось открыть звук компьютера: {e}"))
         if mic is not None or loopback is not None:
-            asr = install.asr_model(self.settings.get("asr_model"))
-            self.events.put(("activity",f"Запускает распознавание речи · {asr['title']}"))
+            target = self.settings.get("asr_media")
+            title = target["model"] if target else install.asr_model(self.settings.get("asr_model"))["title"]
+            self.events.put(("activity",f"Запускает распознавание речи · {title}"))
             try:
                 self.asr_process = self._ensure_asr()
-                self.events.put(("status",asr["title"]))
+                self.events.put(("status",title))
             except Exception as e:
                 if not isinstance(e, InterruptedError):
                     log(f"Speech recognition startup error: {e}")
@@ -3348,7 +3423,7 @@ class CompanionCore:
                         if mic and detector.voiced(rms):
                             self.last_mic_activity=now
                         if event!="end":
-                            if mic and now-partial_at>=0.8:
+                            if mic and not self.settings.get("asr_media") and now-partial_at>=0.8:
                                 partial_at=now
                                 self._transcribe_partial(np.concatenate(utterance,axis=0)[:,0],np)
                             continue
@@ -3360,9 +3435,7 @@ class CompanionCore:
                             joined=""; continue
                         self.events.put(("activity","Распознаёт речь"))
                         with self.asr_lock:
-                            if self.asr_process is None or self.asr_process.poll() is not None:
-                                self.asr_process = self._ensure_asr()
-                            words=parakeet_transcribe(captured,np,install.asr_model(self.settings.get("asr_model")).get("language","ru"),getattr(self,"_asr_url",ASR_URL))
+                            words = self._recognize_phrase(captured, np)
                         if not mic and (self.tts_playing.is_set() or captured_generation!=self.tts_generation
                                         or time.monotonic()-self.tts_last_ended_at<1.4):
                             continue
@@ -3376,7 +3449,7 @@ class CompanionCore:
             except Exception as e:
                 log(f"record/Parakeet {source_name} error: {e}")
                 if time.monotonic()-last_error_at>8:
-                    self.events.put(("status",f"Parakeet · ошибка {source_name}: {str(e)[:110]}")); last_error_at=time.monotonic()
+                    self.events.put(("status",f"Распознавание · ошибка {source_name}: {str(e)[:110]}")); last_error_at=time.monotonic()
                 time.sleep(1)
 
     def _voice_threshold(self, source_name):
@@ -3472,7 +3545,7 @@ class CompanionCore:
             import soundcard
         except Exception:
             return "Для микрофона и звука компьютера нужен пакет soundcard."
-        if not install.ready("asr", self.settings.get("asr_model")):
+        if not self.settings.get("asr_media") and not install.ready("asr", self.settings.get("asr_model")):
             return "Модель распознавания речи не скачана. Скачай её в Настройки → Голос и микрофон."
         self._dictation_stop = threading.Event()
         self.dictation = {"session": self.dictation["session"] + 1, "phase": "starting", "text": ""}
@@ -3541,9 +3614,7 @@ class CompanionCore:
                 return
             try:
                 with self.asr_lock:
-                    if self.asr_process is None or self.asr_process.poll() is not None:
-                        self.asr_process = self._ensure_asr(threading.Event())
-                    words = parakeet_transcribe(audio, np, install.asr_model(self.settings.get("asr_model")).get("language", "ru"), getattr(self, "_asr_url", ASR_URL))
+                    words = self._recognize_phrase(audio, np, threading.Event())
             except Exception as error:
                 log(f"dictation recognition error: {error}")
                 self.events.put(("error", f"Не получилось распознать речь: {error}"))

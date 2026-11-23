@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import ctypes
+import hashlib
 import json
 import re
 import threading
@@ -23,6 +24,14 @@ PROVIDERS = {
     "anthropic": {"title": "Anthropic (Claude)", "kind": "anthropic", "url": "https://api.anthropic.com/v1", "key": True},
     "gemini": {"title": "Google Gemini", "kind": "openai", "url": "https://generativelanguage.googleapis.com/v1beta/openai", "key": True},
     "openrouter": {"title": "OpenRouter", "kind": "openai", "url": "https://openrouter.ai/api/v1", "key": True},
+    "elevenlabs": {"title": "ElevenLabs", "kind": "media", "url": "https://api.elevenlabs.io/v1", "key": True},
+    "deepgram": {"title": "Deepgram", "kind": "media", "url": "https://api.deepgram.com/v1", "key": True},
+    "cartesia": {"title": "Cartesia", "kind": "media", "url": "https://api.cartesia.ai", "key": True},
+    "groq": {"title": "Groq", "kind": "media", "url": "https://api.groq.com/openai/v1", "key": True},
+    "assemblyai": {"title": "AssemblyAI", "kind": "media", "url": "https://api.assemblyai.com/v2", "key": True},
+    "runway": {"title": "Runway", "kind": "media", "url": "https://api.dev.runwayml.com/v1", "key": True},
+    "higgsfield": {"title": "Higgsfield", "kind": "media", "url": "https://api.higgsfield.ai", "key": True},
+    "fal": {"title": "fal.ai", "kind": "media", "url": "https://queue.fal.run", "key": True},
     "custom": {"title": "Свой сервер (OpenAI API)", "kind": "openai", "url": "", "key": True, "optional_key": True},
 }
 APP_DOWNLOADS = {"ollama": "https://ollama.com/download", "lmstudio": "https://lmstudio.ai/download"}
@@ -39,6 +48,14 @@ RETRY_WAITS = (1, 3)
 RETRY_STATUSES = (408, 425, 500, 502, 503, 504, 529)
 RECONNECT_FIRST, RECONNECT_LONGEST = 30, 300
 KEY_PAGES = {
+    "elevenlabs": "https://elevenlabs.io/app/developers/api-keys",
+    "deepgram": "https://console.deepgram.com/",
+    "cartesia": "https://play.cartesia.ai/keys",
+    "groq": "https://console.groq.com/keys",
+    "assemblyai": "https://www.assemblyai.com/dashboard",
+    "runway": "https://dev.runwayml.com/",
+    "higgsfield": "https://open.higgsfield.ai/api-keys",
+    "fal": "https://fal.ai/dashboard/keys",
     "openai": "https://platform.openai.com/api-keys",
     "anthropic": "https://console.anthropic.com/settings/keys",
     "gemini": "https://aistudio.google.com/apikey",
@@ -111,7 +128,8 @@ def settings_of(provider):
 
 
 def is_provider_model(name):
-    return str(name or "").split(":", 1)[0] in PROVIDERS and ":" in str(name or "")
+    provider = PROVIDERS.get(str(name or "").split(":", 1)[0])
+    return bool(provider and provider["kind"] != "media" and ":" in str(name or ""))
 
 
 def split(name):
@@ -133,6 +151,44 @@ def _headers(provider, key):
 def _get(url, headers, timeout=15):
     with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+_runway_accounts = {}
+
+
+def runway_account(options, *, refresh=False):
+    """Read the limits and balance of the Runway project owning this key."""
+    account = (options["url"], hashlib.sha256(options["key"].encode()).digest())
+    with _lock:
+        cached = _runway_accounts.get(account)
+    if not refresh:
+        return cached[1] if cached else None
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
+    headers = _headers("runway", options["key"])
+    headers["X-Runway-Version"] = "2024-11-06"
+    request = urllib.request.Request(options["url"] + "/organization")
+    for name, value in headers.items():
+        request.add_unredirected_header(name, value)
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            data = json.load(response)
+        tier = data.get("tier") if isinstance(data, dict) else None
+        models = tier.get("models") if isinstance(tier, dict) else None
+        if (not isinstance(models, dict) or not all(isinstance(limit, dict) for limit in models.values())
+                or not isinstance(data.get("creditBalance"), int)):
+            raise RuntimeError("Runway не вернул список лимитов и баланс.")
+    except urllib.error.HTTPError as error:
+        with error:
+            message = _http_error(error)
+        if error.code in (401, 403):
+            with _lock:
+                _runway_accounts.pop(account, None)
+            raise KeyRejected(message) from error
+        raise RuntimeError(message) from error
+    with _lock:
+        _runway_accounts[account] = (time.monotonic() + 60, data)
+    return data
 
 
 def _error_text(error):
@@ -209,6 +265,19 @@ def _start_lmstudio_server(url):
     return ""
 
 
+_custom_images = {}
+
+
+def provider_error(provider):
+    with _lock:
+        return _kinds.get(provider, "")
+
+
+def custom_image_models():
+    with _lock:
+        return dict(_custom_images)
+
+
 def fetch_models(provider, key=None, start_server=True):
     options = settings_of(provider)
     info = PROVIDERS[provider]
@@ -218,6 +287,11 @@ def fetch_models(provider, key=None, start_server=True):
         raise RuntimeError("не указан адрес сервера")
     if info["key"] and not info.get("optional_key") and not options["key"]:
         raise KeyRejected("сохранённый ключ не расшифровать, введи его заново" if (config.get(provider) or {}).get("key") else "нужен API-ключ")
+    if provider == "runway":
+        runway_account(options, refresh=True)
+        return []
+    if info["kind"] == "media":
+        return []
     timeout = 5 if provider in APP_DOWNLOADS else 15
     try:
         try:
@@ -242,6 +316,16 @@ def fetch_models(provider, key=None, start_server=True):
         # Studio lists downloaded models even when automatic model switching is off.
         media_tasks = ("text-to-image", "text-to-video", "text-to-speech", "automatic-speech-recognition")
         items = [item for item in items if item.get("loaded") is not False and item.get("task") not in media_tasks]
+    if provider == "custom" and key is None:
+        with _lock:
+            _custom_images.clear()
+            _custom_images.update({
+                str(item["id"]): str(item.get("name") or item["id"]) for item in items if item.get("id") and (
+                    item.get("task") == "text-to-image"
+                    or "image" in ((item.get("architecture") or {}).get("output_modalities") or [])
+                    or str(item["id"]).lower().startswith(("gpt-image", "dall-e", "flux", "stable-diffusion"))
+                )
+            })
     ids = [str(item.get("id") or "") for item in items]
     if provider == "openrouter":
         _reasoning[provider] = {str(item.get("id")): _openrouter_thinking(item) for item in items
@@ -359,6 +443,7 @@ def status():
             count, error, kind = len(_models.get(provider, [])), _errors.get(provider, ""), _kinds.get(provider, "")
         present = installed(provider)
         rows.append({"id": provider, "title": info["title"], "local": bool(info.get("local")), "needsKey": bool(info["key"]),
+                     "mediaOnly": info["kind"] == "media",
                      "enabled": options["enabled"], "url": options["url"], "defaultUrl": info["url"],
                      "hasKey": bool(options["key"]), "models": count, "error": error, "errorKind": kind,
                      "keyEnd": options["key"][-4:] if len(options["key"]) >= 12 else "", "keyBroken": bool(saved.get("key")) and not options["key"],

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { HfFile, MemoryStatus, WebApi } from "./bridge";
 import { ConfirmDialog } from "./dialogs";
-import { AdvancedHead, Button, Field, IconButton, MotionPresence, Toggle, useShared } from "./ui";
+import { Dropdown, AdvancedHead, Button, Field, IconButton, MotionPresence, Toggle, useShared } from "./ui";
 
 function EmbeddingSearch({ api, onStarted }: { api: WebApi; onStarted: () => void }) {
   const [query, setQuery] = useState("");
@@ -38,9 +38,8 @@ function EmbeddingSearch({ api, onStarted }: { api: WebApi; onStarted: () => voi
       </div>
       {repo && files.length > 0 && (
         <div className="row grow">
-          <select className="select" value={file} onChange={(event) => setFile(event.target.value)}>
-            {files.map((item) => <option key={item.path} value={item.path}>{item.path}{item.size ? ` (${(item.size / 2 ** 20).toFixed(0)} МБ)` : ""}</option>)}
-          </select>
+          <Dropdown label="Файл" value={file} onChange={setFile}
+            options={files.map(item => ({ value: item.path, label: item.path + (item.size ? ` (${(item.size / 2 ** 20).toFixed(0)} МБ)` : "") }))} />
           <Button kind="primary" icon="download" disabled={!file} onClick={() => { void api.memory_download_model(repo, file, picked?.size ?? 0).then(onStarted); }}>Скачать</Button>
         </div>
       )}
