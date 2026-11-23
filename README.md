@@ -7,7 +7,7 @@
 
 # PIVEN Companion
 
-A Windows app for running AI models on your own PC.
+AI chat and coding on your own Windows PC.
 
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
@@ -18,22 +18,19 @@ A Windows app for running AI models on your own PC.
 
 </div>
 
-Open PIVEN, pick a model, and start chatting. You can type, dictate a message, or have a voice call. For coding, give it a project folder so it can work with the actual files. You can run a model on your PC or connect a service you already use.
+I wanted something like OpenCode that felt at home on my Windows desktop. I wanted to open it, pick a model, and get back to whatever I was building. So I made PIVEN Companion.
 
-## Getting started
+## Give it a project
 
-1. Open the [latest release](https://github.com/covriknapoly-glitch/piven-companion/releases/latest) and download `PIVEN-Companion-<version>-Setup.exe` under **Assets**.
-2. Run the installer on Windows 10 or 11, then open PIVEN.
-3. Try the suggested model, look for another compatible GGUF on Hugging Face, or connect a provider under **Settings → Integrations**.
+Turn on **Code**, pick a folder, and try asking, “Where does this app save its settings?” PIVEN can look through the project to find out. If you ask it to change something, you can see which files it touched and what happened when it ran the tests. Open **Files → Project** if you want to read a file yourself or drop its path into the chat.
 
-PIVEN estimates memory use and speed before you download a local model. Leave room for the weights, which can take several gigabytes per model. An NVIDIA GPU can speed up local generation. You can also run models on the CPU. The interface is available in English and Russian.
+When you come back to the same folder in a new chat, PIVEN can reuse its project notes. It also looks for a guide in `AGENTS.md`, `CLAUDE.md`, or `README.md`. You can see the notes under **Files → Project memory**, remove them, or refresh the document index after editing files outside PIVEN.
 
-## What you can do
+## You can just talk to it, too
 
-- **Work on a codebase.** Turn on **Code** and choose a folder. Ask PIVEN to explain a file, make a change, or run the tests. **Files → Project** lets you browse the folder, preview text files, and insert paths into your message.
-- **Keep useful context.** Add a folder of documents to the knowledge base and open the passages cited in an answer. You can see and delete facts saved between chats. To try a different direction, start a branch from an earlier message.
-- **Talk to a model.** Dictate a message or start a call from the chat box. Choose local models or connected cloud services separately for recognizing speech and reading answers aloud.
-- **Make things in chat.** Ask PIVEN to search the web, open a program, or create a file such as a presentation. With ComfyUI or a compatible cloud provider connected, you can also generate images and video.
+There’s a mic in the chat box for dictation and a phone button for a call. Speech recognition and the voice that reads replies can use different models or services. If you get halfway through a chat and want to try a different idea, branch from an earlier message and take it from there.
+
+You can give PIVEN a folder full of documents and click a citation to see where an answer came from. Facts it remembers between chats show up in **Settings → Memory**, where you can delete them. It can also look things up, open programs, make a presentation, or generate pictures and video through ComfyUI or a connected provider.
 
 <table>
 <tr>
@@ -46,21 +43,28 @@ PIVEN estimates memory use and speed before you download a local model. Leave ro
 </tr>
 </table>
 
-### When you come back to a project
+## Install it
 
-PIVEN reads the file tree and looks for a project guide in `AGENTS.md`, `CLAUDE.md`, or `README.md`. It can look up project docs and save notes for future chats in that folder. Open **Project memory** under **Files** to see or remove those notes, or refresh the index after editing docs outside PIVEN.
+Grab `PIVEN-Companion-<version>-Setup.exe` under **Assets** and run it on Windows 10 or 11. The app is available in English and Russian. [Latest release](https://github.com/covriknapoly-glitch/piven-companion/releases/latest)
+
+If you’re starting from scratch, try the model PIVEN suggests. You can also look for a compatible GGUF on Hugging Face inside the app. PIVEN shows roughly how much memory each model needs and how fast it might run on your PC. The files can be several gigabytes each, so check the size before you hit download. An NVIDIA GPU helps with speed, and you can run models on the CPU too.
 
 ## Connect a model you already use
 
-Open **Settings → Integrations** to connect a local server such as Ollama, LM Studio, vLLM, Strata, or Unsloth Studio, or a cloud provider such as OpenRouter, Google, OpenAI, or Anthropic. Enter the server address or API key as needed. Once connected, choose a chat model from the picker under the message box. Each chat model can have its own system prompt.
+Already running Ollama or LM Studio? Open **Settings → Integrations**, connect your server, and its models will show up in the chat picker. The same menu has OpenRouter, Google, OpenAI, and Anthropic if you have an API key. You can set a different system prompt for each chat model.
+
+<details>
+<summary>vLLM, Strata, and Unsloth Studio</summary>
 
 - **vLLM** defaults to `http://127.0.0.1:8000/v1`. For tool calls, start the server with `--enable-auto-tool-choice` and the `--tool-call-parser` for your model. [vLLM tool calling](https://docs.vllm.ai/en/stable/features/tool_calling/)
 - **Strata** defaults to `http://127.0.0.1:8080/v1`. Load a chat model in Strata first. [Strata setup](https://github.com/Niko1221/Strata/blob/main/docs/INSTALL.md)
 - **Unsloth Studio** defaults to `http://127.0.0.1:8888/v1`. Load a chat model in Studio, then copy the key from **Settings → API**. If you change the loaded model, click **Reconnect** in PIVEN. [Unsloth Studio API](https://unsloth.ai/docs/basics/api)
 
+</details>
+
 ## Your data
 
-PIVEN stores chats, settings, and models on your PC in `%LOCALAPPDATA%\PIVEN`. When you use a cloud service, PIVEN sends it the data needed for that task. This can include chat messages and relevant excerpts from attached files or project docs, recorded speech for transcription, or text to read aloud. If you share your screen during a call with a cloud model, screenshots can be included too.
+Your chats, settings, and models live in `%LOCALAPPDATA%\PIVEN`. A request to a cloud model can include your message and relevant excerpts from your files. Cloud speech services receive the audio to transcribe or the text to read out loud. If you share your screen in a call with a cloud model, the request can include screenshots too.
 
 ## Run from source
 
