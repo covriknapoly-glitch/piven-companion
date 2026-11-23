@@ -28,11 +28,26 @@ const EMPTY: ContextUsage = {
   historyShare: 0.5, compress: true,
 };
 let lastUsage: ContextUsage | null = null;
+const startupUsage = new WeakMap<WebApi, { chatId: string; model: string; usage: ContextUsage }>();
+
+export async function prefetchContextUsage(api: WebApi, state: EngineState) {
+  const model = state.settings.model;
+  if (!model) return;
+  const usage = await api.context_usage();
+  if (usage.ok && usage.model === model) startupUsage.set(api, { chatId: state.activeChatId, model, usage });
+}
+
+function initialUsage(api: WebApi, chatId: string, model: string) {
+  const entry = startupUsage.get(api);
+  return entry?.chatId === chatId && entry.model === model ? entry.usage : null;
+}
 
 const Line = ({ children }: { children: ReactNode }) => <span className="ctx-text">{children}</span>;
 
 function useContextUsage(api: WebApi, state: EngineState, every: number) {
-  const [loaded, setUsage] = useState<ContextUsage | null>(null);
+  const { activeChatId } = state;
+  const model = state.settings.model;
+  const [loaded, setUsage] = useState(() => initialUsage(api, activeChatId, model));
   const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState(currentDraft);
 
@@ -42,9 +57,9 @@ function useContextUsage(api: WebApi, state: EngineState, every: number) {
   }, []);
 
   useEffect(() => {
-    setUsage(null);
+    setUsage(initialUsage(api, activeChatId, model));
     setFailed(false);
-  }, [state.activeChatId, state.settings.model]);
+  }, [api, activeChatId, model]);
 
   useEffect(() => {
     let stale = false;

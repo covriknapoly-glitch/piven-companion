@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 from app.models import download
-from app.models.llama import MODELS_DIR
+from app.models.llama import GGUF_SHARD, MODELS_DIR
 
 USER_AGENT = "PIVEN-Companion/1.0"
 REPO_PATTERN = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
@@ -143,10 +144,10 @@ def search_models(query, token=""):
         raise ValueError("Введи хотя бы два символа для поиска.")
     params = urllib.parse.urlencode([
         ("search", query), ("filter", "gguf"), ("sort", "downloads"), ("direction", "-1"), ("limit", "60"),
-        ("expand[]", "downloads"), ("expand[]", "likes"), ("expand[]", "siblings"),
+        ("expand[]", "downloads"), ("expand[]", "likes"),
         ("expand[]", "pipeline_tag"), ("expand[]", "tags"), ("expand[]", "gguf"),
     ])
-    results = _get_json("https://huggingface.co/api/models?" + params, token)
+    results = _get_json("https://huggingface.co/api/models?" + params, token, timeout=15)
     if not isinstance(results, list):
         raise RuntimeError("Hugging Face вернул неожиданный формат результатов.")
     if not results:
@@ -155,7 +156,7 @@ def search_models(query, token=""):
             ("expand[]", "downloads"), ("expand[]", "likes"), ("expand[]", "siblings"),
             ("expand[]", "pipeline_tag"), ("expand[]", "tags"), ("expand[]", "gguf"),
         ])
-        candidates = _get_json("https://huggingface.co/api/models?" + params, token)
+        candidates = _get_json("https://huggingface.co/api/models?" + params, token, timeout=15)
         results = [model for model in candidates if isinstance(model, dict)
                    and any(str(file.get("rfilename", file.get("path", ""))).lower().endswith(".gguf")
                            for file in model.get("siblings", []) if isinstance(file, dict))]
@@ -177,15 +178,38 @@ def _repo_ggufs(repo_id, token=""):
     records = _get_json(f"https://huggingface.co/api/models/{encoded_repo}/tree/main?recursive=true&limit=1000", token, 40)
     if not isinstance(records, list):
         raise RuntimeError("Hugging Face вернул неожиданный список файлов.")
-    return [{"path": item.get("path", ""), "size": item.get("size") or (item.get("lfs") or {}).get("size")}
+    return [{"path": item["path"], "size": item.get("size") or (item.get("lfs") or {}).get("size")}
             for item in records if isinstance(item, dict) and item.get("type") == "file"
-            and str(item.get("path", "")).lower().endswith(".gguf")]
+            and _compatible_gguf(repo_id, item.get("path", ""))]
+
+
+def _compatible_gguf(repo_id, path):
+    path = str(path).lower()
+    if repo_id.lower() == "unsloth/inkling-2-mini-gguf":
+        return path.startswith("mainline_support/inkling-2-mini-") and path.endswith((".gguf_file", ".gguf"))
+    return path.endswith(".gguf")
 
 
 def list_gguf_files(repo_id, token=""):
     files = [item for item in _repo_ggufs(repo_id, token) if "mmproj" not in item["path"].lower()]
-    files.sort(key=lambda item: (0 if "q4_k_m" in item["path"].lower() else 1, item["path"].lower()))
-    return files
+    by_path = {item["path"]: item for item in files}
+    choices = []
+    for item in files:
+        shard = GGUF_SHARD.fullmatch(item["path"])
+        if not shard:
+            choices.append({**item, "label": item["path"].removesuffix("_file")}
+                           if item["path"].endswith(".gguf_file") else item)
+        elif shard[2] == "00001" and (parts := _shard_files(shard, by_path)):
+            choices.append({**item, "size": sum(part.get("size") or 0 for part in parts),
+                            "label": shard[1] + ".gguf", "partCount": len(parts)})
+    return sorted(choices, key=lambda item: (0 if "q4_k_m" in item["path"].lower() else 1, item["path"].lower()))
+
+
+def _shard_files(shard, by_path):
+    stem, _, total = shard.groups()
+    suffix = shard[0][-5:]
+    paths = [f"{stem}-{n:05d}-of-{total}{suffix}" for n in range(1, int(total) + 1)]
+    return [by_path[path] for path in paths] if all(path in by_path for path in paths) else []
 
 
 def _pick_projector(files):
@@ -195,7 +219,9 @@ def _pick_projector(files):
 
 
 def suggested_tag(repo_id, file_path):
-    return os.path.splitext(os.path.basename(str(file_path or "model.gguf")))[0]
+    name = _local_gguf_name(repo_id, str(file_path or "model.gguf"))
+    shard = GGUF_SHARD.fullmatch(name)
+    return shard[1] if shard else os.path.splitext(name)[0]
 
 
 def _safe_parts(path):
@@ -205,35 +231,80 @@ def _safe_parts(path):
     return parts
 
 
+def _local_gguf_name(repo_id, path):
+    name = _safe_parts(path)[-1]
+    if repo_id.lower() == "unsloth/inkling-2-mini-gguf" and _compatible_gguf(repo_id, path):
+        return name.removesuffix("_file")[:-5] + "-Mainline.gguf"
+    return name
+
+
 def download_model(repo_id, record, token="", progress=lambda percent, message: None, cancel_event=None):
     repo_id = str(repo_id or "").strip().strip("/")
     if not REPO_PATTERN.fullmatch(repo_id):
         raise ValueError("Введи ID репозитория в формате автор/модель.")
+    if not _compatible_gguf(repo_id, record.get("path", "")):
+        raise ValueError("Этот файл несовместим с llama.cpp. Выбери совместимый GGUF в списке модели.")
     folder = MODELS_DIR / repo_id.replace("/", "--")
     jobs = [record]
+    shard = GGUF_SHARD.fullmatch(str(record.get("path") or ""))
     try:
-        projector = _pick_projector(_repo_ggufs(repo_id, token))
+        repo_files = _repo_ggufs(repo_id, token)
     except Exception:
-        projector = None
+        if shard:
+            raise
+        repo_files = []
+    if shard:
+        parts = _shard_files(shard, {item["path"]: item for item in repo_files})
+        if not parts:
+            raise RuntimeError("В репозитории отсутствуют части GGUF-модели.")
+        record, *jobs = parts
+        # Install the entry shard last so a partial download cannot appear as a model.
+        jobs.append(record)
+    projector = _pick_projector(repo_files)
     if projector and not any("mmproj" in item.name.lower() for item in folder.glob("*.gguf")):
         jobs.append(projector)
-    total_bytes = sum(int(item.get("size") or 0) for item in jobs) or 1
+    total_bytes = sum(int(item.get("size") or 0) for item in jobs)
+    size_known = all(item.get("size") for item in jobs)
     done_bytes = 0
-    destination_of_model = None
+    destination_of_model = folder / _local_gguf_name(repo_id, record["path"])
+    pending = []
     for job in jobs:
         parts = _safe_parts(job.get("path"))
-        destination = folder.joinpath(parts[-1])
-        destination_of_model = destination_of_model or destination
+        destination = folder / _local_gguf_name(repo_id, job["path"])
         expected = job.get("size")
         if destination.is_file() and isinstance(expected, (int, float)) and destination.stat().st_size == expected:
             done_bytes += int(expected)
             continue
-        label = "файла для картинок (mmproj)" if job is not record else "модели"
-        done_bytes += _download_file(repo_id, parts, destination, expected, token, cancel_event,
-                                     lambda received, base=done_bytes, what=label: progress(
-                                         min(99, int((base + received) * 100 / total_bytes)),
-                                         f"Скачивание {what}: {(base + received) / 1024 ** 3:.2f} из {total_bytes / 1024 ** 3:.2f} ГБ"),
-                                     lambda message, base=done_bytes: progress(min(99, int(base * 100 / total_bytes)), message))
+        pending.append((parts, destination, expected))
+    percent = 0
+    for parts, destination, expected in pending:
+        sample = None
+
+        def report(received):
+            nonlocal sample, percent
+            now = time.monotonic()
+            if sample is None or received < sample[0]:
+                sample = received, now
+            transferred, elapsed = received - sample[0], now - sample[1]
+            current = done_bytes + received
+            size = f"{current / 1024 ** 3:.2f} ГБ"
+            if size_known:
+                percent = min(99, int(current * 100 / total_bytes))
+                size = f"{current / 1024 ** 3:.2f} из {total_bytes / 1024 ** 3:.2f} ГБ"
+                if elapsed >= 3 and transferred > 0 and current < total_bytes:
+                    seconds = max(1, round((total_bytes - current) * elapsed / transferred))
+                    hours, remainder = divmod(seconds, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    eta = f"{hours} ч {minutes:02d} мин" if hours else f"{minutes} мин {seconds:02d} с" if minutes else f"{seconds} с"
+                    size += f" · ≈ {eta}"
+            progress(percent, size)
+
+        def wait(message):
+            nonlocal sample
+            sample = None
+            progress(percent, message)
+
+        done_bytes += _download_file(repo_id, parts, destination, expected, token, cancel_event, report, wait)
     progress(100, "Модель готова")
     return str(destination_of_model)
 

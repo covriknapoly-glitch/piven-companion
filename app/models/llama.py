@@ -26,6 +26,7 @@ HOST = "127.0.0.1"
 PORT = 47831
 BASE_URL = f"http://{HOST}:{PORT}"
 MIN_MODEL_BYTES = 50 * 1024 * 1024
+GGUF_SHARD = re.compile(r"(.+)-(\d{5})-of-(\d{5})\.gguf", re.I)
 
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -37,12 +38,20 @@ def model_files():
             continue
         for path in sorted(root.rglob("*.gguf")):
             name = path.name.lower()
-            if "mmproj" in name or path.stat().st_size < MIN_MODEL_BYTES:
+            if "mmproj" in name:
                 continue
-            if "-of-" in name and "-00001-of-" not in name:
+            shard = GGUF_SHARD.fullmatch(path.name)
+            if shard:
+                stem, index, total = shard.groups()
+                if index != "00001" or int(total) < 2 or not all(
+                    part.is_file() and part.stat().st_size > 0
+                    for part in (path.with_name(f"{stem}-{n:05d}-of-{total}{path.suffix}") for n in range(1, int(total) + 1))
+                ):
+                    continue
+            elif path.stat().st_size < MIN_MODEL_BYTES:
                 continue
             projectors = [item for item in path.parent.glob("*.gguf") if "mmproj" in item.name.lower()]
-            label = path.stem.replace("-00001-of-", " (части) ").split(" (части) ")[0]
+            label = shard[1] if shard else path.stem
             if label in found:
                 label = f"{path.parent.name}/{label}"
             found[label] = (path, projectors[0] if projectors else None)
@@ -426,6 +435,8 @@ class LlamaServer:
                 return
             if not server_installed():
                 raise RuntimeError(f"Не найден llama-server.exe: {SERVER_EXE}")
+            if gguf_metadata(gguf, ("general.architecture",)).get("general.architecture") == "inkling2":
+                raise RuntimeError("Эта версия Inkling 2 Mini требует движок Unsloth. Скачай вариант из Mainline_Support в каталоге Hugging Face в PIVEN.")
             check_ram_limit(model, params)
             self._stop_locked()
             args = [str(SERVER_EXE), "-m", str(gguf), "--host", HOST, "--port", str(self.port), "--no-webui"] + options

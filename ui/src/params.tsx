@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { CommandResult, ModelParams, ParamValue, WebApi } from "./bridge";
 import { Icon } from "./icons";
-import { AdvancedHead, Button, Field, IconButton, ModelLogo, MotionPresence, shortModel, Switch, Toggle, useShared } from "./ui";
+import { Dropdown, AdvancedHead, Button, Field, IconButton, ModelLogo, MotionPresence, shortModel, Switch, Toggle, useShared } from "./ui";
 
 type Kind = "int" | "float" | "choice" | "bool" | "context";
 interface Param { key: string; label: string; hint: string; kind: Kind; step?: number; unit?: string; names?: Record<string, string> }
@@ -128,9 +128,8 @@ export function ModelSettingsPage({ api, scope, onBack, onSaved }:
     if (param.kind === "context") return <ContextSlider value={Number(value)} onCommit={(next) => { void save({ ctx_size: next }); }} />;
     if (param.kind === "bool") return <Switch label={param.label} checked={Boolean(value)} onChange={(next) => { void save({ [param.key]: next }); }} />;
     if (param.kind === "choice") return (
-      <select className="select" value={String(value)} onChange={(event) => { void save({ [param.key]: event.target.value }); }}>
-        {(data?.choices[param.key] ?? []).map((choice) => <option key={choice} value={choice}>{param.names?.[choice] ?? choice}</option>)}
-      </select>
+      <Dropdown label={param.label} value={String(value)} onChange={choice => { void save({ [param.key]: choice }); }}
+        options={(data?.choices[param.key] ?? []).map(choice => ({ value: choice, label: param.names?.[choice] ?? choice }))} />
     );
     const limits = data?.limits[param.key];
     return <>

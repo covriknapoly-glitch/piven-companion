@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { MemoryEstimate, ThinkingOptions, ThinkingValue, WebApi } from "./bridge";
 import { Icon, type IconName } from "./icons";
 import logoSvg from "./assets/piven_logo.svg";
@@ -18,7 +18,7 @@ export function useShared<T>(key: string, load: () => Promise<T>): [T | null, ()
 }
 
 export function prefetchShared(entries: [string, () => Promise<unknown>][]) {
-  for (const [key, load] of entries) void load().then((value) => { shared.set(key, value); }).catch(() => {});
+  return Promise.allSettled(entries.map(async ([key, load]) => { shared.set(key, await load()); }));
 }
 
 export const THINKING_NAMES: Record<string, string> = { none: "Без размышления", minimal: "Минимальный", low: "Низкий", medium: "Средний",
@@ -231,6 +231,64 @@ export function useOutsideClose(open: boolean, close: () => void) {
   return ref;
 }
 
+export function Dropdown<T extends string>({ label, value, options, onChange, disabled, placeholder = "Выбрать" }: {
+  label: string; value: string; options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void; disabled?: boolean; placeholder?: string;
+}) {
+  const [menu, setMenu] = useState<{ index: number; height: number; above: boolean } | null>(null);
+  const close = useCallback(() => setMenu(null), []);
+  const ref = useOutsideClose(Boolean(menu), close);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const selected = options.findIndex(option => option.value === value);
+  const open = (index: number) => {
+    const bounds = trigger.current?.getBoundingClientRect();
+    if (!bounds || disabled || !options.length) return;
+    const pane = ref.current?.closest(".settings-fields, .modal-body")?.getBoundingClientRect();
+    const below = (pane?.bottom ?? window.innerHeight) - bounds.bottom - 12;
+    const above = bounds.top - (pane?.top ?? 0) - 12;
+    const flip = below < Math.min(256, options.length * 32) && above > below;
+    setMenu({ index, above: flip, height: Math.max(32, Math.min(256, flip ? above : below)) });
+  };
+  useLayoutEffect(() => {
+    if (!menu || disabled) return;
+    list.current?.querySelectorAll("button")[menu.index]?.focus();
+  }, [menu, disabled]);
+  useEffect(() => { if (disabled) close(); }, [disabled, close]);
+  return <div className="menu-anchor dropdown" ref={ref} onBlur={event => {
+    if (!event.currentTarget.contains(event.relatedTarget)) close();
+  }} onKeyDown={event => {
+    if (event.key === "Escape" && menu) {
+      event.stopPropagation();
+      close();
+      trigger.current?.focus();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      const index = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1
+        : menu ? menu.index + (event.key === "ArrowDown" ? 1 : -1)
+          : selected >= 0 ? selected : event.key === "ArrowUp" ? options.length - 1 : 0;
+      if (menu) setMenu({ ...menu, index: Math.max(0, Math.min(index, options.length - 1)) });
+      else open(index);
+    }
+  }}>
+    <button ref={trigger} className="model-picker-btn" type="button" aria-label={label} aria-haspopup="listbox"
+      aria-controls={menu ? menuId : undefined} aria-expanded={Boolean(menu)} disabled={disabled || !options.length}
+      onClick={() => { if (menu) close(); else open(Math.max(selected, 0)); }}>
+      <span className="disk-name">{options[selected]?.label ?? placeholder}</span><Icon name="chevronDown" size={14} />
+    </button>
+    <MotionPresence>{menu && <div className={`menu ${menu.above ? "menu-up" : "menu-left"} dropdown-menu`}>
+      <div className="menu-list" id={menuId} role="listbox" aria-label={label} ref={list} style={{ maxHeight: menu.height }}>
+        {options.map((option, index) => <button key={option.value} type="button" role="option" tabIndex={-1}
+          aria-selected={index === selected} className={index === selected ? "selected" : ""}
+          onClick={() => { trigger.current?.focus(); close(); onChange(option.value); }}>
+          <span>{option.label}</span>{index === selected && <Icon name="check" size={14} />}
+        </button>)}
+      </div>
+    </div>}</MotionPresence>
+  </div>;
+}
+
 export interface MenuItem { icon?: IconName; label: string; onClick: () => void; danger?: boolean; disabled?: boolean; hint?: string }
 
 export function MenuButton({ icon = "more", label, items, align = "right", className = "" }:
@@ -317,7 +375,20 @@ export const formatElapsed = (seconds: number) => {
 
 const logoCache = new Map<string, string>();
 const logoWaiters = new Set<() => void>();
+let decodedStartupLogo = "";
 let logoQueue: { names: Set<string>; authors: Record<string, string>; archs: Record<string, string> } | null = null;
+
+export async function prefetchModelLogo(api: WebApi, name: string) {
+  if (!name) return;
+  const url = (await api.model_logos([name]))?.[name];
+  if (!url) return;
+  const image = new Image();
+  image.src = url;
+  await image.decode();
+  decodedStartupLogo = url;
+  logoCache.set(name, url);
+  logoWaiters.forEach((wake) => wake());
+}
 
 function requestLogos(api: WebApi, names: string[], authors: Record<string, string>, archs: Record<string, string> = {}) {
   const missing = names.filter((name) => !logoCache.has(name));
@@ -331,7 +402,7 @@ function requestLogos(api: WebApi, names: string[], authors: Record<string, stri
       void api.model_logos(list, batch.authors, batch.archs).then((found) => {
         Object.entries(found || {}).forEach(([name, url]) => logoCache.set(name, url));
         logoWaiters.forEach((wake) => wake());
-      });
+      }).catch(() => { list.forEach((name) => { if (!logoCache.get(name)) logoCache.delete(name); }); });
     }, 30);
   }
   missing.forEach((name) => logoQueue!.names.add(name));
@@ -376,7 +447,7 @@ export function ModelLogo({ api, name, author = "", arch = "", size = 18 }: { ap
   const url = logoCache.get(name);
   return <span className="model-logo" style={{ width: size, height: size }}>
     <Icon name="box" size={Math.round(size * 0.7)} />
-    {url && <img key={url} src={url} alt="" draggable={false} hidden={loadedUrl !== url} onLoad={() => setLoadedUrl(url)} />}
+    {url && <img key={url} src={url} alt="" draggable={false} hidden={loadedUrl !== url && decodedStartupLogo !== url} onLoad={() => setLoadedUrl(url)} />}
   </span>;
 }
 

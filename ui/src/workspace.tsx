@@ -92,8 +92,8 @@ function ProjectFiles({ api, state, onReference }: { api: WebApi; state: EngineS
   const parent = folder.split("/").slice(0, -1).join("/");
   const index = memory?.index;
 
-  if (!state.code.root || listing?.root === "") return <div className="files-empty">
-    <p className="pane-note">Выбери папку, чтобы открыть файлы проекта.</p>
+  if (!state.code.root || listing?.root === "") return <div className="project-no-folder">
+    <p>Выбери папку, чтобы открыть файлы проекта.</p>
     <Button icon="folder" onClick={() => { void api.code_pick_folder(); }}>Выбрать папку…</Button>
   </div>;
   if (selected) return <div className="workspace-slot files-view">
@@ -163,7 +163,7 @@ function FilesTab({ api, state }: { api: WebApi; state: EngineState }) {
   );
   return (
     <div className="workspace-slot files-list">
-      {!files.length && <div className="files-empty"><Decor corner="br" /><p className="pane-note">Файлов пока нет</p></div>}
+      {!files.length && <div className="attachments-empty"><Decor corner="br" /><p className="pane-note">Файлов пока нет</p></div>}
       {files.map((path) => (
         <button key={path} type="button" className="file-row" onClick={() => setOpen(path)} title={path}>
           {IMAGE.test(path) ? <Thumb api={api} path={path} /> : <span className="file-icon"><Icon name={/\.pptx$/i.test(path) ? "presentation" : VIDEO.test(path) ? "play" : "file"} size={18} /></span>}

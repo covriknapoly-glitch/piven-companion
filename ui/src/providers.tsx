@@ -47,13 +47,18 @@ function IntegrationCard({ id, title, hint, state, tone = "", enabled, onToggle,
 }
 
 const HINTS: Record<string, string> = {
+  elevenlabs: "Озвучка Eleven и распознавание Scribe.",
+  deepgram: "Озвучка Aura и распознавание Nova.",
+  cartesia: "Озвучка Sonic.",
+  groq: "Озвучка Orpheus и распознавание Whisper.",
+  assemblyai: "Распознавание речи Universal.",
   openai: "Модели OpenAI по твоему ключу.",
   anthropic: "Модели Claude по твоему ключу.",
   gemini: "Модели Google Gemini по твоему ключу.",
   openrouter: "Много моделей разных компаний через один ключ.",
   custom: "Любой сервер с OpenAI API, например text-generation-webui.",
 };
-const providerHint = (row: ProviderRow) => row.local ? "Модели с локального или удалённого сервера." : HINTS[row.id] ?? "";
+const providerHint = (row: ProviderRow) => row.mediaOnly ? HINTS[row.id] ?? "Генерация картинок и видео по твоему ключу." : row.local ? "Модели с локального или удалённого сервера." : HINTS[row.id] ?? "";
 
 export function IntegrationsPane({ api, d, save, onChanged }:
   { api: WebApi; d: SettingsDetails; save: (patch: Record<string, unknown>) => Promise<unknown>; onChanged: () => void }) {
@@ -73,6 +78,8 @@ export function IntegrationsPane({ api, d, save, onChanged }:
   };
 
   const own = [
+    matches("ComfyUI") && <IntegrationCard key="comfyui" id="comfyui" title="ComfyUI" hint="Генерация картинок и видео через workflow."
+      enabled={on("comfyui")} onToggle={toggle("comfyui")} />,
     matches("llama.cpp", "Скачанные модели GGUF. Если выключить, они выгрузятся из памяти, а подключённые сервисы продолжат работать.") && (
       <IntegrationCard key="models" id="models" title="llama.cpp" hint="Скачанные модели GGUF. Если выключить, они выгрузятся из памяти, а подключённые сервисы продолжат работать."
         enabled={on("models")} onToggle={toggle("models")} />),
@@ -140,11 +147,11 @@ function ProviderCard({ api, row, onSaved, onChecked }:
     }).catch(failed).finally(() => setWorking(false));
   };
   const keyProblem = row.needsKey && (row.errorKind === "key" || row.keyBroken);
-  const empty = !row.error && !keyProblem && row.models === 0;
+  const empty = !row.mediaOnly && !row.error && !keyProblem && row.models === 0;
   const manualServer = row.local || row.id === "custom";
   const trouble = keyProblem ? (row.hasKey ? "ключ не подошёл" : "нужен ключ")
     : row.error ? (row.errorKind === "key" ? "доступ отклонён" : "нет связи") : empty ? "нет моделей" : "";
-  const state = working ? "проверка…" : !row.enabled ? "выключено" : trouble || `моделей: ${row.models}`;
+  const state = working ? "проверка…" : !row.enabled ? "выключено" : trouble || (row.mediaOnly ? "подключено" : `моделей: ${row.models}`);
   const tone = !row.enabled || working ? "" : empty ? "empty" : trouble ? "warn" : "ok";
   const reconnectButton = !row.enabled || row.local || empty ? undefined
     : <IconButton icon="refresh" size={15} label="Переподключить" disabled={working} onClick={reconnect} />;

@@ -1248,8 +1248,8 @@ class PolishFixes(unittest.TestCase):
             self.assertEqual(found["Qwen3.5-9B-Finetune"], "https://a/david.png")
             self.assertEqual(logos.logos(["qwen-other"], {}, {"qwen-other": "qwen35"})["qwen-other"], "https://a/qwen.png")
 
-    def test_llama_switch_leaves_connected_services_and_comfyui_always_on(self):
-        self.assertEqual(core.CompanionCore._load_integrations({"models": False, "comfyui": False}), {"models": False, "comfyui": True})
+    def test_comfyui_switch_is_persisted(self):
+        self.assertEqual(core.CompanionCore._load_integrations({"models": False, "comfyui": False}), {"models": False, "comfyui": False})
         companion = object.__new__(core.CompanionCore)
         companion.settings = {"integrations_enabled": {"models": False}}
         with mock.patch.object(core.integrations, "is_provider_model", side_effect=lambda name: name.startswith("gemini:")):

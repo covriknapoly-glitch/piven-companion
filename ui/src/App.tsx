@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { isPhone, isUnchanged, waitForEngine, type ChatSummary, type EngineState, type SearchHit, type WebApi } from "./bridge";
-import { Lightbox } from "./cards";
-import { Composer } from "./composer";
+import { Lightbox, prefetchChatImages } from "./cards";
+import { Composer, prefetchThinkingOptions } from "./composer";
 import { CommandDialog, ConfirmDialog, DownloadDialog, HubDialog, SearchDialog } from "./dialogs";
 import { VoiceHubDialog } from "./voicehub";
 import { Icon } from "./icons";
 import { CallPanel } from "./call";
 import { KnowledgeDialog } from "./knowledge";
-import { ContextRing } from "./context";
+import { ContextRing, prefetchContextUsage } from "./context";
 import { LinkContext } from "./markdown";
 import { CodeModeActivation } from "./motion";
 import { SettingsDialog, FONT_CHOICES, prefetchSettings, type FontChoice } from "./settings";
@@ -15,7 +15,7 @@ import { HelpDialog, type SlashCommand } from "./commands";
 import { translate } from "./i18n";
 import { Sidebar, type ChatActions } from "./sidebar";
 import { Transcript } from "./transcript";
-import { Decor, IconButton, MenuButton, MotionPresence, fileName, groupModels, shortModel, thinkingName } from "./ui";
+import { Decor, IconButton, MenuButton, MotionPresence, fileName, groupModels, prefetchModelLogo, shortModel, thinkingName } from "./ui";
 import { MODES } from "./projects";
 import { THEME_IDS, THEMES, isLightTheme, type ThemeId } from "./themes";
 import { Workspace, type WorkspaceTab } from "./workspace";
@@ -154,24 +154,47 @@ export default function App() {
   const [prefill, setPrefill] = useState<{ chatId: string; text: string; append?: boolean } | null>(null);
   const [theme, setTheme, resolvedTheme] = useTheme();
   const versionRef = useRef(0);
+  const startupSettings = useRef<Promise<unknown> | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const draftChatIds = useRef<string[]>([]);
   const updateDraftChatIds = useCallback((ids: string[]) => { draftChatIds.current = ids; }, []);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const engineReady = useCallback((engine: WebApi) => {
-    setApi(engine);
-    void engine.state().then((snapshot) => { versionRef.current = snapshot.version; setState(snapshot); });
+    void engine.state().then(async (snapshot) => {
+      if (!isPhone && engine.ui_ready) {
+        startupSettings.current = prefetchSettings(engine, snapshot.settings.model);
+        let deadline = 0;
+        try {
+          await Promise.race([
+            Promise.allSettled([
+              prefetchChatImages(engine, snapshot.items),
+              prefetchContextUsage(engine, snapshot),
+              prefetchThinkingOptions(engine, snapshot),
+              prefetchModelLogo(engine, snapshot.settings.model),
+            ]),
+            new Promise<void>((resolve) => { deadline = window.setTimeout(resolve, 3000); }),
+          ]);
+        } finally {
+          window.clearTimeout(deadline);
+        }
+      }
+      versionRef.current = snapshot.version;
+      setState(snapshot);
+      setApi(engine);
+    }).catch(() => setEngineMissing(true));
   }, []);
   useEffect(() => { if (api && !isPhone) phoneHost.start(api); }, [api]);
   useEffect(() => {
     if (isPhone) return;
+    let live = true;
     void waitForEngine().then((engine) => {
+      if (!live) return;
       if (!engine) { setEngineMissing(true); return; }
-      setApi(engine);
-      void engine.state().then((snapshot) => { versionRef.current = snapshot.version; setState(snapshot); });
+      engineReady(engine);
     });
-  }, []);
+    return () => { live = false; };
+  }, [engineReady]);
   useEffect(() => {
     if (!api) return;
     const style = getComputedStyle(document.documentElement);
@@ -252,7 +275,18 @@ export default function App() {
   useEffect(() => {
     if (!api || !state || prefetched.current) return;
     prefetched.current = true;
-    window.setTimeout(() => prefetchSettings(api, state.settings.model), 2500);
+    if (isPhone) {
+      window.setTimeout(() => { void prefetchSettings(api, state.settings.model); }, 2500);
+      return;
+    }
+    const fonts = ['13px "Lack"', '16px "Piven Icons"', '700 23px "Martian Grotesk Ultra Wide"'];
+    void Promise.allSettled([
+      startupSettings.current ?? prefetchSettings(api, state.settings.model),
+      ...fonts.map((font) => document.fonts.load(font)),
+    ]).then(async () => {
+      await document.fonts.ready;
+      await api.ui_ready?.();
+    }).catch(() => {});
   }, [api, state]);
 
   const chatOrder = useCallback(() => {

@@ -122,20 +122,46 @@ function ModelChip({ state, api, onDone, onOpenHub, onOpenVoiceHub }: { state: E
   );
 }
 
+const thinkingCache = new WeakMap<WebApi, Map<string, ThinkingOptions>>();
+
+function rememberThinking(api: WebApi, model: string, options: ThinkingOptions) {
+  let cache = thinkingCache.get(api);
+  if (!cache) { cache = new Map(); thinkingCache.set(api, cache); }
+  cache.set(model, options);
+}
+
+export async function prefetchThinkingOptions(api: WebApi, state: EngineState) {
+  const model = state.settings.model;
+  if (!model || !state.models.includes(model)) return;
+  const options = await api.thinking_options(model);
+  if (!options.error) rememberThinking(api, model, options);
+}
+
 function ThinkingChip({ state, api, onDone }: { state: EngineState; api: WebApi; onDone: (error?: string) => void }) {
   const model = state.settings.model;
-  const [options, setOptions] = useState<ThinkingOptions | null>(null);
+  const available = Boolean(model) && state.models.includes(model);
+  const [options, setOptions] = useState(() => thinkingCache.get(api)?.get(model) ?? null);
   const [open, setOpen] = useState(false);
+  const request = useRef(0);
   const close = useCallback(() => setOpen(false), []);
   const ref = useOutsideClose(open, close);
+  const refresh = useCallback(async () => {
+    const id = ++request.current;
+    try {
+      const next = await api.thinking_options(model);
+      if (id === request.current && !next.error) {
+        rememberThinking(api, model, next);
+        setOptions(next);
+      }
+    } catch {
+      // Keep the last usable options while the engine is unavailable.
+    }
+  }, [api, model]);
   useEffect(() => {
-    setOptions(null);
-    if (model && state.models.includes(model)) void api.thinking_options(model).then(setOptions);
-  }, [api, model, state.models]);
-  useEffect(() => {
-    if (!state.busy && model && state.models.includes(model)) void api.thinking_options(model).then(setOptions);
-  }, [state.busy]);
-  if (!options || options.error) return null;
+    if (available) void refresh();
+    return () => { request.current++; };
+  }, [available, refresh, state.busy, state.settings.thinkingLevel]);
+  if (!options) return null;
   if (!options.values.length) return options.default === true
     ? <span className="chip-btn static" title={thinkingFixed(options)}><Icon name="spark" size={14} /><span className="chip-text">Размышляет</span></span>
     : null;
@@ -143,7 +169,7 @@ function ThinkingChip({ state, api, onDone }: { state: EngineState; api: WebApi;
     close();
     void api.set_thinking(model, value).then((result) => {
       onDone(result.ok ? undefined : result.error);
-      void api.thinking_options(model).then(setOptions);
+      void refresh();
     });
   };
 
@@ -424,7 +450,7 @@ export function Composer({ api, state, onSent, onStop, onError, onOpenHub, onOpe
           }} />
         {isPhone && <input ref={photoRef} type="file" accept={PHONE_ACCEPT} multiple hidden onChange={(event) => { const files = [...(event.target.files ?? [])]; event.target.value = ""; void addFiles(files); }} />}
         <ModelChip state={state} api={api} onDone={onError} onOpenHub={onOpenHub} onOpenVoiceHub={onOpenVoiceHub} />
-        <ThinkingChip state={state} api={api} onDone={onError} />
+        <ThinkingChip key={state.settings.model} state={state} api={api} onDone={onError} />
         <span className="composer-spacer" />
         {state.code.on && <FolderChip state={state} api={api} onDone={onError} />}
         {state.code.on && <ModeChip state={state} api={api} onDone={onError} />}

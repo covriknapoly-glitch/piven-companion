@@ -33,7 +33,7 @@ from app.models import llama
 from app.models import memory_fit
 from app.tools import mcp
 from app.models import logos
-from app.models import integrations
+from app.models import integrations, media
 from app import update as updates
 from app import i18n
 from app.tools import toolbox as tools
@@ -246,7 +246,7 @@ class WebCompanion(CompanionCore):
         elif kind == "code_picture":
             self.append_to_chat(chat_id, "system", "Снимок результата", [str(value)])
         elif kind == "generated_image":
-            self.append_to_chat(chat_id, "assistant", "Изображение создано через ComfyUI.", [str(value)])
+            self.append_to_chat(chat_id, "assistant", "Изображение готово", [str(value)])
         elif kind == "presentation_created":
             self.append_to_chat(chat_id, "assistant", f"Презентация готова · {Path(value).name}", [str(value)])
         elif kind == "generated_video":
@@ -355,7 +355,7 @@ class WebCompanion(CompanionCore):
                 elif kind in ("activity", "generation_progress") and value:
                     self._activity = str(value)
                 elif kind == "generation_started":
-                    self._activity = "ComfyUI готовит изображение"
+                    self._activity = "Готовит изображение"
                 elif kind == "reasoning":
                     self._reasoning = str(value)
                 elif kind in ("reasoning_clear", "reasoning_remove"):
@@ -386,9 +386,9 @@ class WebCompanion(CompanionCore):
                 elif kind == "code_picture":
                     self._record("system", "Снимок результата", [str(value)])
                 elif kind == "generated_image":
-                    self._record("assistant", "Изображение создано через ComfyUI.", [str(value)])
+                    self._record("assistant", "Изображение готово", [str(value)])
                     self._activity = "Изображение готово"
-                    self._notify("Изображение готово", "Картинка создана через ComfyUI.")
+                    self._notify("Изображение готово", "Открой чат, чтобы посмотреть.")
                 elif kind == "generated_video":
                     self._record("assistant", "Видео готово.", [str(value)])
                     self._activity = "Видео готово"
@@ -474,7 +474,7 @@ class WebCompanion(CompanionCore):
                 if self.busy:
                     return {"ok": False, "error": "Дождись завершения текущего действия."}
                 self._record("user", text, image_paths)
-                self._activity = "Видео по картинке · запуск ComfyUI"
+                self._activity = "Готовит видео"
                 self._start_video_generation(text, image_paths[0])
             return {"ok": True, "route": "video"}
         if image_paths:
@@ -517,11 +517,11 @@ class WebCompanion(CompanionCore):
                 self._record("code", self.code_offer_card(text))
                 return {"ok": True, "route": "offer"}
             if route == "image":
-                self._activity = "Запрос на изображение · запуск ComfyUI"
+                self._activity = "Готовит изображение"
                 self._start_image_generation(text)
                 return {"ok": True, "route": route}
             if route == "video":
-                self._activity = "Запрос на видео · запуск ComfyUI"
+                self._activity = "Готовит видео"
                 self._start_video_generation(text)
                 return {"ok": True, "route": route}
             self.busy = True
@@ -546,7 +546,7 @@ class WebCompanion(CompanionCore):
             except Exception as exc:
                 log(f"providers reconnect error: {exc}")
 
-    def refresh_models(self, providers=True):
+    def refresh_models(self, providers=True, keep_provider_choice=False):
         try:
             if providers:
                 integrations.refresh()
@@ -560,7 +560,8 @@ class WebCompanion(CompanionCore):
         with self._state_lock:
             self._models, self._models_error = names, error
             self._status = f"Моделей: {len(names)}" if names else (error or "Нет моделей")
-            if names and self.settings.get("model") not in names:
+            chosen = self.settings.get("model")
+            if names and chosen not in names and not (keep_provider_choice and integrations.is_provider_model(chosen)):
                 self.settings["model"] = names[0]
             self._changed()
 
@@ -665,7 +666,7 @@ class WebCompanion(CompanionCore):
                     self._changed()
                     self._notify("Загрузка завершена", f"Модель {self._hf.get('tag') or Path(path).stem} скачана.")
                 self.refresh_models()
-                name = Path(path).stem
+                name = next((name for name, (file, _) in llama.model_files().items() if file == Path(path)), "")
                 with self._state_lock:
                     if name in self._models and not self.busy:
                         self.settings["model"] = name
@@ -868,7 +869,11 @@ class WebApi:
         self._app = app
         self._browser = None
         self._hidden_browser = None
+        self._startup_ready = threading.Event()
         app._web_api = self
+
+    def ui_ready(self):
+        self._startup_ready.set()
 
     def poll(self, known_version=0):
         app = self._app
@@ -1134,6 +1139,7 @@ class WebApi:
             "speechEnabled": bool(app.speech_enabled),
             "voice": settings.get("voice", "Russian"),
             "voices": install.tts_voices(settings.get("tts_model")),
+            **{key: settings.get(name) for key, name in media.TASKS.items()},
             "screenInterval": settings.get("screen_interval", 35),
             "micDevice": settings.get("mic_device", ""),
             "voiceSample": settings.get("voice_sample", ""),
@@ -1160,7 +1166,40 @@ class WebApi:
             return {"ok": False, "errors": {"_": "Некорректный запрос."}}
         errors, changes = {}, {}
         for key, value in patch.items():
-            if key == "speechEnabled":
+            if key == "visualMedia":
+                try:
+                    if not isinstance(value, dict):
+                        raise ValueError("Выбери провайдера")
+                    provider = value.get("provider")
+                    row = next((item for item in media.visual_catalog(app.settings) if item["id"] == provider), None)
+                    if row is None:
+                        raise ValueError("Подключи провайдера в разделе «Интеграции».")
+                    if not row["image"] and not row["video"]:
+                        raise ValueError("Нет доступных моделей для картинок и видео.")
+                    selected = {}
+                    for kind in ("image", "video"):
+                        model = value.get(kind + "Model")
+                        options = row[kind]
+                        if options and not any(item["id"] == model for item in options):
+                            raise ValueError("Выбери модель в списке.")
+                        selected[kind] = {"provider": provider, "model": model} if options else None
+                    image, video = selected["image"], selected["video"]
+                    changes.update(image_media=image, video_media=video)
+                except ValueError as error:
+                    errors[key] = str(error)
+            elif key in ("asrMedia", "ttsMedia"):
+                try:
+                    target = media.selection(value, task=media.TASKS[key])
+                    if target:
+                        media.connection(target)
+                    if key == "asrMedia" and (app.running or app.dictation["phase"]):
+                        raise ValueError("Сначала заверши звонок или диктовку.")
+                    if key == "ttsMedia" and app.tts_playing.is_set():
+                        raise ValueError("Сначала останови озвучку.")
+                    changes[media.TASKS[key]] = target
+                except ValueError as error:
+                    errors[key] = str(error)
+            elif key == "speechEnabled":
                 changes["speech_enabled"] = bool(value)
             elif key == "bargeIn":
                 changes["barge_in"] = bool(value)
@@ -1231,6 +1270,7 @@ class WebApi:
                 errors[key] = "Эту настройку отсюда менять нельзя."
         if changes:
             with app._state_lock:
+                models_enabled = app._integration_enabled("models")
                 app.settings.update(changes)
                 app.speech_enabled = app.settings["speech_enabled"]
                 app.screen_interval_seconds = app.settings["screen_interval"]
@@ -1239,7 +1279,7 @@ class WebApi:
                 app.barge_in = app.settings["barge_in"]
                 if "heavy_mode" in changes or "max_loaded_models" in changes:
                     app.apply_heavy_mode()
-                if "integrations_enabled" in changes:
+                if "integrations_enabled" in changes and models_enabled != app._integration_enabled("models"):
                     llama_off = not changes["integrations_enabled"].get("models", True)
                     if llama_off and app._local_blocked(app.settings.get("model")):
                         app.pending_text_prompts.clear()
@@ -1427,8 +1467,8 @@ class WebApi:
         app = self._app
         text = str(text or "")
         route = app._route_for(text)
-        labels = {"presentation": "соберёт презентацию", "image": "нарисует через ComfyUI",
-                  "video": "снимет видео через ComfyUI", "audio": "аудио пока не поддерживается"}
+        labels = {"presentation": "соберёт презентацию", "image": "нарисует изображение",
+                  "video": "создаст видео", "audio": "аудио пока не поддерживается"}
         if route == "code":
             root = (app._active_chat() or {}).get("code_root", "")
             label = "предложит режим кода" if not (app._active_chat() or {}).get("code_on") else f"поработает с кодом в папке {Path(root).name}" if root else "создаст проект и напишет код сам"
@@ -1608,6 +1648,18 @@ class WebApi:
         except Exception as error:
             return {"ok": False, "error": str(error)}
 
+    def audio_providers(self):
+        return media.audio_catalog(self._app.settings)
+
+    def audio_voices(self, provider, model):
+        try:
+            return {"voices": media.audio_voices(str(provider), str(model))}
+        except (ValueError, RuntimeError, OSError) as error:
+            return {"voices": [], "error": str(error)}
+
+    def visual_providers(self):
+        return media.visual_catalog(self._app.settings, refresh=True)
+
     def providers_status(self):
         return {"providers": integrations.status()}
 
@@ -1760,7 +1812,7 @@ class WebApi:
             app._save_conversation(); app._changed()
         return {"ok": True}
 
-    def image_data(self, path):
+    def image_data(self, path, thumbnail=False):
         path = str(path or "")
         file = Path(path)
         if path not in self._app.known_files() or not file.is_file():
@@ -1768,7 +1820,26 @@ class WebApi:
         mime = mimetypes.guess_type(file.name)[0] or ""
         if not mime.startswith(("image/", "video/")):
             return ""
-        if file.stat().st_size > (MAX_IMAGE_BYTES * 5 if mime.startswith("video/") else MAX_IMAGE_BYTES):
+        size = file.stat().st_size
+        if thumbnail and mime.startswith("image/") and (size > 256 * 1024 or mime == "image/tiff"):
+            if size > MAX_IMAGE_BYTES * 5:
+                return ""
+            import io
+            from PIL import Image, ImageOps
+
+            try:
+                with Image.open(file) as source:
+                    if not getattr(source, "is_animated", False):
+                        image = ImageOps.exif_transpose(source)
+                        image.thumbnail((960, 960))
+                        buffer = io.BytesIO()
+                        alpha = "A" in image.getbands() or "transparency" in image.info
+                        image.convert("RGBA" if alpha else "RGB").save(buffer, "PNG" if alpha else "JPEG", quality=82)
+                        mime = "image/png" if alpha else "image/jpeg"
+                        return f"data:{mime};base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+            except (OSError, ValueError, Image.DecompressionBombError):
+                return ""
+        if size > (MAX_IMAGE_BYTES * 5 if mime.startswith("video/") else MAX_IMAGE_BYTES):
             return ""
         return f"data:{mime};base64," + base64.b64encode(file.read_bytes()).decode("ascii")
 
@@ -1982,7 +2053,7 @@ class WebApi:
         with app._state_lock:
             error = app.start_dictation()
             app._changed()
-        return {"ok": not error, "error": error, "needsModel": not install.ready("asr", app.settings.get("asr_model"))}
+        return {"ok": not error, "error": error, "needsModel": not app.settings.get("asr_media") and not install.ready("asr", app.settings.get("asr_model"))}
 
     def stop_dictation(self):
         with self._app._state_lock:
@@ -2256,7 +2327,7 @@ class WebApi:
             live_texts = [text for text in (live.get("question"), live.get("answer")) if text]
 
             def tokens(text):
-                return llama.count_tokens(model, text, unloaded=True)
+                return llama.count_tokens(model, text)
             images = sum(len(item.get("images") or []) for item in turns)
             skills_text = tools_text = ""
             tools_names, waiting = 0, []
@@ -2278,7 +2349,7 @@ class WebApi:
                                  + sum(llama.count_tokens(model, text) for text in live_texts) + llama.count_tokens(model, draft)),
                      "images": llama.IMAGE_TOKENS * images}
             cloud = integrations.is_provider_model(model)
-            return {"ok": True, "model": model, "cloud": cloud, "exact": llama.counts_exactly(model), "parts": parts, "used": sum(parts.values()),
+            return {"ok": True, "model": model, "cloud": cloud, "exact": model in llama.loaded_models(), "parts": parts, "used": sum(parts.values()),
                     "turns": len(turns) + len(live_texts), "images": images, "toolCount": tools_names, "serversWaiting": waiting,
                     "limit": 0 if cloud or not model else llama.context_size(model),
                     "historyShare": core.HISTORY_SHARE, "compress": bool(llama.params_for(model)["compress_context"]) if model and not cloud else False}
@@ -2489,21 +2560,32 @@ def main():
             time.sleep(0.4)
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     app = WebCompanion()
+    app.refresh_models(providers=False, keep_provider_choice=True)
     threading.Thread(target=app.refresh_models, daemon=True).start()
     threading.Thread(target=app._watch_providers, daemon=True).start()
     threading.Thread(target=app._watch_updates, daemon=True).start()
-    window = webview.create_window(WINDOW_TITLE, url=str(UI_INDEX), js_api=WebApi(app),
-                                   width=1440, height=900, min_size=(960, 640), background_color="#0a0a0a")
+    api = WebApi(app)
+    window = webview.create_window(WINDOW_TITLE, url=str(UI_INDEX), js_api=api,
+                                   width=1440, height=900, min_size=(960, 640), background_color="#0a0a0a", hidden=True)
     app.window = window
     window.events.shown += lambda: (set_window_icon(window), style_title_bar(window))
+    first_show = threading.Event()
 
     def open_window():
+        if not first_show.is_set() or app._quitting:
+            return
         app._hidden = False
         window.show()
         hwnd = int(window.native.Handle.ToInt64())
         if ctypes.windll.user32.IsIconic(hwnd):
             window.restore()
         ctypes.windll.user32.SetForegroundWindow(hwnd)
+
+    def show_after_startup():
+        # A stalled WebView or settings lookup must still leave a visible window.
+        api._startup_ready.wait(7)
+        first_show.set()
+        open_window()
 
     listen_for_second_launch(open_window)
 
@@ -2530,7 +2612,7 @@ def main():
         if app.tray:
             app.tray.close()
     window.events.closing += on_closing
-    webview.start(private_mode=False, storage_path=str(core.DATA_DIR / "webview"))
+    webview.start(show_after_startup, private_mode=False, storage_path=str(core.DATA_DIR / "webview"))
 
 
 if __name__ == "__main__":

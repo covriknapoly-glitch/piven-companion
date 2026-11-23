@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandConfirm, DownloadConfirm, EngineState, HfFile, HfModel, HfStatus, ListenOptions, SearchHit, WebApi, MemoryEstimate } from "./bridge";
 import { Icon, type IconName } from "./icons";
-import { Button, callMemoryLabel, Field, IconButton, MemoryBar, Modal, ModelDescription, ModelLogo, MotionPresence, Switch, useOutsideClose } from "./ui";
+import { Dropdown, Button, callMemoryLabel, Field, IconButton, MemoryBar, Modal, ModelDescription, ModelLogo, MotionPresence, Switch, useOutsideClose } from "./ui";
 
 export function ConfirmDialog({ title, text, confirmLabel, cancelLabel = "Отмена", danger = false, onConfirm, onClose }:
   { title: string; text: string; confirmLabel: string; cancelLabel?: string; danger?: boolean; onConfirm: () => void; onClose: () => void }) {
@@ -80,14 +80,19 @@ const formatCount = (value?: number) => (typeof value === "number" ? value.toLoc
 export function HubDialog({ api, onClose, onDone }: { api: WebApi; onClose: () => void; onDone: () => void }) {
   const [query, setQuery] = useState("");
   const [token, setToken] = useState("");
-  const [models, setModels] = useState<HfModel[] | null>(null);
+  const [searchResult, setSearchResult] = useState<{ query: string; token: string; models: HfModel[]; error?: string } | null>(null);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [repo, setRepo] = useState("");
   const [files, setFiles] = useState<HfFile[]>([]);
   const [file, setFile] = useState<HfFile | null>(null);
   const [tag, setTag] = useState("");
-  const [note, setNote] = useState("Начни вводить название модели, например Qwen3 или Gemma.");
+  const [note, setNote] = useState("");
   const [progress, setProgress] = useState<HfStatus | null>(null);
   const [memory, setMemory] = useState<{ gpu: number; context: number; estimate: MemoryEstimate | null; known: boolean; voiceCall?: number } | null>(null);
+  const filesRequest = useRef(0);
+  const searchQuery = query.trim();
+  const currentSearch = searchResult?.query === searchQuery && searchResult.token === token ? searchResult : null;
+  const models = currentSearch?.models ?? [];
   useEffect(() => {
     setMemory(null);
     if (!repo || !file) return;
@@ -97,23 +102,32 @@ export function HubDialog({ api, onClose, onDone }: { api: WebApi; onClose: () =
   }, [api, repo, file, token]);
 
   useEffect(() => {
-    const text = query.trim();
-    if (text.length < 2) { setModels(null); return; }
-    setNote("Поиск на Hugging Face…");
+    if (searchQuery.length < 2) return;
+    let live = true;
     const timer = window.setTimeout(() => {
-      void api.hf_search(text, token).then((reply) => {
-        setModels(reply.models);
-        setNote(reply.ok ? (reply.models.length ? `Нашлось репозиториев: ${reply.models.length}. Выбери один.` : "GGUF-моделей не нашлось, попробуй другое название.") : reply.error ?? "Поиск не удался.");
+      void api.hf_search(searchQuery, token).then((reply) => {
+        if (live) setSearchResult({ query: searchQuery, token, models: reply.models, error: reply.ok ? undefined : reply.error || "Поиск не удался." });
+      }).catch(() => {
+        if (live) setSearchResult({ query: searchQuery, token, models: [], error: "Поиск не удался." });
       });
     }, 450);
-    return () => window.clearTimeout(timer);
-  }, [api, query, token]);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [api, searchQuery, token, searchAttempt]);
+
+  const clearSelection = () => {
+    filesRequest.current++;
+    setRepo(""); setFiles([]); setFile(null); setTag(""); setNote("");
+  };
 
   const chooseRepo = (id: string) => {
+    const request = ++filesRequest.current;
     setRepo(id); setFiles([]); setFile(null); setNote("Загрузка списка файлов…");
     void api.hf_files(id, token).then((reply) => {
+      if (request !== filesRequest.current) return;
       setFiles(reply.files); setFile(reply.files[0] ?? null); setTag(reply.tag ?? "");
       setNote(reply.ok ? (reply.files.length ? "Рекомендуемый файл (Q4_K_M) выбран сразу; можно выбрать другую квантизацию." : "В этом репозитории нет GGUF-файлов.") : reply.error ?? "Не удалось получить файлы.");
+    }).catch(() => {
+      if (request === filesRequest.current) setNote("Не удалось получить файлы.");
     });
   };
 
@@ -126,6 +140,10 @@ export function HubDialog({ api, onClose, onDone }: { api: WebApi; onClose: () =
   useEffect(() => { void poll(); }, [poll]);
 
   const running = progress?.state === "running";
+  const searchNote = searchQuery.length < 2
+    ? "Начни вводить название модели, например Qwen3 или Gemma."
+    : !currentSearch ? "Поиск на Hugging Face…"
+    : currentSearch.error || (models.length ? "" : "GGUF-моделей не нашлось, попробуй другое название.");
   const start = () => {
     if (!file) return;
     void api.hf_start(repo, file, tag, token).then((reply) => { if (!reply.ok) setNote(reply.error ?? "Не удалось начать загрузку."); void poll(); });
@@ -146,10 +164,19 @@ export function HubDialog({ api, onClose, onDone }: { api: WebApi; onClose: () =
         </div>
       )}
       <div className="hub-search">
-        <label className="search-field"><Icon name="search" size={16} /><input autoFocus placeholder="Название модели" value={query} disabled={running} onChange={(event) => setQuery(event.target.value)} /></label>
-        <input className="input mono hub-token" type="password" placeholder="Токен HF (для закрытых моделей)" value={token} autoComplete="off" onChange={(event) => setToken(event.target.value)} />
+        <label className="search-field"><Icon name="search" size={16} /><input autoFocus placeholder="Название модели" value={query} disabled={running} onChange={(event) => {
+          if (event.target.value.trim() !== searchQuery) clearSelection();
+          setQuery(event.target.value);
+        }} /></label>
+        <input className="input mono hub-token" type="password" placeholder="Токен HF (для закрытых моделей)" value={token} autoComplete="off" onChange={(event) => {
+          clearSelection(); setToken(event.target.value);
+        }} />
       </div>
-      {models && models.length > 0 && (
+      {searchNote && <p className={`pane-note${currentSearch?.error ? " error-text" : ""}`} role="status">{searchNote}</p>}
+      {currentSearch?.error && <Button kind="ghost" icon="retry" disabled={running} onClick={() => {
+        setSearchResult(null); setSearchAttempt((attempt) => attempt + 1);
+      }}>Повторить</Button>}
+      {models.length > 0 && (
         <div className="hub-list">
           {models.map((model) => (
             <button key={model.id} type="button" className={model.id === repo ? "selected" : ""} disabled={running} onClick={() => chooseRepo(model.id)}>
@@ -163,12 +190,12 @@ export function HubDialog({ api, onClose, onDone }: { api: WebApi; onClose: () =
       {files.length > 0 && (
         <div className="hub-form">
           <Field label="Файл">
-            <select className="select" value={file?.path ?? ""} disabled={running} onChange={(event) => {
-              const next = files.find((item) => item.path === event.target.value) ?? null;
-              setFile(next); if (next) void api.hf_suggest_tag(repo, next.path).then(setTag);
-            }}>
-              {files.map((item) => <option key={item.path} value={item.path}>{item.path}{item.size ? ` (${formatSize(item.size)})` : ""}</option>)}
-            </select>
+            <Dropdown label="Файл" value={file?.path ?? ""} disabled={running}
+              options={files.map(item => ({ value: item.path, label: (item.label ?? item.path) + (item.size ? ` (${formatSize(item.size)})` : "") }))}
+              onChange={path => {
+                const next = files.find(item => item.path === path) ?? null;
+                setFile(next); if (next) void api.hf_suggest_tag(repo, next.path).then(setTag);
+              }} />
           </Field>
           {file && (memory?.estimate
             ? <MemoryBar gpu={memory.gpu} speed={memory.estimate} label={memory.known ? callMemoryLabel(memory.context) : "Во время звонка с озвучкой, без учёта контекста"}

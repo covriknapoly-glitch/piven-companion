@@ -93,7 +93,10 @@ export interface ModelParams {
   presets: Record<string, Record<string, ParamValue>>; serverKeys: string[]; own: Record<string, ParamValue>;
   effective: Record<string, ParamValue>; autoTitles: boolean; cloud: boolean; systemPrompt: string;
 }
-export interface ProviderRow { errorKind: "" | "key" | "lost"; keyEnd: string; keyBroken: boolean; keyPage: string; id: string; title: string; local: boolean; needsKey: boolean; enabled: boolean; url: string; defaultUrl: string; hasKey: boolean; models: number; error: string; installed: boolean; site: string }
+export interface MediaChoice { id: string; title: string }
+export interface AudioProvider { id: MediaSelection["provider"]; title: string; tts?: MediaChoice[]; asr?: MediaChoice[] }
+export interface VisualProvider { id: MediaSelection["provider"]; title: string; image: MediaChoice[]; video: MediaChoice[]; credits?: number; accountError?: string; catalogFallback?: boolean }
+export interface ProviderRow { mediaOnly?: boolean; errorKind: "" | "key" | "lost"; keyEnd: string; keyBroken: boolean; keyPage: string; id: string; title: string; local: boolean; needsKey: boolean; enabled: boolean; url: string; defaultUrl: string; hasKey: boolean; models: number; error: string; installed: boolean; site: string }
 export interface McpServer { name: string; command: string; url: string; env: Record<string, string>; enabled: boolean; error?: string; tools?: number | null }
 export interface SkillRow { name: string; folder: string; description: string; builtin: boolean; body: string }
 export interface ToolsStatus { enabled: boolean; servers: McpServer[]; skills: SkillRow[] }
@@ -119,7 +122,13 @@ export interface CommandResult {
   path?: string;
 }
 
+export interface MediaSelection { provider: "openai" | "openrouter" | "gemini" | "custom" | "runway" | "higgsfield" | "fal" | "elevenlabs" | "deepgram" | "cartesia" | "groq" | "assemblyai"; model: string; voice?: string }
+export type MediaSetting = "videoMedia" | "imageMedia" | "ttsMedia" | "asrMedia";
 export interface SettingsDetails {
+  videoMedia: MediaSelection | null;
+  imageMedia: MediaSelection | null;
+  asrMedia: MediaSelection | null;
+  ttsMedia: MediaSelection | null;
   speechEnabled: boolean;
   voice: string;
   voices: [string, string][];
@@ -148,7 +157,7 @@ export interface ThinkingOptions { values: ThinkingValue[]; default: ThinkingVal
 export interface SettingsResult { ok: boolean; errors: Record<string, string>; saved: string[] }
 export interface SearchHit { chatId: string; chatTitle: string; index: number; role: ChatRole; excerpt: string }
 export interface HfModel { id: string; downloads?: number; likes?: number; gated: boolean; arch?: string }
-export interface HfFile { path: string; size?: number }
+export interface HfFile { path: string; size?: number; label?: string }
 export interface BrowserState { url: string; title: string; loading: boolean; canBack: boolean; canForward: boolean; notice: string }
 export type VoiceKind = "asr" | "tts";
 export interface DiskUsage { ok: boolean; error?: string; models: { name: string; bytes: number }[]; voiceModels: number; legacyVoiceModels?: { id: string; kind: VoiceKind; title: string; bytes: number }[]; engines: { id: string; label: string; bytes: number; removable: boolean }[] }
@@ -204,7 +213,7 @@ interface WebApi {
   set_model(name: string): Promise<CommandResult>;
   set_speech(enabled: boolean): Promise<CommandResult>;
   route_hint(text: string): Promise<{ route: string; label: string }>;
-  image_data(path: string): Promise<string>;
+  image_data(path: string, thumbnail?: boolean): Promise<string>;
   open_file(path: string): Promise<CommandResult>;
   save_copy(path: string): Promise<CommandResult>;
   copy_text(text: string): Promise<CommandResult>;
@@ -227,6 +236,7 @@ interface WebApi {
   code_preview(path: string): Promise<{ ok: boolean; url?: string; error?: string }>;
   code_undo(index: number): Promise<CommandResult>;
   set_title_theme(caption: string, text: string, dark: boolean): Promise<CommandResult>;
+  ui_ready?(): Promise<void>;
   settings_details(): Promise<SettingsDetails>;
   update_settings(patch: Record<string, unknown>): Promise<SettingsResult>;
   set_mic_muted(muted: boolean): Promise<CommandResult>;
@@ -260,6 +270,9 @@ interface WebApi {
   reset_settings(): Promise<CommandResult>;
   set_language(language: string): Promise<CommandResult>;
   recommended_model(): Promise<{ ok: boolean; repo?: string; record?: Record<string, unknown>; tag?: string; size?: number; why?: string; error?: string }>;
+  audio_providers(): Promise<AudioProvider[]>;
+  audio_voices(provider: string, model: string): Promise<{ voices: MediaChoice[]; error?: string }>;
+  visual_providers(): Promise<VisualProvider[]>;
   providers_status(): Promise<{ providers: ProviderRow[] }>;
   tools_status(): Promise<ToolsStatus>;
   run_code(language: string, code: string, stdin: string): Promise<CodeRun>;
